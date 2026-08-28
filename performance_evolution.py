@@ -47,12 +47,12 @@ def calculate_evolution(weekly_data):
     # --------------------------------------------------------
 
     recent_runs = sum(
-        week.get("activities", 0) or 0
+        week.get("running_activities", 0) or 0
         for week in recent
     )
 
     previous_runs = sum(
-        week.get("activities", 0) or 0
+        week.get("running_activities", 0) or 0
         for week in previous
     )
 

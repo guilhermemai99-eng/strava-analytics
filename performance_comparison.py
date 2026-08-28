@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 
 from database import SessionLocal
 from models import Activity
+from analytics import RUNNING_SPORT_TYPES
 
 
 def parse_date(value):
@@ -290,7 +291,9 @@ def calculate_performance_comparison(
             db.query(Activity)
 
             .filter(
-                Activity.sport_type == "Run"
+                Activity.sport_type.in_(
+                    RUNNING_SPORT_TYPES
+                )
             )
 
             .filter(

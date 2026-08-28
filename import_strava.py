@@ -8,6 +8,8 @@ from strava_tokens import (
     StravaTokenError,
     get_valid_access_token
 )
+from ai_cache import clear_ai_cache
+from pr_cache import clear_cache
 
 
 def sync_strava_activities(athlete_id):
@@ -284,6 +286,13 @@ def sync_strava_activities(athlete_id):
             f"{total_imported}"
         )
 
+        clear_ai_cache(
+            athlete_id
+        )
+
+        clear_cache(
+            athlete_id
+        )
 
         return {
 

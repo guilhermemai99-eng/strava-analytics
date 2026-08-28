@@ -4,6 +4,22 @@ from database import SessionLocal
 from models import Activity
 
 
+RUNNING_SPORT_TYPES = (
+    "Run",
+    "TrailRun",
+    "VirtualRun"
+)
+
+
+def is_run_sport(
+    sport_type
+):
+
+    return (
+        sport_type or ""
+    ) in RUNNING_SPORT_TYPES
+
+
 # ============================================================
 # HELPER — FILTRO POR ATLETA
 # ============================================================
@@ -78,7 +94,9 @@ def get_summary(athlete_id=None):
         running_activities = (
             query
             .filter(
-                Activity.sport_type == "Run"
+                Activity.sport_type.in_(
+                    RUNNING_SPORT_TYPES
+                )
             )
             .all()
         )
@@ -233,6 +251,9 @@ def get_weekly(athlete_id=None):
                 "running_km":
                     0,
 
+                "running_activities":
+                    0,
+
                 "training_hours":
                     0,
 
@@ -257,7 +278,9 @@ def get_weekly(athlete_id=None):
             activity.elevation_gain_m or 0
         )
 
-        if activity.sport_type == "Run":
+        if is_run_sport(
+            activity.sport_type
+        ):
 
             weeks[week_key][
                 "running_km"
@@ -265,6 +288,10 @@ def get_weekly(athlete_id=None):
                 (activity.distance_m or 0)
                 / 1000
             )
+
+            weeks[week_key][
+                "running_activities"
+            ] += 1
 
     result = []
 

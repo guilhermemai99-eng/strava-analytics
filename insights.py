@@ -1,5 +1,6 @@
 from database import SessionLocal
 from models import Activity
+from analytics import RUNNING_SPORT_TYPES
 
 
 def get_insights(athlete_id=None):
@@ -8,7 +9,11 @@ def get_insights(athlete_id=None):
 
     query = (
         db.query(Activity)
-        .filter(Activity.sport_type == "Run")
+        .filter(
+            Activity.sport_type.in_(
+                RUNNING_SPORT_TYPES
+            )
+        )
         .filter(Activity.start_date_local.isnot(None))
     )
 

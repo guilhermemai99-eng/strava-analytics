@@ -2,6 +2,7 @@ import requests
 
 from database import SessionLocal
 from models import Activity
+from analytics import RUNNING_SPORT_TYPES
 from pr_cache import load_cache, save_cache
 from strava_tokens import get_valid_access_token
 
@@ -616,7 +617,9 @@ def get_running_performance(athlete_id=None):
             db.query(Activity)
 
             .filter(
-                Activity.sport_type == "Run"
+                Activity.sport_type.in_(
+                    RUNNING_SPORT_TYPES
+                )
             )
 
             .filter(
@@ -646,6 +649,16 @@ def get_running_performance(athlete_id=None):
             .all()
 
         )
+
+        if (
+            cached
+            and
+            cached.get("total_runs")
+            !=
+            len(activities)
+        ):
+
+            cached = None
 
 
         if not activities:

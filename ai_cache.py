@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 CACHE_DIR = "cache"
@@ -41,7 +41,33 @@ def load_ai_cache(athlete_id=None):
             encoding="utf-8"
         ) as file:
 
-            return json.load(file)
+            data = json.load(file)
+
+        generated_at = data.get(
+            "generated_at"
+        )
+
+        if generated_at:
+
+            try:
+
+                created = datetime.fromisoformat(
+                    generated_at
+                )
+
+                if (
+                    datetime.now() - created
+                    >
+                    timedelta(hours=12)
+                ):
+
+                    return None
+
+            except Exception:
+
+                return None
+
+        return data
 
     except Exception:
 
