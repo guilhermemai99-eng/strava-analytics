@@ -1,0 +1,6 @@
+fastapi==0.141.1
+uvicorn==0.52.4
+python-dotenv==1.2.3
+requests==2.34.2
+SQLAlchemy==2.0.52
+openai==3.3.1

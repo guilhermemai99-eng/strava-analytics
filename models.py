@@ -1,0 +1,163 @@
+from sqlalchemy import Column, Integer, String, Float, Boolean
+
+from database import Base
+
+
+class Activity(Base):
+    __tablename__ = "activities"
+
+    # =========================================================
+    # IDENTIFICAÇÃO DO ATLETA
+    # =========================================================
+
+    athlete_id = Column(
+        Integer,
+        index=True,
+        nullable=True
+    )
+
+    # =========================================================
+    # IDENTIFICAÇÃO DA ATIVIDADE
+    # =========================================================
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    strava_id = Column(
+        Integer,
+        unique=True,
+        index=True,
+        nullable=False
+    )
+
+    # =========================================================
+    # INFORMAÇÃO BÁSICA
+    # =========================================================
+
+    name = Column(
+        String,
+        nullable=False
+    )
+
+    sport_type = Column(
+        String
+    )
+
+    # =========================================================
+    # DISTÂNCIA E TEMPO
+    # =========================================================
+
+    distance_m = Column(
+        Float
+    )
+
+    moving_time_s = Column(
+        Integer
+    )
+
+    elapsed_time_s = Column(
+        Integer
+    )
+
+    # =========================================================
+    # ELEVAÇÃO
+    # =========================================================
+
+    elevation_gain_m = Column(
+        Float
+    )
+
+    elev_high = Column(
+        Float
+    )
+
+    elev_low = Column(
+        Float
+    )
+
+    # =========================================================
+    # VELOCIDADE
+    # =========================================================
+
+    average_speed_m_s = Column(
+        Float
+    )
+
+    max_speed_m_s = Column(
+        Float
+    )
+
+    # =========================================================
+    # DATA
+    # =========================================================
+
+    start_date = Column(
+        String
+    )
+
+    start_date_local = Column(
+        String
+    )
+
+    timezone = Column(
+        String
+    )
+
+    # =========================================================
+    # DISPOSITIVO
+    # =========================================================
+
+    device_name = Column(
+        String
+    )
+
+    # =========================================================
+    # MÉTRICAS
+    # =========================================================
+
+    kudos_count = Column(
+        Integer
+    )
+
+    achievement_count = Column(
+        Integer
+    )
+
+    # =========================================================
+    # TEMPERATURA
+    # =========================================================
+
+    average_temp = Column(
+        Float
+    )
+
+    # =========================================================
+    # FREQUÊNCIA CARDÍACA
+    # =========================================================
+
+    has_heartrate = Column(
+        Boolean
+    )
+
+    # =========================================================
+    # COORDENADAS
+    # =========================================================
+
+    start_lat = Column(
+        Float
+    )
+
+    start_lng = Column(
+        Float
+    )
+
+    end_lat = Column(
+        Float
+    )
+
+    end_lng = Column(
+        Float
+    )
