@@ -105,6 +105,85 @@
         }
 
 
+        .sync-bar {
+
+            margin-top: 20px;
+
+            display: flex;
+
+            flex-wrap: wrap;
+
+            align-items: center;
+
+            gap: 10px 16px;
+
+        }
+
+
+        .sync-button {
+
+            background: #f5f5f5;
+
+            color: #0b0b0b;
+
+            border: none;
+
+            border-radius: 10px;
+
+            padding: 10px 16px;
+
+            font-size: 13px;
+
+            font-weight: 650;
+
+            letter-spacing: -0.2px;
+
+            cursor: pointer;
+
+        }
+
+
+        .sync-button:disabled {
+
+            opacity: 0.55;
+
+            cursor: not-allowed;
+
+        }
+
+
+        .sync-meta {
+
+            color: #777;
+
+            font-size: 13px;
+
+        }
+
+
+        .sync-message {
+
+            font-size: 13px;
+
+            color: #aaa;
+
+        }
+
+
+        .sync-message.success {
+
+            color: #8fd18a;
+
+        }
+
+
+        .sync-message.error {
+
+            color: #e07a7a;
+
+        }
+
+
         /* =================================================
            CARDS
         ================================================= */
@@ -887,6 +966,30 @@
             O teu treino, analisado.
         </div>
 
+        <div class="sync-bar">
+
+            <button
+                type="button"
+                class="sync-button"
+                id="syncStravaButton"
+            >
+                ↻ Sincronizar Strava
+            </button>
+
+            <div
+                class="sync-meta"
+                id="lastSyncLabel"
+            >
+                Última sincronização: —
+            </div>
+
+            <div
+                class="sync-message"
+                id="syncMessage"
+            ></div>
+
+        </div>
+
     </header>
 
 
@@ -1411,6 +1514,235 @@
 
 let ATHLETE_ID = null;
 
+
+function lastSyncStorageKey() {
+
+    if (ATHLETE_ID) {
+
+        return "stravaLastSync:" + ATHLETE_ID;
+
+    }
+
+    return "stravaLastSync";
+
+}
+
+
+function formatLastSync(
+    isoString
+) {
+
+    const date = new Date(
+        isoString
+    );
+
+    if (Number.isNaN(date.getTime())) {
+
+        return null;
+
+    }
+
+    return date.toLocaleString(
+        "pt-PT"
+    );
+
+}
+
+
+function showLastSync() {
+
+    const label =
+        document.getElementById(
+            "lastSyncLabel"
+        );
+
+    if (!label) {
+
+        return;
+    }
+
+    const stored =
+        localStorage.getItem(
+            lastSyncStorageKey()
+        );
+
+    const formatted =
+        stored
+            ? formatLastSync(stored)
+            : null;
+
+    label.textContent =
+        formatted
+            ? "Última sincronização: " + formatted
+            : "Última sincronização: —";
+
+}
+
+
+function setSyncMessage(
+    text,
+    type
+) {
+
+    const message =
+        document.getElementById(
+            "syncMessage"
+        );
+
+    if (!message) {
+
+        return;
+    }
+
+    message.textContent =
+        text || "";
+
+    message.className =
+        "sync-message" +
+        (
+            type
+                ? " " + type
+                : ""
+        );
+
+}
+
+
+function refreshDashboardData() {
+
+    loadDashboard();
+
+    loadAthleteScore();
+
+    loadAICoach();
+
+    loadWeeklyTrainingPlan();
+
+    loadInsights();
+
+    loadRunningPerformance();
+
+    loadWeeklyChart();
+
+}
+
+
+async function syncStrava() {
+
+    const button =
+        document.getElementById(
+            "syncStravaButton"
+        );
+
+    if (!button || button.disabled) {
+
+        return;
+    }
+
+    button.disabled = true;
+
+    button.textContent =
+        "A sincronizar...";
+
+    setSyncMessage(
+        "",
+        ""
+    );
+
+    try {
+
+        const response =
+            await fetch(
+                "/strava/sync",
+                {
+                    method:
+                        "POST"
+                }
+            );
+
+        let data = {};
+
+        try {
+
+            data =
+                await response.json();
+
+        }
+
+        catch (parseError) {
+
+            throw new Error(
+                "Não foi possível ler a resposta da sincronização."
+            );
+
+        }
+
+        if (!response.ok || data.error) {
+
+            throw new Error(
+                data.error
+                    ||
+                    "Não foi possível sincronizar com o Strava."
+            );
+
+        }
+
+        const imported =
+            Number(
+                data.imported
+            );
+
+        const importedCount =
+            Number.isFinite(imported)
+                ? imported
+                : 0;
+
+        const importedText =
+            importedCount === 1
+                ? "1 atividade importada."
+                : importedCount +
+                    " atividades importadas.";
+
+        setSyncMessage(
+            "Sincronização concluída. " +
+            importedText,
+            "success"
+        );
+
+        localStorage.setItem(
+            lastSyncStorageKey(),
+            new Date().toISOString()
+        );
+
+        showLastSync();
+
+        refreshDashboardData();
+
+    }
+
+    catch (error) {
+
+        setSyncMessage(
+            error.message
+                ||
+                "Erro ao sincronizar com o Strava.",
+            "error"
+        );
+
+    }
+
+    finally {
+
+        button.disabled = false;
+
+        button.textContent =
+            "↻ Sincronizar Strava";
+
+    }
+
+}
+
+
 async function loadCurrentAthlete() {
     const response = await fetch("/auth/me");
 
@@ -1426,6 +1758,8 @@ async function loadCurrentAthlete() {
     }
 
     ATHLETE_ID = data.athlete_id;
+
+    showLastSync();
 
     return true;
 }
@@ -2530,6 +2864,15 @@ async function loadWeeklyChart() {
 /* =========================================================
    START
 ========================================================= */
+
+document.getElementById(
+    "syncStravaButton"
+).addEventListener(
+    "click",
+    syncStrava
+);
+
+showLastSync();
 
 loadDashboard();
 
