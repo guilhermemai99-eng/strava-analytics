@@ -162,14 +162,22 @@ def require_athlete_id(
 # ============================================================
 
 @app.get("/")
-def home():
+def home(
+    request: Request
+):
 
-    return {
+    if get_current_athlete_id(
+        request
+    ):
 
-        "message":
-            "Strava Analytics está a funcionar!"
+        return RedirectResponse(
+            url="/dashboard",
+            status_code=302
+        )
 
-    }
+    return FileResponse(
+        "static/login.html"
+    )
 
 
 # ============================================================
@@ -1129,7 +1137,18 @@ def analytics_ai_insights(
 # ============================================================
 
 @app.get("/dashboard")
-def dashboard():
+def dashboard(
+    request: Request
+):
+
+    if not get_current_athlete_id(
+        request
+    ):
+
+        return RedirectResponse(
+            url="/",
+            status_code=302
+        )
 
     return FileResponse(
         "static/dashboard.html"
