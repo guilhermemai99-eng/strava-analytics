@@ -15,140 +15,101 @@
 
     <style>
 
+        :root {
+            --bg: #070707;
+            --surface: #111111;
+            --line: rgba(255, 255, 255, 0.06);
+            --text: #f3f1ec;
+            --muted: #8a8680;
+            --accent: #d7b56d;
+        }
+
         * {
             box-sizing: border-box;
         }
 
-
         body {
-
             margin: 0;
-
-            background: #0b0b0b;
-
-            color: #f5f5f5;
-
+            min-height: 100vh;
+            background:
+                radial-gradient(1200px 600px at 80% -10%, rgba(215, 181, 109, 0.08), transparent 50%),
+                var(--bg);
+            color: var(--text);
             font-family:
                 Inter,
+                ui-sans-serif,
+                system-ui,
                 -apple-system,
-                BlinkMacSystemFont,
                 "Segoe UI",
-                Arial,
                 sans-serif;
-
         }
 
-
-        .container {
-
-            max-width: 1180px;
-
-            margin: auto;
-
-            padding:
-                55px 28px 80px;
-
+        .shell {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 32px 20px;
         }
 
-
-        .header {
-
-            margin-bottom: 42px;
-
+        .card {
+            width: min(520px, 100%);
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 24px;
+            padding: 40px 36px 36px;
+            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
         }
-
 
         .eyebrow {
-
-            color: #777;
-
+            color: var(--accent);
             font-size: 11px;
-
-            font-weight: 600;
-
-            letter-spacing: 2px;
-
+            font-weight: 650;
+            letter-spacing: 0.22em;
             text-transform: uppercase;
-
-            margin-bottom: 10px;
-
+            margin-bottom: 18px;
         }
-
 
         h1 {
-
             margin: 0;
-
-            font-size: 42px;
-
-            line-height: 1.05;
-
-            font-weight: 650;
-
-            letter-spacing: -1.5px;
-
+            font-size: clamp(36px, 7vw, 52px);
+            line-height: 0.95;
+            font-weight: 620;
+            letter-spacing: -1.8px;
         }
-
 
         .subtitle {
-
-            margin-top: 12px;
-
-            color: #777;
-
+            margin: 18px 0 0;
+            color: var(--muted);
             font-size: 15px;
-
+            line-height: 1.55;
+            max-width: 36ch;
         }
-
-
-        .login-actions {
-
-            margin-top: 28px;
-
-        }
-
 
         .login-button {
-
-            display: inline-block;
-
-            background: #f5f5f5;
-
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 32px;
+            min-height: 48px;
+            padding: 0 22px;
+            background: var(--text);
             color: #0b0b0b;
-
-            border: none;
-
-            border-radius: 10px;
-
-            padding: 12px 18px;
-
-            font-size: 14px;
-
-            font-weight: 650;
-
-            letter-spacing: -0.2px;
-
+            border-radius: 12px;
             text-decoration: none;
-
+            font-size: 14px;
+            font-weight: 650;
+            transition: transform 0.2s ease, opacity 0.2s ease;
         }
 
+        .login-button:hover {
+            transform: translateY(-1px);
+        }
 
-        @media (max-width: 550px) {
-
-            .container {
-
-                padding:
-                    35px 18px 60px;
-
+        @media (max-width: 390px) {
+            .card {
+                padding: 28px 22px;
             }
-
-
-            h1 {
-
-                font-size: 34px;
-
-            }
-
         }
 
     </style>
@@ -158,38 +119,33 @@
 
 <body>
 
+<div class="shell">
 
-<div class="container">
-
-    <header class="header">
+    <section class="card">
 
         <div class="eyebrow">
-            Running Analytics
+            Performance platform
         </div>
 
         <h1>
-            Strava Analytics
+            O teu treino,<br>
+            com clareza.
         </h1>
 
-        <div class="subtitle">
-            Entra com a tua conta Strava para ver o teu dashboard.
-        </div>
+        <p class="subtitle">
+            Entra com a tua conta Strava para ver score, performance e o plano da semana.
+        </p>
 
-        <div class="login-actions">
+        <a
+            class="login-button"
+            href="/auth/strava"
+        >
+            Entrar com Strava
+        </a>
 
-            <a
-                class="login-button"
-                href="/auth/strava"
-            >
-                Entrar com Strava
-            </a>
-
-        </div>
-
-    </header>
+    </section>
 
 </div>
-
 
 </body>
 
