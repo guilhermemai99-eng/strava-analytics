@@ -185,7 +185,10 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    run_startup_migrations()
+    if os.getenv("SKIP_STARTUP_MIGRATIONS") != "1":
+        run_startup_migrations()
+    else:
+        print("[start] Skipping startup migrations (SKIP_STARTUP_MIGRATIONS=1).")
     run_startup_token_encryption()
     yield
 
