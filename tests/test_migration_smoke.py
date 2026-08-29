@@ -85,6 +85,15 @@ def test_alembic_upgrade_head_on_empty_database():
                 )
             )
         }
+        activity_cols = {
+            row[0]
+            for row in conn.execute(
+                text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name='activities'"
+                )
+            )
+        }
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
 
     engine.dispose()
@@ -99,4 +108,6 @@ def test_alembic_upgrade_head_on_empty_database():
     }.issubset(tables)
     assert "token_version" in cols
     assert "updated_at" in cols
-    assert version == "0005_pulse_profile_fields"
+    assert "summary_polyline" in activity_cols
+    assert "photo_url" in activity_cols
+    assert version == "0006_activity_feed_media"
