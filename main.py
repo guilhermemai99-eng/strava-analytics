@@ -14,6 +14,12 @@ from dotenv import load_dotenv
 from database import SessionLocal
 from models import Activity
 from strava_auth import StravaAuth
+from oauth_helpers import (
+    cleanup_expired_oauth_states,
+    consume_oauth_state,
+    create_oauth_state,
+)
+from athlete_helpers import upsert_athlete_from_strava
 
 from import_strava import sync_strava_activities
 from strava_tokens import StravaTokenError
@@ -86,13 +92,6 @@ STRAVA_CLIENT_SECRET = os.getenv(
 STRAVA_REDIRECT_URI = os.getenv(
     "STRAVA_REDIRECT_URI"
 )
-
-
-# ============================================================
-# ESTADOS OAUTH
-# ============================================================
-
-oauth_states = {}
 
 
 # ============================================================
@@ -187,8 +186,16 @@ def strava_login():
         32
     )
 
-    # Guardar temporariamente
-    oauth_states[state] = True
+    db = SessionLocal()
+
+    try:
+
+        cleanup_expired_oauth_states(db)
+        create_oauth_state(db, state)
+
+    finally:
+
+        db.close()
 
     params = {
 
@@ -257,11 +264,17 @@ def strava_callback(
     # VALIDAR STATE
     # ========================================================
 
-    if (
-        not state
-        or
-        state not in oauth_states
-    ):
+    db = SessionLocal()
+
+    try:
+
+        state_ok = consume_oauth_state(db, state)
+
+    finally:
+
+        db.close()
+
+    if not state_ok:
 
         return {
 
@@ -269,13 +282,6 @@ def strava_callback(
                 "Estado OAuth inválido."
 
         }
-
-
-    # State só pode ser usado uma vez
-    oauth_states.pop(
-        state,
-        None
-    )
 
 
     # ========================================================
@@ -350,12 +356,14 @@ def strava_callback(
 
 
     # ========================================================
-    # GUARDAR / ATUALIZAR STRAVA AUTH
+    # GUARDAR / ATUALIZAR ATLETA + STRAVA AUTH
     # ========================================================
 
     db = SessionLocal()
 
     try:
+
+        upsert_athlete_from_strava(db, athlete)
 
         existing_auth = (
 
