@@ -4,93 +4,98 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pulse</title>
-  <link rel="stylesheet" href="/static/css/pulse.css?v=dms-maps-1">
+  <link rel="stylesheet" href="/static/css/pulse.css?v=ig-1">
+  <link rel="stylesheet" href="/static/css/pulse-ig.css?v=ig-1">
 </head>
 <body>
   <div class="sync-chip" id="syncChip" aria-live="polite">Syncing Strava…</div>
 
   <div class="pulse-app">
     <aside class="pulse-sidebar" aria-label="Navegação principal">
-      <div class="pulse-brand">Pulse<span>.</span></div>
+      <a class="pulse-brand" href="#feed" data-nav="feed" aria-label="Pulse Home">Pulse<span>.</span></a>
       <nav class="pulse-nav">
-        <button type="button" class="pulse-nav-link is-active" data-nav="feed">
+        <button type="button" class="pulse-nav-link is-active" data-nav="feed" aria-label="Home">
           <span class="pulse-nav-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1v-9.5z"/></svg>
           </span>
-          Feed
+          <span class="pulse-nav-label">Home</span>
         </button>
-        <button type="button" class="pulse-nav-link" data-nav="explore">
+        <button type="button" class="pulse-nav-link" data-nav="explore" aria-label="Explore">
           <span class="pulse-nav-ico" aria-hidden="true">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
           </span>
-          Explore
+          <span class="pulse-nav-label">Explore</span>
         </button>
-        <button type="button" class="pulse-nav-link" data-nav="messages">
+        <button type="button" class="pulse-nav-link" data-nav="messages" aria-label="Messages">
           <span class="pulse-nav-ico" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="M4 6h16v10H8l-4 3V6z"/></svg>
           </span>
-          Messages
+          <span class="pulse-nav-label">Messages</span>
           <span class="nav-badge" id="sidebarDmBadge" hidden>0</span>
         </button>
-        <button type="button" class="pulse-nav-link" data-nav="coach">
+        <button type="button" class="pulse-nav-link" data-nav="activity" aria-label="Activity">
           <span class="pulse-nav-ico" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M12 3l2.2 4.5L19 9l-3.5 3.4.8 4.8L12 15.2 7.7 17.2l.8-4.8L5 9l4.8-1.5L12 3z"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M12 21s-7-4.5-7-10a4 4 0 017-2.6A4 4 0 0119 11c0 5.5-7 10-7 10z"/></svg>
           </span>
-          AI Coach
+          <span class="pulse-nav-label">Activity</span>
         </button>
-        <button type="button" class="pulse-nav-link" data-nav="profile">
+        <button type="button" class="pulse-nav-link" data-nav="create" aria-label="Sync activity">
+          <span class="pulse-nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          </span>
+          <span class="pulse-nav-label">Create</span>
+        </button>
+        <button type="button" class="pulse-nav-link" data-nav="profile" aria-label="Profile">
           <span class="pulse-nav-ico" aria-hidden="true">
             <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 19c1.8-3.2 4-4.8 7-4.8s5.2 1.6 7 4.8"/></svg>
           </span>
-          Profile
+          <span class="pulse-nav-label">Profile</span>
         </button>
       </nav>
-
       <div class="pulse-sidebar-foot">
-        <button type="button" class="pulse-user-chip" id="openSettingsSidebar" aria-label="Abrir settings">
-          <div class="pulse-avatar" id="sidebarAvatar">P</div>
-          <div class="pulse-user-meta">
-            <strong id="sidebarName">Runner</strong>
-            <span id="sidebarHandle">@pulse</span>
-          </div>
+        <button type="button" class="pulse-nav-link pulse-nav-more" id="openSettingsSidebar" aria-label="More">
+          <span class="pulse-nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+          </span>
+          <span class="pulse-nav-label">More</span>
         </button>
       </div>
     </aside>
 
-    <main class="pulse-main">
-      <div class="pulse-center" id="viewRoot" aria-live="polite"></div>
-    </main>
+    <div class="pulse-stage">
+      <header class="pulse-mobile-header" id="mobileHeader" aria-hidden="true">
+        <div class="mobile-header-start" id="mobileHeaderStart"></div>
+        <h1 class="mobile-header-title" id="mobileHeaderTitle">Pulse</h1>
+        <div class="mobile-header-end" id="mobileHeaderEnd"></div>
+      </header>
 
-    <aside class="pulse-coach" aria-label="AI Coach">
-      <div class="coach-top">
-        <h2>AI Coach</h2>
-        <p class="coach-tagline" id="coachTagline">Your legs don’t lie.</p>
-      </div>
-      <div class="coach-panel" id="coachSidebarPanel"></div>
-    </aside>
+      <main class="pulse-main">
+        <div class="pulse-center" id="viewRoot" aria-live="polite"></div>
+      </main>
+    </div>
   </div>
 
   <nav class="pulse-bottom-nav" aria-label="Navegação móvel">
-    <button type="button" data-nav="feed" class="is-active">
-      <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
-      Feed
+    <button type="button" data-nav="feed" class="is-active" aria-label="Home">
+      <svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1v-9.5z"/></svg>
+      <span>Home</span>
     </button>
-    <button type="button" data-nav="explore">
+    <button type="button" data-nav="explore" aria-label="Explore">
       <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-      Explore
+      <span>Explore</span>
     </button>
-    <button type="button" data-nav="messages" class="bottom-nav-messages">
+    <button type="button" data-nav="create" aria-label="Sync">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      <span>Create</span>
+    </button>
+    <button type="button" data-nav="messages" class="bottom-nav-messages" aria-label="Messages">
       <svg viewBox="0 0 24 24"><path d="M4 6h16v10H8l-4 3V6z"/></svg>
-      Messages
+      <span>Messages</span>
       <span class="nav-badge nav-badge--float" id="bottomDmBadge" hidden>0</span>
     </button>
-    <button type="button" data-nav="coach">
-      <svg viewBox="0 0 24 24"><path d="M12 3l2.2 4.5L19 9l-3.5 3.4.8 4.8L12 15.2 7.7 17.2l.8-4.8L5 9l4.8-1.5L12 3z"/></svg>
-      Coach
-    </button>
-    <button type="button" data-nav="profile">
+    <button type="button" data-nav="profile" aria-label="Profile">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 19c1.8-3.2 4-4.8 7-4.8s5.2 1.6 7 4.8"/></svg>
-      Profile
+      <span>Profile</span>
     </button>
   </nav>
 
@@ -150,7 +155,7 @@
 
     <div class="drawer-section">
       <h3>Pulse Lab</h3>
-      <p class="form-hint">The analytics lab is still here — scores, plans, evolution.</p>
+      <p class="form-hint">Analytics lab — scores, plans, evolution.</p>
       <a class="btn btn-ghost" href="/lab" style="margin-top:12px;display:inline-flex;">Open analytics lab</a>
     </div>
 
@@ -200,10 +205,6 @@
   <div class="toast" id="toast" role="status"></div>
 
   <script src="/static/js/microcopy.js?v=personality-2"></script>
-<<<<<<< HEAD
-  <script src="/static/js/pulse.js?v=dms-1" defer></script>
-=======
-  <script src="/static/js/pulse.js?v=maps-photo-2" defer></script>
->>>>>>> b2dcdc9 (Improve Feed maps visibility and profile photo quality)
+  <script src="/static/js/pulse.js?v=ig-1" defer></script>
 </body>
 </html>

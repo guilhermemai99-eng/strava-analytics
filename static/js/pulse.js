@@ -2,7 +2,8 @@
 (() => {
   "use strict";
 
-  const PAGES = ["feed", "explore", "messages", "coach", "profile"];
+  const PAGES = ["feed", "explore", "messages", "activity", "profile", "coach"];
+  const PROFILE_TABS = ["activities", "media", "stats", "lab"];
   const Copy = window.PulseCopy || null;
 
   const TILE_BACKGROUNDS = [
@@ -101,15 +102,21 @@
       error: null,
       sending: false,
     },
+    profileTab: "activities",
+    viewedProfileTab: "activities",
   };
 
   const els = {
     viewRoot: document.getElementById("viewRoot"),
-    coachSidebarPanel: document.getElementById("coachSidebarPanel"),
-    coachTagline: document.getElementById("coachTagline"),
-    sidebarAvatar: document.getElementById("sidebarAvatar"),
-    sidebarName: document.getElementById("sidebarName"),
-    sidebarHandle: document.getElementById("sidebarHandle"),
+    mobileHeader: document.getElementById("mobileHeader"),
+    mobileHeaderTitle: document.getElementById("mobileHeaderTitle"),
+    mobileHeaderStart: document.getElementById("mobileHeaderStart"),
+    mobileHeaderEnd: document.getElementById("mobileHeaderEnd"),
+    coachTagline: null,
+    coachSidebarPanel: null,
+    sidebarAvatar: null,
+    sidebarName: null,
+    sidebarHandle: null,
     settingsDrawer: document.getElementById("settingsDrawer"),
     drawerBackdrop: document.getElementById("drawerBackdrop"),
     activityModal: document.getElementById("activityModal"),
@@ -220,9 +227,44 @@
   }
 
   function setNavActive(page) {
+    const navPage = page === "dm" ? "messages" : page === "create" ? null : page;
     document.querySelectorAll("[data-nav]").forEach((btn) => {
-      btn.classList.toggle("is-active", btn.dataset.nav === page);
+      btn.classList.toggle("is-active", navPage && btn.dataset.nav === navPage);
     });
+  }
+
+  function isDesktop() {
+    return window.matchMedia("(min-width: 821px)").matches;
+  }
+
+  const MOBILE_TITLES = {
+    feed: "Pulse",
+    explore: "Explore",
+    messages: "Messages",
+    activity: "Activity",
+    profile: "Profile",
+    coach: "AI Coach",
+    u: "Profile",
+    dm: "Messages",
+  };
+
+  function updateMobileHeader() {
+    if (!els.mobileHeader || !els.mobileHeaderTitle) return;
+    const page = state.page;
+    els.mobileHeaderTitle.textContent = MOBILE_TITLES[page] || "Pulse";
+    if (els.mobileHeaderStart) els.mobileHeaderStart.innerHTML = "";
+    if (els.mobileHeaderEnd) els.mobileHeaderEnd.innerHTML = "";
+
+    if (page === "dm") {
+      if (els.mobileHeaderStart) {
+        els.mobileHeaderStart.innerHTML =
+          '<button type="button" class="ig-action-btn" data-action="back-inbox" aria-label="Back">←</button>';
+      }
+      const peer = state.thread.peer;
+      if (peer && els.mobileHeaderTitle) {
+        els.mobileHeaderTitle.textContent = displayNameOf(peer);
+      }
+    }
   }
 
   function pickTagline() {
@@ -606,7 +648,7 @@
   function renderFeedPost(item) {
     const author = item.author || {};
     const activity = item.activity || {};
-    const location = item.location?.display_name;
+    const location = item.location?.display_name || "Somewhere out there";
     const when = relativeWhen(
       activity.start_date_local || activity.start_date || item.created_at
     );
@@ -614,50 +656,52 @@
       activity.distance_km != null
         ? `${Number(activity.distance_km).toFixed(
             Number(activity.distance_km) >= 10 ? 1 : 2
-          )} KM`
+          )} km`
         : "—";
-    const pace = activity.pace_label ? `${activity.pace_label}/KM` : "—";
+    const pace = activity.pace_label ? `${activity.pace_label}/km` : "—";
     const duration = activity.duration_label || "—";
+    const insightLine = Copy ? Copy.activityInsight(activity) : null;
 
     return `
-      <article class="feed-post" data-feed-activity-id="${escapeHtml(activity.id)}">
-        <div class="feed-post-head">
+      <article class="feed-post ig-post" data-feed-activity-id="${escapeHtml(activity.id)}">
+        <header class="ig-post-head">
           <button type="button" class="feed-author-btn" data-action="open-user" data-athlete-id="${escapeHtml(author.athlete_id || "")}" data-handle="${escapeHtml(author.handle || "")}">
             ${authorAvatarHtml(author)}
             <div class="feed-post-meta">
               <strong>${escapeHtml(displayNameOf(author))}</strong>
-              <span>${escapeHtml(publicHandleLabel(author))}${when ? ` · ${escapeHtml(when)}` : ""}</span>
+              <span>${escapeHtml(location)}</span>
             </div>
           </button>
-          <div class="feed-post-type">${escapeHtml(activity.type || "Run")}</div>
+          <button type="button" class="ig-post-menu" aria-label="More">⋯</button>
+        </header>
+        <div class="ig-post-media">${renderFeedMedia(item)}</div>
+        <div class="ig-post-actions">
+          <button type="button" class="ig-action-btn" aria-label="Like">
+            <svg viewBox="0 0 24 24"><path d="M12 21s-7-4.5-7-10a4 4 0 017-2.6A4 4 0 0119 11c0 5.5-7 10-7 10z"/></svg>
+          </button>
+          <button type="button" class="ig-action-btn" aria-label="Comment">
+            <svg viewBox="0 0 24 24"><path d="M4 6h16v10H8l-4 3V6z"/></svg>
+          </button>
+          <button type="button" class="ig-action-btn" aria-label="Share">
+            <svg viewBox="0 0 24 24"><path d="M4 12v7h16v-7M12 3v12M8 7l4-4 4 4"/></svg>
+          </button>
+        </div>
+        <div class="ig-post-metrics">
+          <span><strong>${escapeHtml(distance)}</strong> distance</span>
+          <span><strong>${escapeHtml(pace)}</strong> pace</span>
+          <span><strong>${escapeHtml(duration)}</strong> time</span>
+          <span><strong>${escapeHtml(activity.type || "Run")}</strong></span>
+        </div>
+        <div class="ig-post-caption">
+          <strong>${escapeHtml(displayNameOf(author))}</strong>
+          ${escapeHtml(activity.title || activity.original_name || "Another one in the books.")}
         </div>
         ${
-          location
-            ? `<div class="feed-location">📍 ${escapeHtml(location)}</div>`
-            : `<div class="feed-location">📍 Somewhere out there</div>`
+          insightLine
+            ? `<div class="ig-post-comments">${escapeHtml(insightLine)}</div>`
+            : `<div class="ig-post-comments">View activity details</div>`
         }
-        <div class="feed-title-block">
-          <h3>${escapeHtml(activity.title || "Survived another one.")}</h3>
-          ${
-            activity.original_name
-              ? `<div class="original-name">${escapeHtml(activity.original_name)}</div>`
-              : ""
-          }
-        </div>
-        ${renderFeedMedia(item)}
-        <div class="feed-metrics">
-          <div class="feed-metric"><span>Distance</span><strong>${escapeHtml(distance)}</strong></div>
-          <div class="feed-metric"><span>Pace</span><strong>${escapeHtml(pace)}</strong></div>
-          <div class="feed-metric"><span>Time</span><strong>${escapeHtml(duration)}</strong></div>
-        </div>
-        ${
-          (() => {
-            const line = Copy ? Copy.activityInsight(activity) : null;
-            return line
-              ? `<p class="feed-insight">${escapeHtml(line)}</p>`
-              : "";
-          })()
-        }
+        <div class="ig-post-meta-line">${escapeHtml(when || "")}</div>
       </article>
     `;
   }
@@ -707,16 +751,13 @@
             feed.message.eyebrow || "Your runs. Front row."
           )}</strong><p>${escapeHtml(feed.message.body || "")}</p></div>`
         : "";
-      body = `${banner}<div class="feed-list">${feed.items
+      body = `${banner}<div class="feed-list ig-feed">${feed.items
         .map(renderFeedPost)
         .join("")}</div>`;
     }
 
     return `
       <section class="pulse-page" data-page="feed">
-        <p class="page-kicker">Feed</p>
-        <h1 class="page-title">Where runners show up.</h1>
-        <p class="page-sub">Running connects people. Your miles are the content.</p>
         ${body}
       </section>
     `;
@@ -781,6 +822,57 @@
         ${followCtl}
       </div>
     `;
+  }
+
+  function renderExploreTile(item, index) {
+    const mod = index % 7;
+    const sizeClass = mod === 0 ? "is-wide" : mod === 3 ? "is-tall" : "";
+    if (item.kind === "athlete") {
+      const a = item.data;
+      const athleteId = athleteIdOf(a);
+      const bg = TILE_BACKGROUNDS[(Number(athleteId) || index) % TILE_BACKGROUNDS.length];
+      return `
+        <button type="button" class="explore-tile ${sizeClass}" data-action="open-user" data-athlete-id="${escapeHtml(athleteId || "")}" data-handle="${escapeHtml(a.handle || "")}">
+          <div class="explore-tile-bg" style="background:${bg}"></div>
+          <div class="explore-tile-overlay">
+            <strong>${escapeHtml(displayNameOf(a))}</strong>
+            <span>${escapeHtml(a.location?.display_name || publicHandleLabel(a))}</span>
+          </div>
+        </button>`;
+    }
+    const act = item.data;
+    const bg = tileBackground(act, index);
+    return `
+      <button type="button" class="explore-tile ${sizeClass}" data-activity-id="${escapeHtml(act.id)}">
+        <div class="explore-tile-bg" style="background:${bg}"></div>
+        <div class="explore-tile-overlay">
+          <strong>${escapeHtml((act.name || act.sport_type || "Run").toUpperCase())}</strong>
+          <span>${escapeHtml(formatKm(act.distance_m))} km</span>
+        </div>
+      </button>`;
+  }
+
+  function buildExploreTiles() {
+    const ex = state.explore;
+    const tiles = [];
+    (ex.suggestions || []).slice(0, 6).forEach((a) => {
+      tiles.push({ kind: "athlete", data: a });
+    });
+    (ex.sections || []).forEach((section) => {
+      (section.athletes || []).slice(0, 4).forEach((a) => {
+        tiles.push({ kind: "athlete", data: a });
+      });
+    });
+    state.activities.slice(0, 9).forEach((a) => {
+      tiles.push({ kind: "activity", data: a });
+    });
+    return tiles.slice(0, 18);
+  }
+
+  function renderExploreMasonry() {
+    const tiles = buildExploreTiles();
+    if (!tiles.length) return "";
+    return `<div class="explore-masonry">${tiles.map(renderExploreTile).join("")}</div>`;
   }
 
   function renderExploreSection(section) {
@@ -866,7 +958,7 @@
         empty.title
       )}</h2><p>${escapeHtml(empty.body)}</p></div>`;
     }
-    return `${incompleteHint}${privacy}${suggestedBlock}${sections.map(renderExploreSection).join("")}`;
+    return `${incompleteHint}${privacy}${renderExploreMasonry()}<div class="explore-runners-block">${suggestedBlock}${sections.map(renderExploreSection).join("")}</div>`;
   }
 
   function renderExplore() {
@@ -876,20 +968,18 @@
         ? `Searching public runners for “${q.trim()}”.`
         : "Type at least 2 characters. Only public profiles show up.";
     return `
-      <section class="pulse-page" data-page="explore">
-        <p class="page-kicker">Explore</p>
-        <h1 class="page-title">Finding your people.</h1>
-        <p class="page-sub">Curiosity first. Matching later. No creepy vibes.</p>
-
-        <div class="search-wrap">
-          <span class="search-ico" aria-hidden="true">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
-            </svg>
-          </span>
-          <input id="exploreSearch" type="search" placeholder="Who are you looking for?" autocomplete="off" value="${escapeHtml(q)}">
+      <section class="pulse-page pulse-page--wide" data-page="explore">
+        <div class="explore-search-bar">
+          <div class="search-wrap">
+            <span class="search-ico" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
+              </svg>
+            </span>
+            <input id="exploreSearch" type="search" placeholder="Search athletes, cities, routes…" autocomplete="off" value="${escapeHtml(q)}">
+          </div>
+          <p class="search-hint" id="exploreSearchHint">${escapeHtml(hint)}</p>
         </div>
-        <p class="search-hint" id="exploreSearchHint">${escapeHtml(hint)}</p>
         ${renderExploreBody()}
       </section>
     `;
@@ -1028,9 +1118,8 @@
   function renderCoachPage() {
     return `
       <section class="pulse-page coach-page" data-page="coach">
-        <p class="page-kicker">AI Coach</p>
-        <h1 class="page-title">${escapeHtml(els.coachTagline?.textContent || "Your legs don’t lie.")}</h1>
-        <p class="page-sub">Advice with bite. Numbers with jokes. No clipboard energy.</p>
+        <h1 class="mobile-header-title" style="margin:0 0 8px;font-family:var(--font-display);font-size:24px;">AI Coach</h1>
+        <p class="page-sub" style="color:var(--muted);margin:0 0 16px;">Advice with bite. Numbers with jokes.</p>
         ${renderCoachChat({ compact: false })}
       </section>
     `;
@@ -1061,95 +1150,194 @@
     `;
   }
 
-  function renderProfile() {
-    const p = state.profile;
-    if (!p) {
-      return `
-        <section class="pulse-page">
-          <p class="page-kicker">Profile</p>
-          <h1 class="page-title">Loading your miles…</h1>
-        </section>
-      `;
-    }
+  function renderProfileTabs(activeTab) {
+    const tabs = [
+      { id: "activities", label: "Activities", icon: '<svg viewBox="0 0 24 24"><path d="M4 6h7v7H4zM13 6h7v7h-7zM4 15h7v7H4zM13 15h7v7h-7z"/></svg>' },
+      { id: "media", label: "Media", icon: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M4 16l5-5 4 4 3-3 4 4"/></svg>' },
+      { id: "stats", label: "Stats", icon: '<svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 17V11M12 17V7M16 17v-4"/></svg>' },
+      { id: "lab", label: "Lab", icon: '<svg viewBox="0 0 24 24"><path d="M12 3l2.2 4.5L19 9l-3.5 3.4.8 4.8L12 15.2 7.7 17.2l.8-4.8L5 9l4.8-1.5L12 3z"/></svg>' },
+    ];
+    return `
+      <div class="ig-profile-tabs" role="tablist">
+        ${tabs
+          .map(
+            (t) => `
+          <button type="button" class="ig-tab ${activeTab === t.id ? "is-active" : ""}" data-action="profile-tab" data-tab="${t.id}" role="tab">
+            ${t.icon}
+            <span>${t.label}</span>
+          </button>`
+          )
+          .join("")}
+      </div>`;
+  }
 
-    const stats = p.stats || state.summary || {};
+  function renderProfileTabContent(tab, profile, activities, summary) {
+    const stats = profile.stats || summary || {};
     const distance =
       stats.total_running_km != null
         ? Number(stats.total_running_km).toFixed(1)
         : stats.total_distance_km != null
           ? Number(stats.total_distance_km).toFixed(1)
-          : deriveDistanceKm(state.activities);
+          : deriveDistanceKm(activities);
     const runs =
-      stats.running_activities ??
-      stats.total_activities ??
-      state.activities.length;
+      stats.running_activities ?? stats.total_activities ?? activities.length;
     let timeLabel;
     if (stats.total_training_hours != null) {
       const hours = Number(stats.total_training_hours);
       timeLabel = hours >= 10 ? `${hours.toFixed(0)}h` : `${hours.toFixed(1)}h`;
     } else {
-      timeLabel = formatDuration(deriveMovingTime(state.activities));
+      timeLabel = formatDuration(deriveMovingTime(activities));
     }
 
-    const followers = Number(p.follower_count || 0);
-    const following = Number(p.following_count || 0);
-    const grid =
-      state.activities.length === 0
-        ? (() => {
-            const empty = copyEmpty("activities");
-            return `<div class="tile-empty empty-state-block"><strong>${escapeHtml(
-              empty.title
-            )}</strong><br><span style="color:var(--faint)">${escapeHtml(
-              empty.body
-            )}</span></div>`;
-          })()
-        : state.activities.map(renderActivityTile).join("");
-
-    const insightLine =
-      Copy && Copy.profileInsight ? Copy.profileInsight(p, state.activities) : null;
-    const insight = insightLine
-      ? `<p class="profile-insight">${escapeHtml(insightLine)}</p>`
-      : "";
-
-    return `
-      <section class="pulse-page" data-page="profile">
-        <p class="page-kicker">Profile</p>
-        <div class="profile-header">
-          ${renderAvatarHtml(p, "is-lg")}
-          <div class="profile-identity">
-            <h1>${escapeHtml(p.display_name || "Runner")}</h1>
-            <p class="profile-handle">${escapeHtml(handleLabel(p))}</p>
-            ${p.bio ? `<p class="profile-bio">${escapeHtml(p.bio)}</p>` : ""}
-            ${insight}
-            <div class="profile-social profile-social-counts">
-              <button type="button" class="profile-count" disabled><strong>${escapeHtml(
-                Number(p.posts_count ?? p.stats?.total_activities ?? state.activities.length)
-              )}</strong> posts</button>
-              <button type="button" class="profile-count" data-action="open-followers" data-athlete-id="${escapeHtml(p.athlete_id || "")}" data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(followers)}</strong> followers</button>
-              <button type="button" class="profile-count" data-action="open-following" data-athlete-id="${escapeHtml(p.athlete_id || "")}" data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(following)}</strong> following</button>
-            </div>
-            <div class="profile-actions">
-              <button type="button" class="btn btn-primary" data-action="edit-profile">Edit Profile</button>
-              <button type="button" class="btn btn-ghost" data-action="open-settings">Settings</button>
-            </div>
-            ${
-              profileIncomplete(p)
-                ? `<p class="form-hint" style="margin-top:10px">Complete your profile to help people find you.</p>`
-                : ""
-            }
-          </div>
-        </div>
-
-        <div class="profile-stats">
+    if (tab === "stats") {
+      return `
+        <div class="ig-tab-panel ig-stats-grid">
           <div class="stat-pill"><span>Distance</span><strong>${escapeHtml(distance)} km</strong></div>
           <div class="stat-pill"><span>Runs</span><strong>${escapeHtml(runs)}</strong></div>
           <div class="stat-pill"><span>Time</span><strong>${escapeHtml(timeLabel)}</strong></div>
-        </div>
+          <div class="stat-pill"><span>Followers</span><strong>${escapeHtml(Number(profile.follower_count || 0))}</strong></div>
+        </div>`;
+    }
+    if (tab === "lab") {
+      return `
+        <div class="ig-tab-panel ig-lab-panel">
+          <p>Deep analytics live in Pulse Lab — scores, training load, and AI insights without cluttering your social feed.</p>
+          <div class="profile-actions" style="margin-top:16px">
+            <a class="btn btn-primary" href="/lab">Open Pulse Lab</a>
+            <button type="button" class="btn btn-ghost" data-nav="coach">AI Coach</button>
+          </div>
+          ${renderCoachChat({ compact: false })}
+        </div>`;
+    }
+    if (tab === "media") {
+      const withPhoto = activities.filter((a) => a.photo_url || a.primary_photo_url);
+      const grid =
+        withPhoto.length === 0
+          ? `<div class="tile-empty">No media yet. Sync Strava to pull photos.</div>`
+          : withPhoto.map(renderActivityTile).join("");
+      return `<div class="ig-tab-panel"><div class="activity-grid">${grid}</div></div>`;
+    }
+    const grid =
+      activities.length === 0
+        ? (() => {
+            const empty = copyEmpty("activities");
+            return `<div class="tile-empty empty-state-block"><strong>${escapeHtml(empty.title)}</strong><br><span style="color:var(--faint)">${escapeHtml(empty.body)}</span></div>`;
+          })()
+        : activities.map(renderActivityTile).join("");
+    return `<div class="ig-tab-panel"><div class="activity-grid">${grid}</div></div>`;
+  }
 
-        <h2 class="profile-section-title">Activities</h2>
-        <div class="activity-grid">${grid}</div>
-      </section>
+  function renderIgProfileShell({
+    profile,
+    activities,
+    summary,
+    isSelf,
+    activeTab,
+    actionsHtml,
+    athleteId,
+    handle,
+  }) {
+    const followers = Number(profile.follower_count || 0);
+    const following = Number(profile.following_count || 0);
+    const posts = Number(
+      profile.posts_count ?? profile.stats?.total_activities ?? activities.length
+    );
+    const idAttr = athleteId ? `data-athlete-id="${escapeHtml(athleteId)}"` : "";
+    const handleAttr = handle ? `data-handle="${escapeHtml(handle)}"` : "";
+
+    return `
+      <section class="pulse-page pulse-page--wide ig-profile" data-page="${isSelf ? "profile" : "u"}">
+        <div class="ig-profile-top">
+          ${renderAvatarHtml(profile, "is-lg")}
+          <div class="ig-profile-stats-row">
+            <button type="button" class="ig-stat" disabled><strong>${escapeHtml(posts)}</strong><span>posts</span></button>
+            <button type="button" class="ig-stat profile-count" data-action="open-followers" ${idAttr} ${handleAttr}><strong>${escapeHtml(followers)}</strong><span>followers</span></button>
+            <button type="button" class="ig-stat profile-count" data-action="open-following" ${idAttr} ${handleAttr}><strong>${escapeHtml(following)}</strong><span>following</span></button>
+          </div>
+        </div>
+        <div class="ig-profile-meta">
+          <h1>${escapeHtml(displayNameOf(profile))}</h1>
+          <p class="ig-profile-handle">${escapeHtml(isSelf ? handleLabel(profile) : publicHandleLabel(profile))}</p>
+          ${profile.bio ? `<p class="ig-profile-bio">${escapeHtml(profile.bio)}</p>` : ""}
+          ${
+            profile.location?.display_name
+              ? `<p class="ig-profile-handle">${escapeHtml(profile.location.display_name)}</p>`
+              : ""
+          }
+          <div class="ig-profile-actions">${actionsHtml}</div>
+        </div>
+        ${renderProfileTabs(activeTab)}
+        ${renderProfileTabContent(activeTab, profile, activities, summary)}
+      </section>`;
+  }
+
+  function renderActivityPage() {
+    const items = [];
+    if (state.inbox.unread_total > 0) {
+      items.push({
+        text: `You have ${state.inbox.unread_total} unread message${state.inbox.unread_total === 1 ? "" : "s"}.`,
+        time: "Now",
+        action: "messages",
+      });
+    }
+    if (state.feed.items.length) {
+      const latest = state.feed.items[0];
+      items.push({
+        text: `${displayNameOf(latest.author)} posted a ${latest.activity?.type || "run"}.`,
+        time: relativeWhen(latest.activity?.start_date_local || latest.created_at) || "Recent",
+        action: "feed",
+      });
+    }
+    items.push({
+      text: "Sync Strava to refresh your feed and explore grid.",
+      time: "Tip",
+      action: "create",
+    });
+
+    return `
+      <section class="pulse-page activity-page" data-page="activity">
+        <div class="activity-list">
+          ${items
+            .map(
+              (row) => `
+            <button type="button" class="activity-row" data-nav="${escapeHtml(row.action)}">
+              <div class="pulse-avatar is-sm">P</div>
+              <div>
+                <p>${escapeHtml(row.text)}</p>
+                <time>${escapeHtml(row.time)}</time>
+              </div>
+            </button>`
+            )
+            .join("")}
+        </div>
+      </section>`;
+  }
+
+  function renderProfile() {
+    const p = state.profile;
+    if (!p) {
+      return `
+        <section class="pulse-page ig-profile" data-page="profile">
+          <div class="feed-status"><h2>Loading your miles…</h2></div>
+        </section>
+      `;
+    }
+
+    const actions = `
+      <button type="button" class="btn btn-primary" data-action="edit-profile">Edit profile</button>
+      <button type="button" class="btn btn-ghost" data-action="open-settings">Settings</button>
     `;
+
+    return renderIgProfileShell({
+      profile: p,
+      activities: state.activities,
+      summary: state.summary,
+      isSelf: true,
+      activeTab: state.profileTab,
+      actionsHtml: actions,
+      athleteId: p.athlete_id,
+      handle: p.handle,
+    });
   }
 
   function renderViewedProfile() {
@@ -1179,37 +1367,6 @@
       return renderProfile();
     }
 
-    const stats = p.stats || {};
-    const distance =
-      stats.total_distance_km != null ? Number(stats.total_distance_km).toFixed(1) : "—";
-    const runs = stats.activity_count ?? (p.activities || []).length;
-    const timeLabel =
-      stats.total_moving_time_s != null
-        ? formatDuration(stats.total_moving_time_s)
-        : "—";
-    const followers = Number(p.follower_count || 0);
-    const following = Number(p.following_count || 0);
-    const activities = Array.isArray(p.activities) ? p.activities : [];
-    const grid =
-      activities.length === 0
-        ? `<div class="tile-empty">Zero miles. Plenty of potential.</div>`
-        : activities
-            .map((a, i) =>
-              renderActivityTile(
-                {
-                  id: a.id,
-                  name: a.name,
-                  sport_type: a.sport_type,
-                  distance_m: a.distance_m,
-                  moving_time_s: a.moving_time_s,
-                  start_date_local: a.start_date_local,
-                  start_date: a.start_date,
-                },
-                i
-              )
-            )
-            .join("");
-
     const athleteId = athleteIdOf(p);
     const idAttr = athleteId ? `data-athlete-id="${escapeHtml(athleteId)}"` : "";
     const followBtn = p.is_following
@@ -1217,57 +1374,32 @@
           p.is_mutual ? "Friends" : "Following"
         }</button>`
       : `<button type="button" class="btn btn-primary btn-follow" data-action="follow-user" ${idAttr} data-handle="${escapeHtml(p.handle || "")}">Follow</button>`;
+    const messageBtn = p.is_mutual
+      ? `<button type="button" class="btn btn-primary btn-message" data-action="open-dm" ${idAttr} data-handle="${escapeHtml(p.handle || "")}">Message</button>`
+      : `<span class="form-hint dm-mutual-hint">Follow each other to message.</span>`;
+    const activities = Array.isArray(p.activities)
+      ? p.activities.map((a) => ({
+          id: a.id,
+          name: a.name,
+          sport_type: a.sport_type,
+          distance_m: a.distance_m,
+          moving_time_s: a.moving_time_s,
+          start_date_local: a.start_date_local,
+          start_date: a.start_date,
+          photo_url: a.photo_url,
+        }))
+      : [];
 
-    const followedBy =
-      p.is_followed_by && !p.is_following
-        ? `<p class="form-hint" style="margin-top:8px">Follows you</p>`
-        : p.is_mutual
-          ? `<p class="form-hint" style="margin-top:8px">You follow each other</p>`
-          : "";
-
-    return `
-      <section class="pulse-page" data-page="u">
-        <p class="page-kicker">Profile</p>
-        <div class="profile-header">
-          ${renderAvatarHtml(p, "is-lg")}
-          <div class="profile-identity">
-            <h1>${escapeHtml(displayNameOf(p))}</h1>
-            <p class="profile-handle">${escapeHtml(publicHandleLabel(p))}</p>
-            ${p.bio ? `<p class="profile-bio">${escapeHtml(p.bio)}</p>` : ""}
-            ${
-              p.location?.display_name
-                ? `<p class="profile-handle" style="margin-top:-6px">${escapeHtml(p.location.display_name)}</p>`
-                : ""
-            }
-            <div class="profile-social profile-social-counts">
-              <button type="button" class="profile-count" disabled><strong>${escapeHtml(
-                Number(p.posts_count ?? p.stats?.activity_count ?? activities.length)
-              )}</strong> posts</button>
-              <button type="button" class="profile-count" data-action="open-followers" ${idAttr} data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(followers)}</strong> followers</button>
-              <button type="button" class="profile-count" data-action="open-following" ${idAttr} data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(following)}</strong> following</button>
-            </div>
-            <div class="profile-actions">
-              ${followBtn}
-              ${
-                p.is_mutual
-                  ? `<button type="button" class="btn btn-primary btn-message" data-action="open-dm" ${idAttr} data-handle="${escapeHtml(p.handle || "")}">Message</button>`
-                  : `<p class="form-hint dm-mutual-hint">Follow each other to start messaging.</p>`
-              }
-            </div>
-            ${followedBy}
-          </div>
-        </div>
-
-        <div class="profile-stats">
-          <div class="stat-pill"><span>Distance</span><strong>${escapeHtml(distance)} km</strong></div>
-          <div class="stat-pill"><span>Runs</span><strong>${escapeHtml(runs)}</strong></div>
-          <div class="stat-pill"><span>Time</span><strong>${escapeHtml(timeLabel)}</strong></div>
-        </div>
-
-        <h2 class="profile-section-title">Activities</h2>
-        <div class="activity-grid">${grid}</div>
-      </section>
-    `;
+    return renderIgProfileShell({
+      profile: p,
+      activities,
+      summary: p.stats,
+      isSelf: false,
+      activeTab: state.viewedProfileTab,
+      actionsHtml: `${followBtn}${messageBtn}`,
+      athleteId,
+      handle: p.handle,
+    });
   }
 
   function deriveDistanceKm(activities) {
@@ -1341,36 +1473,106 @@
     `;
   }
 
-  function renderMessagesInbox() {
+  function renderInboxBody() {
     const inbox = state.inbox;
-    let body = "";
     if (inbox.status === "loading" || inbox.status === "idle") {
-      body = `<div class="dm-empty"><p>Loading messages…</p></div>`;
-    } else if (inbox.status === "error") {
-      body = `
+      return `<div class="dm-empty"><p>Loading messages…</p></div>`;
+    }
+    if (inbox.status === "error") {
+      return `
         <div class="dm-empty">
           <p>${escapeHtml(inbox.error || errLine())}</p>
           <button type="button" class="btn btn-primary" data-action="retry-inbox">Retry</button>
         </div>`;
-    } else if (!inbox.items.length) {
-      body = `
+    }
+    if (!inbox.items.length) {
+      return `
         <div class="dm-empty">
           <h2>Your inbox is quiet.</h2>
           <p>Messages open when you follow each other. Find runners in Explore.</p>
           <button type="button" class="btn btn-primary" data-nav="explore">Explore</button>
         </div>`;
-    } else {
-      body = `<div class="dm-inbox-list">${inbox.items.map(renderInboxRow).join("")}</div>`;
+    }
+    return `<div class="dm-inbox-list">${inbox.items.map(renderInboxRow).join("")}</div>`;
+  }
+
+  function renderThreadInner({ split = false } = {}) {
+    const t = state.thread;
+    const peer = t.peer || {};
+    const pageClass = split ? "dm-split-thread-inner" : "dm-thread-page";
+    const backBtn = split
+      ? ""
+      : `<button type="button" class="dm-back" data-action="back-inbox" aria-label="Back">←</button>`;
+
+    if (t.status === "loading" || t.status === "idle") {
+      return `
+        <div class="${pageClass}" data-page="dm">
+          <header class="dm-thread-top">${backBtn}<h1 class="dm-title">Messages</h1></header>
+          <div class="dm-empty"><p>Opening chat…</p></div>
+        </div>`;
+    }
+    if (t.status === "error") {
+      return `
+        <div class="${pageClass}" data-page="dm">
+          <header class="dm-thread-top">${backBtn}<h1 class="dm-title">Messages</h1></header>
+          <div class="dm-empty">
+            <p>${escapeHtml(t.error || errLine())}</p>
+            <button type="button" class="btn btn-primary" data-action="back-inbox">Back to inbox</button>
+          </div>
+        </div>`;
+    }
+
+    const composer = t.can_send
+      ? `
+        <form class="dm-composer" id="dmComposer" autocomplete="off">
+          <input type="text" id="dmInput" maxlength="2000" placeholder="Message…" enterkeyhint="send" />
+          <button type="submit" class="dm-send" aria-label="Send" ${t.sending ? "disabled" : ""}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l15-7-6 14-2-5-7-2z"/></svg>
+          </button>
+        </form>`
+      : `<div class="dm-readonly">You can message each other again when you both follow each other.</div>`;
+
+    return `
+      <div class="${pageClass} is-open" data-page="dm">
+        <header class="dm-thread-top">
+          ${backBtn}
+          <button type="button" class="dm-peer" data-action="open-user" data-athlete-id="${escapeHtml(peer.athlete_id || "")}" data-handle="${escapeHtml(peer.handle || "")}">
+            ${renderAvatarHtml(peer, "is-sm")}
+            <div>
+              <strong>${escapeHtml(displayNameOf(peer))}</strong>
+              <span>${escapeHtml(publicHandleLabel(peer))}</span>
+            </div>
+          </button>
+        </header>
+        <div class="dm-thread-scroll" id="dmThreadScroll">
+          ${renderDmBubbles(t.messages)}
+        </div>
+        ${composer}
+      </div>`;
+  }
+
+  function renderMessagesInbox() {
+    if (isDesktop()) {
+      const threadPanel = state.thread.conversationId
+        ? renderThreadInner({ split: true })
+        : `<div class="dm-split-empty"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H8l-4 3V6z"/></svg><p>Select a conversation</p></div>`;
+      return `
+        <section class="pulse-page dm-page dm-split-page pulse-page--wide" data-page="messages">
+          <div class="dm-split">
+            <aside class="dm-split-inbox dm-inbox-page">
+              <header class="dm-topbar"><h1 class="dm-title">Messages</h1></header>
+              ${renderInboxBody()}
+            </aside>
+            <div class="dm-split-thread">${threadPanel}</div>
+          </div>
+        </section>`;
     }
 
     return `
       <section class="pulse-page dm-page dm-inbox-page" data-page="messages">
-        <header class="dm-topbar">
-          <h1 class="dm-title">Messages</h1>
-        </header>
-        ${body}
-      </section>
-    `;
+        <header class="dm-topbar"><h1 class="dm-title">Messages</h1></header>
+        ${renderInboxBody()}
+      </section>`;
   }
 
   function renderDmBubbles(messages) {
@@ -1405,63 +1607,8 @@
   }
 
   function renderDmThread() {
-    const t = state.thread;
-    const peer = t.peer || {};
-    if (t.status === "loading" || t.status === "idle") {
-      return `
-        <section class="pulse-page dm-page dm-thread-page" data-page="dm">
-          <header class="dm-thread-top">
-            <button type="button" class="dm-back" data-action="back-inbox" aria-label="Back">←</button>
-            <h1 class="dm-title">Messages</h1>
-          </header>
-          <div class="dm-empty"><p>Opening chat…</p></div>
-        </section>`;
-    }
-    if (t.status === "error") {
-      return `
-        <section class="pulse-page dm-page dm-thread-page" data-page="dm">
-          <header class="dm-thread-top">
-            <button type="button" class="dm-back" data-action="back-inbox" aria-label="Back">←</button>
-            <h1 class="dm-title">Messages</h1>
-          </header>
-          <div class="dm-empty">
-            <p>${escapeHtml(t.error || errLine())}</p>
-            <button type="button" class="btn btn-primary" data-action="back-inbox">Back to inbox</button>
-          </div>
-        </section>`;
-    }
-
-    const composer = t.can_send
-      ? `
-        <form class="dm-composer" id="dmComposer" autocomplete="off">
-          <input type="text" id="dmInput" maxlength="2000" placeholder="Message…" enterkeyhint="send" />
-          <button type="submit" class="dm-send" aria-label="Send" ${t.sending ? "disabled" : ""}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l15-7-6 14-2-5-7-2z"/></svg>
-          </button>
-        </form>`
-      : `
-        <div class="dm-readonly">
-          You can message each other again when you both follow each other.
-        </div>`;
-
-    return `
-      <section class="pulse-page dm-page dm-thread-page is-open" data-page="dm">
-        <header class="dm-thread-top">
-          <button type="button" class="dm-back" data-action="back-inbox" aria-label="Back">←</button>
-          <button type="button" class="dm-peer" data-action="open-user" data-athlete-id="${escapeHtml(peer.athlete_id || "")}" data-handle="${escapeHtml(peer.handle || "")}">
-            ${renderAvatarHtml(peer, "is-sm")}
-            <div>
-              <strong>${escapeHtml(displayNameOf(peer))}</strong>
-              <span>${escapeHtml(publicHandleLabel(peer))}</span>
-            </div>
-          </button>
-        </header>
-        <div class="dm-thread-scroll" id="dmThreadScroll">
-          ${renderDmBubbles(t.messages)}
-        </div>
-        ${composer}
-      </section>
-    `;
+    if (isDesktop()) return renderMessagesInbox();
+    return `<section class="pulse-page dm-page" data-page="dm">${renderThreadInner({ split: false })}</section>`;
   }
 
   async function loadInbox(force = false) {
@@ -1497,9 +1644,19 @@
   }
 
   function navigateDm(conversationId, { replace = false } = {}) {
-    state.page = "dm";
     state.thread.conversationId = conversationId;
     setNavActive("messages");
+    if (isDesktop()) {
+      state.page = "messages";
+      document.body.classList.remove("dm-thread-active");
+      const hash = `#messages/${encodeURIComponent(conversationId)}`;
+      if (replace) history.replaceState({ page: "messages", conversationId }, "", hash);
+      else history.pushState({ page: "messages", conversationId }, "", hash);
+      render();
+      loadThread(conversationId, true);
+      return;
+    }
+    state.page = "dm";
     document.body.classList.add("dm-thread-active");
     const hash = `#dm/${encodeURIComponent(conversationId)}`;
     if (replace) history.replaceState({ page: "dm", conversationId }, "", hash);
@@ -1639,10 +1796,12 @@
       const athleteId = athleteIdOf(decodeURIComponent(raw.slice(3)).trim());
       return { page: "u", handle: null, athleteId, conversationId: null };
     }
-    if (raw.startsWith("dm/")) {
-      const conversationId = decodeURIComponent(raw.slice(3)).trim();
+    if (raw.startsWith("dm/") || raw.startsWith("messages/")) {
+      const conversationId = decodeURIComponent(
+        raw.slice(raw.indexOf("/") + 1)
+      ).trim();
       return {
-        page: "dm",
+        page: isDesktop() ? "messages" : "dm",
         handle: null,
         athleteId: null,
         conversationId: conversationId || null,
@@ -1653,34 +1812,34 @@
   }
 
   function navigate(page, { replace = false } = {}) {
+    if (page === "create") {
+      syncStrava(false);
+      return;
+    }
+
     const next = PAGES.includes(page) ? page : "feed";
     state.page = next;
     state.viewed.handle = null;
     state.viewed.athleteId = null;
-    if (next !== "dm") {
+    if (next !== "dm" && next !== "messages") {
       document.body.classList.remove("dm-thread-active");
+      state.thread.conversationId = null;
+    } else if (next === "messages" && !isDesktop()) {
       state.thread.conversationId = null;
     }
     setNavActive(next === "dm" ? "messages" : next);
     const hash = `#${next}`;
     if (replace) {
       history.replaceState({ page: next }, "", hash);
-    } else if (location.hash !== hash) {
+    } else if (location.hash !== hash && !location.hash.startsWith(`#${next}/`)) {
       history.pushState({ page: next }, "", hash);
     }
     render();
-    if (next === "feed") {
-      loadFeed(false);
-    }
-    if (next === "explore") {
-      loadExplore(false);
-    }
-    if (next === "messages") {
-      loadInbox(true);
-    }
-    if (next === "coach") {
-      loadCoachMessages(false);
-    }
+    if (next === "feed") loadFeed(false);
+    if (next === "explore") loadExplore(false);
+    if (next === "messages") loadInbox(true);
+    if (next === "coach") loadCoachMessages(false);
+    if (next === "activity") refreshUnreadBadge();
   }
 
   function openUserProfile(ref, { replace = false } = {}) {
@@ -1876,7 +2035,7 @@
   function applyProfileMessageDom(athleteId, { isMutual, handle }) {
     const id = athleteIdOf(athleteId);
     if (!id) return;
-    const actions = document.querySelector('[data-page="u"] .profile-actions');
+    const actions = document.querySelector('[data-page="u"] .ig-profile-actions');
     if (!actions) return;
     const followBtn = actions.querySelector(".btn-follow[data-athlete-id]");
     if (!followBtn || athleteIdOf(followBtn.dataset.athleteId) !== id) return;
@@ -2400,19 +2559,19 @@
     else if (state.page === "explore") html = renderExplore();
     else if (state.page === "messages") html = renderMessagesInbox();
     else if (state.page === "dm") html = renderDmThread();
+    else if (state.page === "activity") html = renderActivityPage();
     else if (state.page === "coach") html = renderCoachPage();
     else if (state.page === "u") html = renderViewedProfile();
     else html = renderProfile();
 
     els.viewRoot.innerHTML = html;
-    els.coachSidebarPanel.innerHTML = renderCoachChat({ compact: true });
     bindViewInteractions();
     wireCoachDom(els.viewRoot);
-    wireCoachDom(els.coachSidebarPanel);
     wireDmComposer();
     scrollCoachThreads();
+    updateMobileHeader();
 
-    if (state.page === "dm") {
+    if (state.page === "dm" || (state.page === "messages" && state.thread.conversationId)) {
       requestAnimationFrame(() => {
         const sc = document.getElementById("dmThreadScroll");
         if (sc) sc.scrollTop = sc.scrollHeight;
@@ -2479,6 +2638,14 @@
       if (cid) navigateDm(cid);
     }
     if (action === "back-inbox") navigateInbox();
+    if (action === "profile-tab") {
+      const tab = el?.dataset?.tab;
+      if (!PROFILE_TABS.includes(tab)) return;
+      if (state.page === "u") state.viewedProfileTab = tab;
+      else state.profileTab = tab;
+      render();
+      return;
+    }
     if (action === "follow-user") {
       toggleFollow(
         { athleteId: el?.dataset?.athleteId, handle: el?.dataset?.handle },
@@ -2596,16 +2763,18 @@
   }
 
   function applyProfileChrome(profile) {
-    els.sidebarName.textContent = displayNameOf(profile);
-    els.sidebarHandle.textContent = handleLabel(profile);
-    els.sidebarAvatar.innerHTML = "";
-    if (profile.avatar_url) {
-      const img = document.createElement("img");
-      img.src = profile.avatar_url;
-      img.alt = "";
-      els.sidebarAvatar.appendChild(img);
-    } else {
-      els.sidebarAvatar.textContent = profile.initials || "P";
+    if (els.sidebarName) els.sidebarName.textContent = displayNameOf(profile);
+    if (els.sidebarHandle) els.sidebarHandle.textContent = handleLabel(profile);
+    if (els.sidebarAvatar) {
+      els.sidebarAvatar.innerHTML = "";
+      if (profile.avatar_url) {
+        const img = document.createElement("img");
+        img.src = profile.avatar_url;
+        img.alt = "";
+        els.sidebarAvatar.appendChild(img);
+      } else {
+        els.sidebarAvatar.textContent = profile.initials || "P";
+      }
     }
 
     document.getElementById("settingsDisplayName").value =
@@ -2843,7 +3012,6 @@
   /* ——— Boot ——— */
 
   async function boot() {
-    els.coachTagline.textContent = pickTagline();
     document.addEventListener("click", onClick);
     window.addEventListener("popstate", () => {
       const loc = parseLocationHash();
@@ -2852,7 +3020,7 @@
           { athleteId: loc.athleteId, handle: loc.handle },
           { replace: true }
         );
-      } else if (loc.page === "dm" && loc.conversationId) {
+      } else if (loc.conversationId && (loc.page === "dm" || loc.page === "messages")) {
         navigateDm(loc.conversationId, { replace: true });
       } else {
         navigate(loc.page, { replace: true });
@@ -2879,7 +3047,7 @@
         { athleteId: initial.athleteId, handle: initial.handle },
         { replace: true }
       );
-    } else if (initial.page === "dm" && initial.conversationId) {
+    } else if (initial.conversationId && (initial.page === "dm" || initial.page === "messages")) {
       navigateDm(initial.conversationId, { replace: true });
     } else {
       navigate(initial.page, { replace: true });

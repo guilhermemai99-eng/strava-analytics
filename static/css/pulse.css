@@ -17,9 +17,12 @@
   --accent-ink: #0b120c;
   --accent-2: #5cffb0;
   --warn: #e08b7a;
-  --sidebar-w: 248px;
-  --coach-w: 340px;
-  --center-max: 680px;
+  --sidebar-w: 244px;
+  --coach-w: 0px;
+  --center-max: 470px;
+  --ig-feed-max: 470px;
+  --ig-explore-max: 935px;
+  --ig-dm-split: 935px;
   --radius: 18px;
   --radius-sm: 12px;
   --font-display: "Syne", ui-sans-serif, system-ui, sans-serif;
@@ -80,10 +83,10 @@ body {
 
 .pulse-app {
   display: grid;
-  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--coach-w);
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   min-height: 100dvh;
-  max-width: 1440px;
-  margin: 0 auto;
+  max-width: 100%;
+  margin: 0;
 }
 
 .pulse-sidebar,
