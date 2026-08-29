@@ -1,12 +1,15 @@
-"""Token encryption: dual-read, encrypt-on-store, plaintext to callers."""
+"""Token encryption: encrypt-on-store, plaintext to callers, no dual-read."""
 
 from __future__ import annotations
 
 import time
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from strava_auth import StravaAuth
 from strava_tokens import (
+    StravaTokenError,
     _read_stored_token,
     get_valid_access_token,
     store_strava_tokens,
@@ -22,15 +25,9 @@ def test_fernet_roundtrip():
     assert decrypt_token(cipher) == plain
 
 
-def test_dual_read_plaintext_version_zero():
-    auth = StravaAuth(
-        athlete_id=1,
-        access_token="plain-access",
-        refresh_token="plain-refresh",
-        expires_at=1893456000,
-        token_version=0,
-    )
-    assert _read_stored_token(auth.access_token, auth.token_version) == "plain-access"
+def test_plaintext_version_zero_rejected():
+    with pytest.raises(StravaTokenError, match="plaintext"):
+        _read_stored_token("plain-access", 0)
 
 
 def test_store_encrypts_and_bumps_version():
@@ -53,7 +50,6 @@ def test_get_valid_access_token_returns_plaintext(db_session, make_athlete):
     auth = StravaAuth(
         athlete_id=730001,
         expires_at=int(time.time()) + 3600,
-        token_version=0,
     )
     store_strava_tokens(
         auth,
@@ -78,12 +74,12 @@ def test_get_valid_access_token_returns_plaintext(db_session, make_athlete):
 
 def test_refresh_persists_newly_encrypted_tokens(db_session, make_athlete):
     make_athlete(730002)
-    auth = StravaAuth(
-        athlete_id=730002,
-        expires_at=int(time.time()) - 10,
-        token_version=0,
+    auth = StravaAuth(athlete_id=730002)
+    store_strava_tokens(
+        auth,
         access_token="old-access",
         refresh_token="old-refresh",
+        expires_at=int(time.time()) - 10,
     )
     db_session.add(auth)
     db_session.commit()

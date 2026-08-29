@@ -75,12 +75,47 @@ def run_startup_migrations() -> None:
     print("[start] Migrations complete.")
 
 
+def run_startup_token_encryption() -> None:
+    """Encrypt any leftover plaintext tokens before serving traffic."""
+
+    from token_crypto import TokenEncryptionError
+    from strava_tokens import upgrade_plaintext_tokens
+
+    if not (os.getenv("TOKEN_ENCRYPTION_KEY") or "").strip():
+        print(
+            "[start] TOKEN_ENCRYPTION_KEY missing; "
+            "skipping plaintext token upgrade."
+        )
+        return
+
+    db = SessionLocal()
+    try:
+        result = upgrade_plaintext_tokens(db)
+        print(
+            "[start] Token encryption upgrade: "
+            f"upgraded={result['upgraded']} "
+            f"skipped={result['skipped']} "
+            f"remaining_plaintext={result['remaining_plaintext']}"
+        )
+        if result["remaining_plaintext"]:
+            print(
+                "[start] WARNING: plaintext Strava tokens remain; "
+                "those athletes must re-OAuth or be fixed manually."
+            )
+    except (TokenEncryptionError, StravaTokenError) as exc:
+        print(f"[start] Token encryption upgrade failed: {exc}")
+        raise
+    finally:
+        db.close()
+
+
 from contextlib import asynccontextmanager
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     run_startup_migrations()
+    run_startup_token_encryption()
     yield
 
 

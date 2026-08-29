@@ -27,7 +27,7 @@ class StravaTokenError(Exception):
 
 
 def _read_stored_token(raw_value, token_version):
-    """Return plaintext from a DB column using dual-read rules."""
+    """Return plaintext from a Fernet-encrypted DB column."""
 
     if raw_value is None:
         return None
@@ -39,7 +39,10 @@ def _read_stored_token(raw_value, token_version):
     )
 
     if version == TOKEN_VERSION_PLAINTEXT:
-        return raw_value
+        raise StravaTokenError(
+            "Strava token is still plaintext (token_version=0). "
+            "Run scripts/encrypt_strava_tokens.py, then re-login if needed."
+        )
 
     if version == TOKEN_VERSION_FERNET:
         try:
@@ -81,6 +84,63 @@ def store_strava_tokens(
         raise StravaTokenError(str(exc)) from exc
 
     return auth
+
+
+def upgrade_plaintext_tokens(db) -> dict:
+    """Encrypt all token_version=0 rows in-place. Safe to run on every boot."""
+
+    pending = (
+        db.query(StravaAuth)
+        .filter(
+            (StravaAuth.token_version == TOKEN_VERSION_PLAINTEXT)
+            | (StravaAuth.token_version.is_(None))
+        )
+        .order_by(StravaAuth.id)
+        .all()
+    )
+
+    upgraded = 0
+    skipped = 0
+
+    for auth in pending:
+        access = auth.access_token
+        refresh = auth.refresh_token
+
+        if not access:
+            skipped += 1
+            continue
+
+        store_strava_tokens(
+            auth,
+            access_token=access,
+            refresh_token=refresh,
+            expires_at=auth.expires_at,
+        )
+
+        if auth.access_token == access:
+            raise StravaTokenError(
+                f"id={auth.id}: access_token still equals plaintext after encrypt"
+            )
+
+        upgraded += 1
+
+    if upgraded:
+        db.commit()
+
+    remaining = (
+        db.query(StravaAuth)
+        .filter(
+            (StravaAuth.token_version == TOKEN_VERSION_PLAINTEXT)
+            | (StravaAuth.token_version.is_(None))
+        )
+        .count()
+    )
+
+    return {
+        "upgraded": upgraded,
+        "skipped": skipped,
+        "remaining_plaintext": remaining,
+    }
 
 
 def get_valid_access_token(

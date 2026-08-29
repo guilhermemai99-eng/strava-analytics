@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """Encrypt plaintext Strava tokens (token_version=0 -> 1).
 
-Schema migration 0004 only adds columns. Run this job after deploying
-the dual-read app and setting TOKEN_ENCRYPTION_KEY.
+Also runs automatically on app startup when TOKEN_ENCRYPTION_KEY is set.
+Keep this script for one-shot ops / dry-runs.
 
 Usage:
   TOKEN_ENCRYPTION_KEY=... DATABASE_URL=... \\
     .venv/bin/python scripts/encrypt_strava_tokens.py
 
-  # Dry-run (no writes):
   .venv/bin/python scripts/encrypt_strava_tokens.py --dry-run
 """
 
@@ -24,7 +23,7 @@ if str(ROOT) not in sys.path:
 
 from database import SessionLocal
 from strava_auth import StravaAuth
-from strava_tokens import store_strava_tokens
+from strava_tokens import upgrade_plaintext_tokens
 from token_crypto import (
     TOKEN_VERSION_FERNET,
     TOKEN_VERSION_PLAINTEXT,
@@ -84,76 +83,32 @@ def encrypt_all(*, dry_run: bool) -> int:
             print("Nothing to encrypt. All rows already at token_version=1.")
             return 0
 
-        pending = (
-            db.query(StravaAuth)
-            .filter(
-                (StravaAuth.token_version == TOKEN_VERSION_PLAINTEXT)
-                | (StravaAuth.token_version.is_(None))
-            )
-            .order_by(StravaAuth.id)
-            .all()
-        )
-
-        upgraded = 0
-        for auth in pending:
-            access = auth.access_token
-            refresh = auth.refresh_token
-
-            if not access:
-                print(
-                    f"skip id={auth.id} athlete_id={auth.athlete_id} "
-                    "(missing access_token)"
+        if dry_run:
+            pending = (
+                db.query(StravaAuth)
+                .filter(
+                    (StravaAuth.token_version == TOKEN_VERSION_PLAINTEXT)
+                    | (StravaAuth.token_version.is_(None))
                 )
-                continue
-
-            if dry_run:
+                .order_by(StravaAuth.id)
+                .all()
+            )
+            for auth in pending:
                 print(
                     f"dry-run would encrypt id={auth.id} "
                     f"athlete_id={auth.athlete_id}"
                 )
-                upgraded += 1
-                continue
+            print(f"done upgraded={len(pending)} dry_run=True")
+            return 0
 
-            store_strava_tokens(
-                auth,
-                access_token=access,
-                refresh_token=refresh,
-                expires_at=auth.expires_at,
-            )
-
-            if auth.access_token == access:
-                raise RuntimeError(
-                    f"id={auth.id}: access_token still equals plaintext"
-                )
-            if decrypt_token(auth.access_token) != access:
-                raise RuntimeError(
-                    f"id={auth.id}: decrypt mismatch for access_token"
-                )
-            if refresh:
-                if auth.refresh_token == refresh:
-                    raise RuntimeError(
-                        f"id={auth.id}: refresh_token still equals plaintext"
-                    )
-                if decrypt_token(auth.refresh_token) != refresh:
-                    raise RuntimeError(
-                        f"id={auth.id}: decrypt mismatch for refresh_token"
-                    )
-
-            upgraded += 1
-            print(
-                f"encrypted id={auth.id} athlete_id={auth.athlete_id}"
-            )
-
-        if not dry_run:
-            db.commit()
-
-        _, plaintext_after, encrypted_after, _ = _count_by_version(db)
+        result = upgrade_plaintext_tokens(db)
         print(
-            f"done upgraded={upgraded} dry_run={dry_run} "
-            f"plaintext_v0={plaintext_after} encrypted_v1={encrypted_after}"
+            f"done upgraded={result['upgraded']} "
+            f"skipped={result['skipped']} "
+            f"plaintext_v0={result['remaining_plaintext']}"
         )
 
-        if not dry_run and plaintext_after != 0:
+        if result["remaining_plaintext"] != 0:
             print(
                 "WARNING: plaintext rows remain after job.",
                 file=sys.stderr,

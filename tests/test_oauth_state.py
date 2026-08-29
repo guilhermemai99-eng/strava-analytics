@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import timedelta
 
 from oauth_helpers import consume_oauth_state, create_oauth_state
 from oauth_state import OAuthState, utcnow
+
+
+def _state(prefix: str) -> str:
+    return f"{prefix}-{uuid.uuid4().hex}"
 
 
 def test_missing_state_rejected(db_session):
@@ -15,22 +20,24 @@ def test_missing_state_rejected(db_session):
 
 
 def test_valid_state_consumed_once(db_session):
-    create_oauth_state(db_session, "state-once")
-    assert consume_oauth_state(db_session, "state-once") is True
-    assert consume_oauth_state(db_session, "state-once") is False
+    state = _state("once")
+    create_oauth_state(db_session, state)
+    assert consume_oauth_state(db_session, state) is True
+    assert consume_oauth_state(db_session, state) is False
 
 
 def test_expired_state_rejected(db_session):
-    create_oauth_state(db_session, "state-expired")
+    state = _state("expired")
+    create_oauth_state(db_session, state)
     row = (
         db_session.query(OAuthState)
-        .filter(OAuthState.state == "state-expired")
+        .filter(OAuthState.state == state)
         .one()
     )
     row.expires_at = utcnow() - timedelta(minutes=1)
     db_session.commit()
 
-    assert consume_oauth_state(db_session, "state-expired") is False
+    assert consume_oauth_state(db_session, state) is False
 
 
 def test_callback_rejects_invalid_state(client):
