@@ -275,28 +275,45 @@ a { color: inherit; text-decoration: none; }
     inset: auto -20% -45% -20%;
     height: 70%;
     background: radial-gradient(circle, rgba(184,242,90,0.2), transparent 65%);
+    pointer-events: none;
+    z-index: 0;
 }
 
 .score-ring {
+    --score: 0;
     width: min(200px, 34vh);
     height: min(200px, 34vh);
+    aspect-ratio: 1 / 1;
     border-radius: 50%;
     display: grid;
     place-items: center;
     position: relative;
+    z-index: 1;
+    flex-shrink: 0;
     background:
-        radial-gradient(circle at center, rgba(6,8,7,0.96) 58%, transparent 59%),
-        conic-gradient(from 210deg, var(--accent), var(--accent-2), rgba(255,255,255,0.08) 70%);
-    box-shadow: 0 0 0 1px rgba(184,242,90,0.2);
+        radial-gradient(circle at center, #070a08 61%, transparent 62%),
+        conic-gradient(
+            from -90deg,
+            var(--accent) 0 calc(var(--score) * 1%),
+            rgba(255, 255, 255, 0.08) calc(var(--score) * 1%) 100%
+        );
+    box-shadow: 0 0 0 1px rgba(184,242,90,0.2), 0 12px 40px rgba(0,0,0,0.35);
+}
+
+.score-ring > div {
+    position: relative;
+    z-index: 2;
+    text-align: center;
 }
 
 .score-number {
     font-family: var(--font-score);
-    font-size: clamp(52px, 8vh, 72px);
+    font-size: clamp(48px, 7vh, 72px);
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1;
     font-variant-numeric: tabular-nums;
+    color: var(--text);
 }
 
 .score-total {
@@ -315,6 +332,22 @@ a { color: inherit; text-decoration: none; }
     font-size: 11px;
     letter-spacing: 0.16em;
     text-transform: uppercase;
+}
+
+.score-hero-meta {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+}
+
+.score-hero-note {
+    display: none;
+    margin-top: 6px;
+    color: var(--text);
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
 }
 
 .score-categories {
@@ -726,12 +759,66 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
 @media (max-width: 980px) {
     .app { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
     .sidebar { display: none; }
-    .main { grid-template-rows: 70px 1fr; }
-    .page { padding: 16px 16px 12px; }
-    .overview-grid, .perf-top, .coach-card, .activities-grid {
+    .main { grid-template-rows: auto 1fr; }
+    .topbar {
+        padding: 10px 14px;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    #pageTitle { font-size: 20px; }
+    .sync-button {
+        min-height: 34px;
+        padding: 0 12px;
+        font-size: 11px;
+    }
+    .sync-meta, .sync-message { font-size: 10px; max-width: 42vw; }
+    .page { padding: 12px 14px 10px; gap: 10px; }
+    .overview-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        gap: 10px;
+    }
+    .score-hero {
+        grid-row: auto;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 16px;
+        padding: 14px 16px;
+        min-height: 132px;
+        overflow: visible;
+    }
+    .score-hero::before {
+        inset: 10% -30% -40% 40%;
+        height: 90%;
+    }
+    .score-ring {
+        width: 108px;
+        height: 108px;
+        min-width: 108px;
+        min-height: 108px;
+    }
+    .score-number { font-size: 40px; }
+    .score-label {
+        margin: 0;
+        text-align: left;
+    }
+    .score-hero-meta { text-align: left; }
+    .score-hero-note { display: block; }
+    .score-categories {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+    .score-category { padding: 10px 10px; }
+    .score-category-value { font-size: 22px; }
+    .score-confidence { font-size: 10px; }
+    .perf-top, .coach-card, .activities-grid {
         grid-template-columns: 1fr;
     }
     .metrics, #performance, .load-stats { grid-template-columns: repeat(2, 1fr); }
+    .metrics .card { padding: 12px 12px; }
+    .metric-value { font-size: 22px; }
     .bottom-nav {
         display: grid;
         grid-template-columns: repeat(5, 1fr);
@@ -754,7 +841,10 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
 
 @media (max-width: 640px) {
     .weekly-session, .activity-row { grid-template-columns: 1fr 1fr; }
-    .score-categories { grid-template-columns: 1fr 1fr; }
+    .score-categories { grid-template-columns: repeat(2, 1fr); }
+    .score-category:last-child:nth-child(odd) {
+        grid-column: 1 / -1;
+    }
 }
 
     </style>
@@ -813,7 +903,10 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
                                 <div class="score-total">/ 100</div>
                             </div>
                         </div>
-                        <div class="score-label">Overall</div>
+                        <div class="score-hero-meta">
+                            <div class="score-label">Overall</div>
+                            <div class="score-hero-note">Forma atual</div>
+                        </div>
                     </div>
                     <div class="score-categories" id="athleteCategories">
                         <div class="skeleton"></div>
