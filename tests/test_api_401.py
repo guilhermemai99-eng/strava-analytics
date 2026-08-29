@@ -25,6 +25,13 @@ PROTECTED = [
     ("GET", "/api/coach/messages"),
     ("POST", "/api/coach/chat"),
     ("DELETE", "/api/coach/messages"),
+    ("GET", "/api/dms"),
+    ("GET", "/api/dms/unread-count"),
+    ("POST", "/api/dms/with/1"),
+    ("GET", "/api/dms/1"),
+    ("GET", "/api/dms/1/messages"),
+    ("POST", "/api/dms/1/messages"),
+    ("POST", "/api/dms/1/read"),
     ("POST", "/strava/sync"),
     ("GET", "/analytics/summary"),
     ("GET", "/analytics/weekly"),
@@ -68,6 +75,8 @@ def test_protected_apis_return_401_without_session(client):
             resp = client.delete(path)
         elif method == "POST" and path == "/api/coach/chat":
             resp = client.post(path, json={"message": "hi"})
+        elif method == "POST" and path.endswith("/messages"):
+            resp = client.post(path, json={"content": "hi"})
         elif method == "POST" and path.endswith("/follow"):
             resp = client.post(path)
         else:

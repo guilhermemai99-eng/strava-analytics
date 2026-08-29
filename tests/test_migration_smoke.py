@@ -112,4 +112,9 @@ def test_alembic_upgrade_head_on_empty_database():
     assert "photo_url" in activity_cols
     assert "coach_messages" in tables
     assert "follows" in tables
-    assert version == "0008_follows"
+    assert {
+        "conversations",
+        "conversation_participants",
+        "direct_messages",
+    }.issubset(tables)
+    assert version == "0009_direct_messages"

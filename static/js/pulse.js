@@ -1857,6 +1857,39 @@
       });
   }
 
+  function applyProfileMessageDom(athleteId, { isMutual, handle }) {
+    const id = athleteIdOf(athleteId);
+    if (!id) return;
+    const actions = document.querySelector('[data-page="u"] .profile-actions');
+    if (!actions) return;
+    const followBtn = actions.querySelector(".btn-follow[data-athlete-id]");
+    if (!followBtn || athleteIdOf(followBtn.dataset.athleteId) !== id) return;
+
+    let msgBtn = actions.querySelector(".btn-message");
+    let hint = actions.querySelector(".dm-mutual-hint");
+    if (isMutual) {
+      if (hint) hint.remove();
+      if (!msgBtn) {
+        msgBtn = document.createElement("button");
+        msgBtn.type = "button";
+        msgBtn.className = "btn btn-primary btn-message";
+        msgBtn.dataset.action = "open-dm";
+        msgBtn.dataset.athleteId = id;
+        if (handle) msgBtn.dataset.handle = handle;
+        msgBtn.textContent = "Message";
+        actions.appendChild(msgBtn);
+      }
+    } else {
+      if (msgBtn) msgBtn.remove();
+      if (!hint) {
+        hint = document.createElement("p");
+        hint.className = "form-hint dm-mutual-hint";
+        hint.textContent = "Follow each other to start messaging.";
+        actions.appendChild(hint);
+      }
+    }
+  }
+
   function syncExploreFollowFlag(athleteId, isFollowing) {
     const id = athleteIdOf(athleteId);
     if (!id) return;
@@ -1910,6 +1943,10 @@
         isFollowing: wantFollow,
         isMutual: state.viewed.data.is_mutual,
       });
+      applyProfileMessageDom(athleteId, {
+        isMutual: state.viewed.data.is_mutual,
+        handle: state.viewed.data.handle || state.viewed.handle,
+      });
       applyFollowerCountDom(nextCount);
     }
 
@@ -1943,6 +1980,10 @@
           isFollowing: !!data.is_following,
           isMutual: !!data.is_mutual,
         });
+        applyProfileMessageDom(athleteId, {
+          isMutual: !!data.is_mutual,
+          handle: data.handle || state.viewed.handle,
+        });
         applyFollowerCountDom(
           Number(data.follower_count ?? data.followers_count ?? 0)
         );
@@ -1973,6 +2014,10 @@
         applyFollowButtonDom(athleteId, {
           isFollowing: !!prevViewed.is_following,
           isMutual: !!prevViewed.is_mutual,
+        });
+        applyProfileMessageDom(athleteId, {
+          isMutual: !!prevViewed.is_mutual,
+          handle: prevViewed.handle || state.viewed.handle,
         });
         applyFollowerCountDom(Number(prevViewed.follower_count || 0));
       }
