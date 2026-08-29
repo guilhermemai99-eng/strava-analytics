@@ -26,6 +26,7 @@ def serialize_explore_athlete(
     last_activity_at: str | None = None,
     activity_count: int | None = None,
     total_distance_km: float | None = None,
+    is_following: bool = False,
 ) -> dict:
     handle = athlete.handle or athlete.username
     return {
@@ -47,6 +48,7 @@ def serialize_explore_athlete(
             "total_distance_km": total_distance_km,
         },
         "is_profile_public": bool(athlete.is_profile_public),
+        "is_following": bool(is_following),
     }
 
 
@@ -74,8 +76,22 @@ def _activity_aggregates(db: Session, athlete_ids: list[int]) -> dict[int, dict]
     return out
 
 
-def _with_stats(db: Session, athletes: list[Athlete]) -> list[dict]:
+def _with_stats(
+    db: Session,
+    athletes: list[Athlete],
+    *,
+    viewer_id: int | None = None,
+) -> list[dict]:
     aggregates = _activity_aggregates(db, [a.id for a in athletes])
+    follows: set[int] = set()
+    if viewer_id is not None and athletes:
+        from follow_helpers import following_set
+
+        follows = following_set(
+            db,
+            viewer_id=viewer_id,
+            target_ids=[a.id for a in athletes],
+        )
     items = []
     for athlete in athletes:
         stats = aggregates.get(athlete.id, {})
@@ -85,6 +101,7 @@ def _with_stats(db: Session, athletes: list[Athlete]) -> list[dict]:
                 last_activity_at=stats.get("last_activity_at"),
                 activity_count=stats.get("activity_count"),
                 total_distance_km=stats.get("total_distance_km"),
+                is_following=athlete.id in follows,
             )
         )
     return items
@@ -121,7 +138,7 @@ def search_public_athletes(
         .limit(safe_limit)
         .all()
     )
-    return _with_stats(db, athletes)
+    return _with_stats(db, athletes, viewer_id=viewer_id)
 
 
 def suggest_nearby(
@@ -146,7 +163,7 @@ def suggest_nearby(
             .all()
         )
         if athletes:
-            return _with_stats(db, athletes)
+            return _with_stats(db, athletes, viewer_id=viewer.id)
     if country:
         athletes = (
             db.query(Athlete)
@@ -155,7 +172,7 @@ def suggest_nearby(
             .limit(safe_limit)
             .all()
         )
-        return _with_stats(db, athletes)
+        return _with_stats(db, athletes, viewer_id=viewer.id)
     return []
 
 
@@ -186,7 +203,7 @@ def suggest_recently_active(
         .all()
     )
     athletes = [row[0] for row in rows]
-    return _with_stats(db, athletes)
+    return _with_stats(db, athletes, viewer_id=viewer_id)
 
 
 def suggest_new_faces(
@@ -206,7 +223,7 @@ def suggest_new_faces(
         .limit(safe_limit)
         .all()
     )
-    return _with_stats(db, athletes)
+    return _with_stats(db, athletes, viewer_id=viewer_id)
 
 
 def get_public_athlete(db: Session, athlete_id: int) -> Athlete | None:
