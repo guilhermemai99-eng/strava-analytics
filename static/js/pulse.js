@@ -44,6 +44,16 @@
       sending: false,
       error: null,
     },
+    explore: {
+      status: "idle",
+      me: null,
+      sections: [],
+      error: null,
+      searchQ: "",
+      searchStatus: "idle",
+      searchResults: [],
+      peek: null,
+    },
   };
 
   const els = {
@@ -613,9 +623,107 @@
     if (state.page === "feed") render();
   }
 
-  /* ——— Pages ——— */
+  function renderRunnerCard(athlete) {
+    const handle = athlete.handle || athlete.username;
+    const handleText = handle ? `@${handle}` : "no handle yet";
+    const location = athlete.location?.display_name || "Somewhere on Earth";
+    const count = athlete.stats?.activity_count;
+    const km = athlete.stats?.total_distance_km;
+    let stats = "";
+    if (count != null && count > 0) {
+      stats = `${count} run${count === 1 ? "" : "s"}`;
+      if (km != null) stats += ` · ${km} km`;
+    } else {
+      stats = "Fresh legs";
+    }
+    const avatarProfile = {
+      avatar_url: athlete.avatar_url,
+      initials: athlete.initials || "P",
+    };
+    return `
+      <button type="button" class="runner-card" data-action="peek-athlete" data-athlete-id="${escapeHtml(athlete.athlete_id)}">
+        ${renderAvatarHtml(avatarProfile)}
+        <div>
+          <p class="runner-card-name">${escapeHtml(athlete.name || "Runner")}</p>
+          <p class="runner-card-meta">${escapeHtml(handleText)} · ${escapeHtml(location)}</p>
+        </div>
+        <div class="runner-card-stats">${escapeHtml(stats)}</div>
+      </button>
+    `;
+  }
+
+  function renderExploreSection(section) {
+    const athletes = Array.isArray(section.athletes) ? section.athletes : [];
+    const body =
+      athletes.length === 0
+        ? `<p class="explore-empty">${escapeHtml(section.empty_hint || "Nobody here yet.")}</p>`
+        : `<div class="runner-list">${athletes.map(renderRunnerCard).join("")}</div>`;
+    return `
+      <section class="explore-section" data-explore-section="${escapeHtml(section.id || "")}">
+        <div class="explore-section-head">
+          <h2>${escapeHtml(section.title || "Runners")}</h2>
+          <span>${athletes.length || "0"}</span>
+        </div>
+        ${body}
+      </section>
+    `;
+  }
+
+  function renderExploreBody() {
+    const ex = state.explore;
+    const q = (ex.searchQ || "").trim();
+
+    if (q.length >= 2) {
+      if (ex.searchStatus === "loading") {
+        return `<p class="explore-empty">Scanning the streets for “${escapeHtml(q)}”…</p>`;
+      }
+      if (ex.searchStatus === "error") {
+        return `
+          <p class="explore-empty">${escapeHtml(ex.error || "Search tripped.")}</p>
+          <button type="button" class="btn btn-ghost" data-action="retry-explore-search">Try again</button>
+        `;
+      }
+      const results = ex.searchResults || [];
+      if (results.length === 0) {
+        return `<p class="explore-empty">No public runners match “${escapeHtml(q)}”. Try another name — or ask them to flip Show me in Explore.</p>`;
+      }
+      return `
+        <p class="explore-results-label">${results.length} match${results.length === 1 ? "" : "es"}</p>
+        <div class="runner-list">${results.map(renderRunnerCard).join("")}</div>
+      `;
+    }
+
+    if (ex.status === "loading" || ex.status === "idle") {
+      return `<p class="explore-empty">Finding who’s putting in the miles…</p>`;
+    }
+    if (ex.status === "error") {
+      return `
+        <p class="explore-empty">${escapeHtml(ex.error || "That didn’t go the distance.")}</p>
+        <button type="button" class="btn btn-primary" data-action="retry-explore">Retry</button>
+      `;
+    }
+
+    const me = ex.me || {};
+    const privacy = me.is_profile_public
+      ? `<div class="explore-privacy"><p>You’re visible in Explore. Own the miles.</p></div>`
+      : `<div class="explore-privacy">
+          <p>You’re invisible right now. Flip <strong>Show me in Explore</strong> in Settings if you want company.</p>
+          <button type="button" class="btn btn-ghost" data-action="open-settings">Settings</button>
+        </div>`;
+
+    const sections = Array.isArray(ex.sections) ? ex.sections : [];
+    if (sections.length === 0) {
+      return `${privacy}<p class="explore-empty">Quiet streets. Public runners show up here.</p>`;
+    }
+    return `${privacy}${sections.map(renderExploreSection).join("")}`;
+  }
 
   function renderExplore() {
+    const q = state.explore.searchQ || "";
+    const hint =
+      q.trim().length >= 2
+        ? `Searching public runners for “${q.trim()}”.`
+        : "Type at least 2 characters. Only public profiles show up.";
     return `
       <section class="pulse-page" data-page="explore">
         <p class="page-kicker">Explore</p>
@@ -628,20 +736,123 @@
               <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
             </svg>
           </span>
-          <input id="exploreSearch" type="search" placeholder="Who are you looking for?" autocomplete="off">
+          <input id="exploreSearch" type="search" placeholder="Who are you looking for?" autocomplete="off" value="${escapeHtml(q)}">
         </div>
-        <p class="search-hint" id="exploreSearchHint">We’re still finding the runners.</p>
-
-        ${renderComingSoon({
-          eyebrow: "Under construction",
-          title: "We’re scouting the streets.",
-          message:
-            "Soon you’ll discover who’s putting in the miles around you. Not in a creepy way — in a “want to run Thursday?” way.",
-          ctaLabel: "Back to feed",
-          ctaNav: "feed",
-        })}
+        <p class="search-hint" id="exploreSearchHint">${escapeHtml(hint)}</p>
+        ${renderExploreBody()}
       </section>
     `;
+  }
+
+  async function loadExplore(force = false) {
+    if (!force && (state.explore.status === "ready" || state.explore.status === "loading")) {
+      return;
+    }
+    state.explore.status = "loading";
+    state.explore.error = null;
+    if (state.page === "explore" && !(state.explore.searchQ || "").trim()) render();
+
+    try {
+      const res = await apiFetch("/api/explore");
+      if (!res.ok) throw new Error("That didn’t go the distance.");
+      const data = await res.json();
+      state.explore.me = data.me || null;
+      state.explore.sections = Array.isArray(data.sections) ? data.sections : [];
+      state.explore.status = "ready";
+      state.explore.error = null;
+    } catch (err) {
+      state.explore.status = "error";
+      state.explore.error = err.message || "Try again.";
+    }
+
+    if (state.page === "explore" && !(state.explore.searchQ || "").trim()) render();
+  }
+
+  let exploreSearchTimer = null;
+
+  async function runExploreSearch(query) {
+    const q = (query || "").trim();
+    state.explore.searchQ = q;
+    if (q.length < 2) {
+      state.explore.searchStatus = "idle";
+      state.explore.searchResults = [];
+      if (state.page === "explore") render();
+      return;
+    }
+
+    state.explore.searchStatus = "loading";
+    if (state.page === "explore") render();
+
+    try {
+      const res = await apiFetch(`/api/explore/search?q=${encodeURIComponent(q)}`);
+      if (!res.ok) throw new Error("Search tripped.");
+      const data = await res.json();
+      // Ignore stale responses if the user kept typing.
+      if ((state.explore.searchQ || "").trim() !== q) return;
+      state.explore.searchResults = Array.isArray(data.results) ? data.results : [];
+      state.explore.searchStatus = "ready";
+      state.explore.error = null;
+    } catch (err) {
+      if ((state.explore.searchQ || "").trim() !== q) return;
+      state.explore.searchStatus = "error";
+      state.explore.error = err.message || "Try again.";
+    }
+
+    if (state.page === "explore") render();
+  }
+
+  function scheduleExploreSearch(query) {
+    state.explore.searchQ = query;
+    clearTimeout(exploreSearchTimer);
+    exploreSearchTimer = setTimeout(() => runExploreSearch(query), 280);
+  }
+
+  async function peekAthlete(athleteId) {
+    try {
+      const res = await apiFetch(`/api/athletes/${encodeURIComponent(athleteId)}/profile`);
+      if (!res.ok) {
+        showToast("That runner isn’t public — or vanished.");
+        return;
+      }
+      const athlete = await res.json();
+      state.explore.peek = athlete;
+      openAthletePeek(athlete);
+    } catch (_err) {
+      showToast("That didn’t go the distance.");
+    }
+  }
+
+  function openAthletePeek(athlete) {
+    const handle = athlete.handle || athlete.username;
+    const location = athlete.location?.display_name || "Somewhere on Earth";
+    const count = athlete.stats?.activity_count ?? 0;
+    const km = athlete.stats?.total_distance_km;
+    const avatarProfile = {
+      avatar_url: athlete.avatar_url,
+      initials: athlete.initials || "P",
+    };
+    els.activityModalTitle.textContent = athlete.name || "Runner";
+    els.activityModalBody.innerHTML = `
+      <div style="display:flex;gap:16px;align-items:center;margin-bottom:18px;">
+        ${renderAvatarHtml(avatarProfile, "is-lg")}
+        <div>
+          <p class="profile-handle" style="margin:0">${escapeHtml(handle ? `@${handle}` : "no handle yet")}</p>
+          <p class="form-hint" style="margin:6px 0 0">${escapeHtml(location)}</p>
+        </div>
+      </div>
+      ${athlete.bio ? `<p class="profile-bio">${escapeHtml(athlete.bio)}</p>` : `<p class="form-hint">No bio. The miles speak louder anyway.</p>`}
+      <div class="modal-metrics" style="margin-top:18px;">
+        <div class="stat-pill"><span>Runs</span><strong>${escapeHtml(count)}</strong></div>
+        <div class="stat-pill"><span>Distance</span><strong>${escapeHtml(km != null ? `${km} km` : "—")}</strong></div>
+        <div class="stat-pill"><span>Last</span><strong>${escapeHtml(formatDate(athlete.last_activity_at))}</strong></div>
+      </div>
+      <p class="form-hint" style="margin-top:18px;">
+        Follows land later. For now: look, don’t lurk.
+      </p>
+    `;
+    els.activityModal.hidden = false;
+    void els.activityModal.offsetWidth;
+    els.activityModal.classList.add("is-open");
   }
 
   function renderCoachPage() {
@@ -772,12 +983,20 @@
     if (next === "feed") {
       loadFeed(false);
     }
+    if (next === "explore") {
+      loadExplore(false);
+    }
     if (next === "coach") {
       loadCoachMessages(false);
     }
   }
 
   function render() {
+    const active = document.activeElement;
+    const wasExploreSearch = active && active.id === "exploreSearch";
+    const selStart = wasExploreSearch ? active.selectionStart : null;
+    const selEnd = wasExploreSearch ? active.selectionEnd : null;
+
     let html = "";
     if (state.page === "feed") html = renderFeed();
     else if (state.page === "explore") html = renderExplore();
@@ -790,6 +1009,20 @@
     wireCoachDom(els.viewRoot);
     wireCoachDom(els.coachSidebarPanel);
     scrollCoachThreads();
+
+    if (wasExploreSearch) {
+      const input = document.getElementById("exploreSearch");
+      if (input) {
+        input.focus();
+        if (selStart != null && selEnd != null) {
+          try {
+            input.setSelectionRange(selStart, selEnd);
+          } catch (_err) {
+            /* ignore */
+          }
+        }
+      }
+    }
   }
 
   function bindViewInteractions() {
@@ -812,6 +1045,9 @@
           showToast("Follow someone. Running alone is overrated.");
         }
         if (action === "retry-feed") loadFeed(true);
+        if (action === "retry-explore") loadExplore(true);
+        if (action === "retry-explore-search") runExploreSearch(state.explore.searchQ || "");
+        if (action === "peek-athlete") peekAthlete(btn.dataset.athleteId);
         if (action === "clear-coach") clearCoachChat();
       });
     });
@@ -924,6 +1160,9 @@
       profile.display_name_custom || profile.display_name || "";
     document.getElementById("settingsHandle").value = profile.handle || "";
     document.getElementById("settingsBio").value = profile.bio || "";
+    document.getElementById("settingsCity").value = profile.location?.city || "";
+    document.getElementById("settingsCountry").value = profile.location?.country || "";
+    document.getElementById("settingsPublicExplore").checked = !!profile.is_profile_public;
   }
 
   async function loadProfileBundle(force = false) {
@@ -1010,6 +1249,9 @@
         showToast("Follow someone. Running alone is overrated.");
       }
       if (action === "retry-feed") loadFeed(true);
+      if (action === "retry-explore") loadExplore(true);
+      if (action === "retry-explore-search") runExploreSearch(state.explore.searchQ || "");
+      if (action === "peek-athlete") peekAthlete(actionEl.dataset.athleteId);
       if (action === "clear-coach") clearCoachChat();
       return;
     }
@@ -1071,6 +1313,9 @@
         display_name: document.getElementById("settingsDisplayName").value,
         handle: document.getElementById("settingsHandle").value,
         bio: document.getElementById("settingsBio").value,
+        city: document.getElementById("settingsCity").value,
+        country: document.getElementById("settingsCountry").value,
+        is_profile_public: document.getElementById("settingsPublicExplore").checked,
       };
       const res = await apiFetch("/api/me/profile", {
         method: "PATCH",
@@ -1089,23 +1334,24 @@
       applyProfileChrome(state.profile);
       els.settingsMsg.textContent = "Saved. You’re still you — just clearer.";
       els.settingsMsg.className = "form-msg is-ok";
+      // Refresh Explore so “Show me” / city changes land immediately.
+      state.explore.status = "idle";
+      if (state.page === "explore") loadExplore(true);
       if (state.page === "profile") render();
     });
   }
 
   function wireExploreSearch() {
+    els.viewRoot.addEventListener("input", (event) => {
+      if (event.target.id !== "exploreSearch") return;
+      scheduleExploreSearch(event.target.value);
+    });
     els.viewRoot.addEventListener("keydown", (event) => {
       if (event.target.id !== "exploreSearch") return;
       if (event.key === "Enter") {
         event.preventDefault();
-        const q = event.target.value.trim();
-        const hint = document.getElementById("exploreSearchHint");
-        if (hint) {
-          hint.textContent = q
-            ? `“${q}” — we’re still finding the runners.`
-            : "We’re still finding the runners.";
-        }
-        showToast("Search is warming up. Personality first, matching later.");
+        clearTimeout(exploreSearchTimer);
+        runExploreSearch(event.target.value);
       }
     });
   }

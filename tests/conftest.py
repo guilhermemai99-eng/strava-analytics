@@ -86,9 +86,9 @@ def make_athlete(db_session):
         row = db_session.query(Athlete).filter(Athlete.id == athlete_id).one_or_none()
         now = _utcnow()
         if row is None:
+            fields.setdefault("is_profile_public", False)
             row = Athlete(
                 id=athlete_id,
-                is_profile_public=False,
                 created_at=now,
                 updated_at=now,
                 **fields,
