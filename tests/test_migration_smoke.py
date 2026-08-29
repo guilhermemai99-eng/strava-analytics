@@ -110,4 +110,5 @@ def test_alembic_upgrade_head_on_empty_database():
     assert "updated_at" in cols
     assert "summary_polyline" in activity_cols
     assert "photo_url" in activity_cols
-    assert version == "0006_activity_feed_media"
+    assert "coach_messages" in tables
+    assert version == "0007_coach_messages"

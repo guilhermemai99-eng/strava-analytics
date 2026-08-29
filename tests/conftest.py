@@ -112,6 +112,9 @@ def make_athlete(db_session):
         db_session.query(Activity).filter(Activity.athlete_id == athlete_id).delete()
         db_session.query(UserSession).filter(UserSession.athlete_id == athlete_id).delete()
         db_session.query(StravaAuth).filter(StravaAuth.athlete_id == athlete_id).delete()
+        from coach_message import CoachMessage
+
+        db_session.query(CoachMessage).filter(CoachMessage.athlete_id == athlete_id).delete()
         db_session.query(Athlete).filter(Athlete.id == athlete_id).delete()
     db_session.commit()
 

@@ -37,6 +37,13 @@
       error: null,
       loadingLine: FEED_LOADING_LINES[0],
     },
+    coach: {
+      status: "idle",
+      welcome: "",
+      messages: [],
+      sending: false,
+      error: null,
+    },
   };
 
   const els = {
@@ -169,22 +176,184 @@
     `;
   }
 
-  function renderCoachWarmup() {
+  function renderCoachChat(options) {
+    const opts = options || {};
+    const compact = !!opts.compact;
+    const coach = state.coach;
+    const bubbles = [];
+
+    if (coach.welcome) {
+      bubbles.push(
+        `<div class="coach-bubble is-system">${escapeHtml(coach.welcome)}</div>`
+      );
+    }
+
+    coach.messages.forEach((msg) => {
+      const roleClass = msg.role === "user" ? "is-user" : "is-assistant";
+      bubbles.push(
+        `<div class="coach-bubble ${roleClass}">${escapeHtml(msg.content)}</div>`
+      );
+    });
+
+    if (coach.status === "loading" && !coach.messages.length) {
+      bubbles.push(`<div class="coach-typing">Coach is reading your miles…</div>`);
+    }
+    if (coach.sending) {
+      bubbles.push(`<div class="coach-typing">Typing something slightly rude but useful…</div>`);
+    }
+    if (coach.error) {
+      bubbles.push(
+        `<div class="coach-bubble is-system">${escapeHtml(coach.error)}</div>`
+      );
+    }
+
+    const disabled = coach.sending ? "disabled" : "";
     return `
-      ${renderComingSoon({
-        eyebrow: "Warming up",
-        title: "Coach is still tying its shoelaces.",
-        message:
-          "We’re teaching it how to turn your questionable training decisions into something useful. Advice better than “just run faster” is on the way.",
-      })}
-      <div class="coach-bubble" style="margin-top:18px;">
-        Training your future coach.<br>
-        It already knows skipping recovery doesn’t make you faster.
-      </div>
-      <div class="coach-composer">
-        <input type="text" disabled placeholder="Coach is warming up…" aria-label="Mensagem ao coach (indisponível)">
+      <div class="coach-chat ${compact ? "is-compact" : ""}">
+        <div class="coach-thread" data-coach-thread>${bubbles.join("")}</div>
+        <form class="coach-composer" data-coach-form>
+          <div class="coach-composer-row">
+            <input
+              type="text"
+              name="message"
+              maxlength="1200"
+              placeholder="Ask about pace, recovery, long runs…"
+              aria-label="Message the AI Coach"
+              autocomplete="off"
+              ${disabled}
+            >
+            <button type="submit" class="coach-send" ${disabled} aria-label="Send">↑</button>
+          </div>
+          <div class="coach-tools">
+            <button type="button" data-action="clear-coach">Clear chat</button>
+            <span style="color:var(--faint);font-size:11px;">Roasts included. Medical advice not.</span>
+          </div>
+        </form>
       </div>
     `;
+  }
+
+  function renderCoachWarmup() {
+    // Kept as alias while sidebar still calls the chat renderer.
+    return renderCoachChat({ compact: true });
+  }
+
+  async function loadCoachMessages(force = false) {
+    if (state.coach.status === "ready" && !force) return;
+    state.coach.status = "loading";
+    paintCoachPanels();
+    try {
+      const res = await apiFetch("/api/coach/messages");
+      if (!res.ok) throw new Error("Coach ghosted. Retry.");
+      const data = await res.json();
+      state.coach.welcome = data.welcome || "";
+      state.coach.messages = Array.isArray(data.messages) ? data.messages : [];
+      state.coach.status = "ready";
+      state.coach.error = null;
+    } catch (err) {
+      state.coach.status = "error";
+      state.coach.error = err.message || "That didn’t go the distance.";
+    }
+    paintCoachPanels();
+  }
+
+  async function sendCoachMessage(raw) {
+    const message = (raw || "").trim();
+    if (!message || state.coach.sending) return;
+    state.coach.sending = true;
+    state.coach.error = null;
+    // Optimistic user bubble
+    state.coach.messages.push({
+      id: `tmp-${Date.now()}`,
+      role: "user",
+      content: message,
+      created_at: new Date().toISOString(),
+    });
+    paintCoachPanels();
+
+    try {
+      const res = await apiFetch("/api/coach/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof data.detail === "string" ? data.detail : "That didn’t go the distance."
+        );
+      }
+      // Replace optimistic user message with server copies.
+      state.coach.messages = state.coach.messages.filter(
+        (m) => String(m.id).indexOf("tmp-") !== 0
+      );
+      if (data.user_message) state.coach.messages.push(data.user_message);
+      if (data.assistant_message) state.coach.messages.push(data.assistant_message);
+      else if (data.reply) {
+        state.coach.messages.push({
+          role: "assistant",
+          content: data.reply,
+          created_at: new Date().toISOString(),
+        });
+      }
+      state.coach.status = "ready";
+    } catch (err) {
+      state.coach.error = err.message || "That didn’t go the distance.";
+      // Keep optimistic user message so they can retry contextually.
+    } finally {
+      state.coach.sending = false;
+      paintCoachPanels();
+    }
+  }
+
+  async function clearCoachChat() {
+    try {
+      const res = await apiFetch("/api/coach/messages", { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      state.coach.messages = [];
+      state.coach.welcome = data.welcome || state.coach.welcome;
+      state.coach.error = null;
+      showToast("Chat cleared. Ego reset optional.");
+      paintCoachPanels();
+    } catch (err) {
+      showToast("Couldn’t clear chat.");
+    }
+  }
+
+  function paintCoachPanels() {
+    if (els.coachSidebarPanel) {
+      els.coachSidebarPanel.innerHTML = renderCoachChat({ compact: true });
+      wireCoachDom(els.coachSidebarPanel);
+    }
+    if (state.page === "coach") {
+      // Re-render full page so mobile thread stays in sync.
+      const html = renderCoachPage();
+      els.viewRoot.innerHTML = html;
+      bindViewInteractions();
+      wireCoachDom(els.viewRoot);
+    }
+    scrollCoachThreads();
+  }
+
+  function scrollCoachThreads() {
+    document.querySelectorAll("[data-coach-thread]").forEach((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+  }
+
+  function wireCoachDom(root) {
+    if (!root) return;
+    root.querySelectorAll("[data-coach-form]").forEach((form) => {
+      if (form.dataset.wired === "1") return;
+      form.dataset.wired = "1";
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const input = form.querySelector('input[name="message"]');
+        const value = input ? input.value : "";
+        if (input) input.value = "";
+        sendCoachMessage(value);
+      });
+    });
   }
 
   /* ——— Feed helpers ——— */
@@ -480,8 +649,8 @@
       <section class="pulse-page coach-page" data-page="coach">
         <p class="page-kicker">AI Coach</p>
         <h1 class="page-title">${escapeHtml(els.coachTagline?.textContent || "Your legs don’t lie.")}</h1>
-        <p class="page-sub">Personal coach energy. Still warming up — honestly.</p>
-        ${renderCoachWarmup()}
+        <p class="page-sub">Advice with bite. Numbers with jokes. No clipboard energy.</p>
+        ${renderCoachChat({ compact: false })}
       </section>
     `;
   }
@@ -603,6 +772,9 @@
     if (next === "feed") {
       loadFeed(false);
     }
+    if (next === "coach") {
+      loadCoachMessages(false);
+    }
   }
 
   function render() {
@@ -613,8 +785,11 @@
     else html = renderProfile();
 
     els.viewRoot.innerHTML = html;
-    els.coachSidebarPanel.innerHTML = renderCoachWarmup();
+    els.coachSidebarPanel.innerHTML = renderCoachChat({ compact: true });
     bindViewInteractions();
+    wireCoachDom(els.viewRoot);
+    wireCoachDom(els.coachSidebarPanel);
+    scrollCoachThreads();
   }
 
   function bindViewInteractions() {
@@ -637,6 +812,7 @@
           showToast("Follow someone. Running alone is overrated.");
         }
         if (action === "retry-feed") loadFeed(true);
+        if (action === "clear-coach") clearCoachChat();
       });
     });
 
@@ -833,6 +1009,8 @@
       if (action === "following-tease") {
         showToast("Follow someone. Running alone is overrated.");
       }
+      if (action === "retry-feed") loadFeed(true);
+      if (action === "clear-coach") clearCoachChat();
       return;
     }
 
@@ -947,6 +1125,7 @@
 
     await ensureAuth();
     await loadProfileBundle(true);
+    loadCoachMessages(false);
 
     const initial = (location.hash || "#feed").slice(1);
     navigate(PAGES.includes(initial) ? initial : "feed", { replace: true });
