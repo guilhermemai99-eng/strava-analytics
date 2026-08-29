@@ -31,7 +31,9 @@ def serialize_explore_athlete(
     handle = athlete.handle or athlete.username
     return {
         "athlete_id": athlete.id,
+        "id": athlete.id,
         "name": display_name_for(athlete),
+        "display_name": display_name_for(athlete),
         "username": handle,
         "handle": athlete.handle,
         "initials": initials_for(athlete),
@@ -82,6 +84,12 @@ def _with_stats(
     *,
     viewer_id: int | None = None,
 ) -> list[dict]:
+    from profile_helpers import ensure_handle
+
+    for athlete in athletes:
+        if not athlete.handle:
+            ensure_handle(db, athlete)
+
     aggregates = _activity_aggregates(db, [a.id for a in athletes])
     follows: set[int] = set()
     if viewer_id is not None and athletes:
