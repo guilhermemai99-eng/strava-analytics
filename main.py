@@ -1292,6 +1292,27 @@ def dashboard(
         )
 
     return FileResponse(
+        "static/pulse.html"
+    )
+
+
+@app.get("/lab")
+def analytics_lab(
+    request: Request
+):
+
+    """Legacy analytics dashboard — kept reachable from Settings."""
+
+    if not get_current_athlete_id(
+        request
+    ):
+
+        return RedirectResponse(
+            url="/",
+            status_code=302
+        )
+
+    return FileResponse(
         "static/dashboard.html"
     )
 
