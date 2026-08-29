@@ -31,6 +31,7 @@ from session_helpers import (
 from profile_helpers import (
     ProfileValidationError,
     apply_profile_patch,
+    ensure_handle,
     serialize_profile,
 )
 from avatar_helpers import AvatarValidationError, validate_avatar_upload
@@ -43,6 +44,18 @@ from explore_helpers import (
     suggest_new_faces,
     suggest_recently_active,
 )
+from follow_helpers import (
+    FollowError,
+    create_follow,
+    delete_follow,
+    follower_count,
+    following_count,
+    get_athlete_by_handle,
+    list_followers,
+    list_following,
+    normalize_route_handle,
+)
+from public_profile_helpers import can_view_profile, serialize_public_profile
 from ai_coach_chat import (
     CoachChatError,
     build_coach_context,
@@ -701,8 +714,14 @@ def get_my_profile(request: Request):
                 detail="Perfil não encontrado.",
             )
 
+        athlete = ensure_handle(db, athlete)
         stats = get_summary(athlete_id)
-        return serialize_profile(athlete, include_stats=stats)
+        payload = serialize_profile(athlete, include_stats=stats)
+        payload["follower_count"] = follower_count(db, athlete_id)
+        payload["following_count"] = following_count(db, athlete_id)
+        payload["is_self"] = True
+        payload["is_following"] = False
+        return payload
     finally:
         db.close()
 
@@ -730,8 +749,16 @@ def patch_my_profile(request: Request, body: ProfileUpdate):
         except ProfileValidationError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+        if not athlete.handle:
+            athlete = ensure_handle(db, athlete)
+
         stats = get_summary(athlete_id)
-        return serialize_profile(athlete, include_stats=stats)
+        out = serialize_profile(athlete, include_stats=stats)
+        out["follower_count"] = follower_count(db, athlete_id)
+        out["following_count"] = following_count(db, athlete_id)
+        out["is_self"] = True
+        out["is_following"] = False
+        return out
     finally:
         db.close()
 
@@ -952,6 +979,122 @@ def strava_sync(
                 "Tenta novamente dentro de momentos."
 
         }
+
+
+# ============================================================
+# PUBLIC PROFILES + FOLLOWS — /api/profiles/{handle}
+# ============================================================
+
+def _require_visible_profile(db, *, handle: str, viewer_id: int) -> Athlete:
+    target = get_athlete_by_handle(db, handle)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    viewer = db.query(Athlete).filter(Athlete.id == viewer_id).one_or_none()
+    if viewer is None:
+        raise HTTPException(status_code=404, detail="Perfil não encontrado.")
+    if not can_view_profile(viewer, target):
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return target
+
+
+@app.get("/api/profiles/{handle}")
+def get_public_profile(handle: str, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        target = _require_visible_profile(db, handle=handle, viewer_id=viewer_id)
+        viewer = db.query(Athlete).filter(Athlete.id == viewer_id).one()
+        return serialize_public_profile(db, target=target, viewer=viewer)
+    finally:
+        db.close()
+
+
+@app.get("/api/profiles/{handle}/followers")
+def get_profile_followers(handle: str, request: Request, limit: int = 50):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        target = _require_visible_profile(db, handle=handle, viewer_id=viewer_id)
+        people = list_followers(
+            db,
+            athlete_id=target.id,
+            viewer_id=viewer_id,
+            limit=limit,
+        )
+        return {
+            "handle": target.handle,
+            "kind": "followers",
+            "count": len(people),
+            "people": people,
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/profiles/{handle}/following")
+def get_profile_following(handle: str, request: Request, limit: int = 50):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        target = _require_visible_profile(db, handle=handle, viewer_id=viewer_id)
+        people = list_following(
+            db,
+            athlete_id=target.id,
+            viewer_id=viewer_id,
+            limit=limit,
+        )
+        return {
+            "handle": target.handle,
+            "kind": "following",
+            "count": len(people),
+            "people": people,
+        }
+    finally:
+        db.close()
+
+
+@app.post("/api/profiles/{handle}/follow")
+def follow_profile(handle: str, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        target = get_athlete_by_handle(db, handle)
+        if target is None or (
+            target.id != viewer_id and not bool(target.is_profile_public)
+        ):
+            raise HTTPException(status_code=404, detail="Profile not found")
+        try:
+            create_follow(db, follower_id=viewer_id, following_id=target.id)
+        except FollowError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        viewer = db.query(Athlete).filter(Athlete.id == viewer_id).one()
+        return serialize_public_profile(db, target=target, viewer=viewer)
+    finally:
+        db.close()
+
+
+@app.delete("/api/profiles/{handle}/follow")
+def unfollow_profile(handle: str, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        target = get_athlete_by_handle(db, handle)
+        if target is None:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        delete_follow(db, follower_id=viewer_id, following_id=target.id)
+        viewer = db.query(Athlete).filter(Athlete.id == viewer_id).one()
+        if not can_view_profile(viewer, target):
+            return {
+                "handle": target.handle,
+                "is_following": False,
+                "follower_count": follower_count(db, target.id),
+                "following_count": following_count(db, target.id),
+                "is_self": False,
+            }
+        return serialize_public_profile(db, target=target, viewer=viewer)
+    finally:
+        db.close()
 
 
 # ============================================================

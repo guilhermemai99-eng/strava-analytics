@@ -102,6 +102,70 @@ def assert_handle_available(db: Session, handle: str, athlete_id: int) -> None:
         raise ProfileValidationError("Este handle já está em uso.")
 
 
+def _slug_candidate(raw: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9_]+", "_", raw.lower())
+    cleaned = re.sub(r"_+", "_", cleaned).strip("_")
+    return cleaned[:30]
+
+
+def suggest_handle_for(athlete: Athlete) -> str:
+    """Stable candidate from name/username — no random suffixes yet."""
+    sources = [
+        athlete.handle,
+        athlete.username,
+        athlete.display_name,
+        " ".join(
+            p
+            for p in [
+                (athlete.firstname or "").strip(),
+                (athlete.lastname or "").strip(),
+            ]
+            if p
+        ),
+        f"runner_{athlete.id}",
+    ]
+    for source in sources:
+        if not source:
+            continue
+        slug = _slug_candidate(str(source))
+        if len(slug) >= 3 and HANDLE_RE.match(slug) and slug not in RESERVED_HANDLES:
+            return slug
+    return f"runner_{athlete.id}"[:30]
+
+
+def ensure_handle(db: Session, athlete: Athlete) -> Athlete:
+    """Assign a stable unique handle once; never rotate an existing one."""
+    if athlete.handle:
+        return athlete
+
+    base = suggest_handle_for(athlete)
+    candidate = base
+    suffix = 0
+    while True:
+        taken = (
+            db.query(Athlete.id)
+            .filter(Athlete.handle == candidate, Athlete.id != athlete.id)
+            .first()
+        )
+        if taken is None and candidate not in RESERVED_HANDLES and HANDLE_RE.match(candidate):
+            athlete.handle = candidate
+            athlete.updated_at = utcnow()
+            db.commit()
+            db.refresh(athlete)
+            return athlete
+        suffix += 1
+        # Keep base short enough for _NN suffix within 30 chars.
+        stem = base[: max(3, 30 - len(str(suffix)) - 1)]
+        candidate = f"{stem}_{suffix}"
+        if suffix > 9999:
+            candidate = f"u{athlete.id}"[:30]
+            athlete.handle = candidate
+            athlete.updated_at = utcnow()
+            db.commit()
+            db.refresh(athlete)
+            return athlete
+
+
 def avatar_url_for(athlete: Athlete) -> str | None:
     if athlete.avatar_data and athlete.avatar_content_type:
         # Cache-bust with updated_at so browsers refresh after upload.
@@ -119,6 +183,23 @@ def avatar_url_for(athlete: Athlete) -> str | None:
     if athlete.profile:
         return athlete.profile
 
+    return None
+
+
+def public_avatar_url_for(athlete: Athlete) -> str | None:
+    """Avatar URL safe for other runners to load (not /api/me/avatar)."""
+    if athlete.avatar_data and athlete.avatar_content_type:
+        stamp = ""
+        if athlete.updated_at is not None:
+            ts = athlete.updated_at
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            stamp = f"?v={int(ts.timestamp())}"
+        return f"/api/athletes/{athlete.id}/avatar{stamp}"
+    if athlete.profile_medium:
+        return athlete.profile_medium
+    if athlete.profile:
+        return athlete.profile
     return None
 
 

@@ -29,7 +29,9 @@ def test_get_own_profile(client, make_session, make_athlete, db_session):
     assert data["athlete_id"] == 810001
     assert data["display_name"] == "Guilherme Campos"
     assert data["initials"] == "GC"
-    assert data["handle"] is None
+    assert data["handle"] == "guilherme_campos"
+    assert data["follower_count"] == 0
+    assert data["following_count"] == 0
     assert data["has_custom_avatar"] is False
     assert data["strava"]["connected"] is True
     assert "stats" in data
