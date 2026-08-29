@@ -5,6 +5,9 @@ from __future__ import annotations
 PROTECTED = [
     ("GET", "/activities"),
     ("GET", "/api/feed"),
+    ("GET", "/api/coach/messages"),
+    ("POST", "/api/coach/chat"),
+    ("DELETE", "/api/coach/messages"),
     ("POST", "/strava/sync"),
     ("GET", "/analytics/summary"),
     ("GET", "/analytics/weekly"),
@@ -46,6 +49,8 @@ def test_protected_apis_return_401_without_session(client):
             resp = client.patch(path, json={})
         elif method == "DELETE":
             resp = client.delete(path)
+        elif method == "POST" and path == "/api/coach/chat":
+            resp = client.post(path, json={"message": "hi"})
         else:
             resp = client.post(path)
         assert resp.status_code == 401, f"{method} {path} -> {resp.status_code}"

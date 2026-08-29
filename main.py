@@ -35,6 +35,20 @@ from profile_helpers import (
 )
 from avatar_helpers import AvatarValidationError, validate_avatar_upload
 from feed_helpers import serialize_feed_item
+from ai_coach_chat import (
+    CoachChatError,
+    build_coach_context,
+    generate_coach_reply,
+    welcome_message,
+)
+from coach_chat_helpers import (
+    add_coach_message,
+    clear_coach_messages,
+    history_for_model,
+    list_coach_messages,
+    serialize_coach_message,
+    trim_coach_messages,
+)
 
 from import_strava import sync_strava_activities
 from strava_tokens import StravaTokenError, store_strava_tokens
@@ -1426,6 +1440,106 @@ def analytics_athlete_score(
         athlete_id
 
     )
+
+
+class CoachChatRequest(BaseModel):
+    message: str
+
+
+# ============================================================
+# AI COACH CHAT
+# ============================================================
+
+@app.get("/api/coach/messages")
+def get_coach_messages(request: Request, limit: int = 40):
+    athlete_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        rows = list_coach_messages(db, athlete_id, limit=limit)
+        return {
+            "welcome": welcome_message(),
+            "messages": [serialize_coach_message(row) for row in rows],
+            "count": len(rows),
+        }
+    finally:
+        db.close()
+
+
+@app.delete("/api/coach/messages")
+def delete_coach_messages(request: Request):
+    athlete_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        deleted = clear_coach_messages(db, athlete_id)
+        db.commit()
+        return {"deleted": deleted, "welcome": welcome_message()}
+    finally:
+        db.close()
+
+
+@app.post("/api/coach/chat")
+def post_coach_chat(request: Request, body: CoachChatRequest):
+    athlete_id = require_athlete_id(request)
+    message = (body.message or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Message required.")
+    if len(message) > 1200:
+        raise HTTPException(status_code=400, detail="Message too long.")
+
+    weekly_data = get_weekly(athlete_id)
+    performance_data = get_running_performance(athlete_id)
+    summary_data = get_summary(athlete_id)
+    evolution_data = calculate_evolution(weekly_data)
+    performance_comparison = calculate_performance_comparison(athlete_id)
+    athlete_score = calculate_athlete_score(
+        evolution_data,
+        performance_comparison,
+        performance_data,
+        athlete_id,
+    )
+    recommendation = get_recommendation(
+        athlete_score,
+        evolution_data,
+        performance_comparison,
+    )
+    context = build_coach_context(
+        weekly_data=weekly_data,
+        performance_data=performance_data,
+        summary_data=summary_data,
+        evolution_data=evolution_data,
+        performance_comparison=performance_comparison,
+        recommendation=recommendation,
+        athlete_score=athlete_score,
+    )
+
+    db = SessionLocal()
+    try:
+        prior = list_coach_messages(db, athlete_id, limit=24)
+        history = history_for_model(prior)
+
+        try:
+            reply = generate_coach_reply(
+                user_message=message,
+                history=history,
+                context=context,
+            )
+        except CoachChatError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        user_row = add_coach_message(db, athlete_id, "user", message)
+        assistant_row = add_coach_message(db, athlete_id, "assistant", reply)
+        trim_coach_messages(db, athlete_id)
+        db.commit()
+        db.refresh(user_row)
+        db.refresh(assistant_row)
+
+        return {
+            "reply": reply,
+            "user_message": serialize_coach_message(user_row),
+            "assistant_message": serialize_coach_message(assistant_row),
+        }
+    finally:
+        db.close()
 
 
 # ============================================================
