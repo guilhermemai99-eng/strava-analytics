@@ -1,8 +1,8 @@
 """Fernet helpers for Strava OAuth tokens at rest.
 
 token_version semantics (see strava_auth / strava_tokens):
-  0 = plaintext (legacy dual-read)
-  1 = Fernet ciphertext
+  1 = Fernet ciphertext (required)
+  0 = legacy plaintext — no longer accepted after Foundation cutover
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-TOKEN_VERSION_PLAINTEXT = 0
+TOKEN_VERSION_PLAINTEXT = 0  # legacy; rejected by readers
 TOKEN_VERSION_FERNET = 1
 
 

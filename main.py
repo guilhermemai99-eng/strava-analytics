@@ -1,8 +1,6 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-
 import os
 import secrets
 import requests
@@ -77,12 +75,47 @@ def run_startup_migrations() -> None:
     print("[start] Migrations complete.")
 
 
+def run_startup_token_encryption() -> None:
+    """Encrypt any leftover plaintext tokens before serving traffic."""
+
+    from token_crypto import TokenEncryptionError
+    from strava_tokens import upgrade_plaintext_tokens
+
+    if not (os.getenv("TOKEN_ENCRYPTION_KEY") or "").strip():
+        print(
+            "[start] TOKEN_ENCRYPTION_KEY missing; "
+            "skipping plaintext token upgrade."
+        )
+        return
+
+    db = SessionLocal()
+    try:
+        result = upgrade_plaintext_tokens(db)
+        print(
+            "[start] Token encryption upgrade: "
+            f"upgraded={result['upgraded']} "
+            f"skipped={result['skipped']} "
+            f"remaining_plaintext={result['remaining_plaintext']}"
+        )
+        if result["remaining_plaintext"]:
+            print(
+                "[start] WARNING: plaintext Strava tokens remain; "
+                "those athletes must re-OAuth or be fixed manually."
+            )
+    except (TokenEncryptionError, StravaTokenError) as exc:
+        print(f"[start] Token encryption upgrade failed: {exc}")
+        raise
+    finally:
+        db.close()
+
+
 from contextlib import asynccontextmanager
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     run_startup_migrations()
+    run_startup_token_encryption()
     yield
 
 
@@ -120,21 +153,6 @@ STRAVA_CLIENT_SECRET = os.getenv(
 STRAVA_REDIRECT_URI = os.getenv(
     "STRAVA_REDIRECT_URI"
 )
-
-
-# ============================================================
-# MODELO DE ATIVIDADE
-# ============================================================
-
-class ActivityCreate(BaseModel):
-
-    name: str
-
-    distance_km: float
-
-    time_minutes: float
-
-    average_heart_rate: int
 
 
 # ============================================================
@@ -180,7 +198,10 @@ def require_athlete_id(
 
     if not athlete_id:
 
-        return None
+        raise HTTPException(
+            status_code=401,
+            detail="Utilizador não autenticado."
+        )
 
     return athlete_id
 
@@ -584,17 +605,6 @@ def strava_sync(
         request
     )
 
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
-
     try:
 
         return sync_strava_activities(
@@ -639,17 +649,6 @@ def get_activities(
         request
     )
 
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
-
     db = SessionLocal()
 
     try:
@@ -679,74 +678,6 @@ def get_activities(
 
 
 # ============================================================
-# CRIAR ATIVIDADE
-# ============================================================
-
-@app.post("/activities")
-def create_activity(
-    request: Request,
-    activity: ActivityCreate
-):
-
-    athlete_id = require_athlete_id(
-        request
-    )
-
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
-
-    db = SessionLocal()
-
-    try:
-
-        new_activity = Activity(
-
-            athlete_id=
-                athlete_id,
-
-            name=
-                activity.name,
-
-            distance_km=
-                activity.distance_km,
-
-            time_minutes=
-                activity.time_minutes,
-
-            average_heart_rate=
-                activity.average_heart_rate
-
-        )
-
-
-        db.add(
-            new_activity
-        )
-
-        db.commit()
-
-        db.refresh(
-            new_activity
-        )
-
-
-        return new_activity
-
-
-    finally:
-
-        db.close()
-
-
-# ============================================================
 # ANALYTICS — SUMMARY
 # ============================================================
 
@@ -758,17 +689,6 @@ def analytics_summary(
     athlete_id = require_athlete_id(
         request
     )
-
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
 
     return get_summary(
         athlete_id
@@ -788,17 +708,6 @@ def analytics_weekly(
         request
     )
 
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
-
     return get_weekly(
         athlete_id
     )
@@ -816,17 +725,6 @@ def analytics_performance(
     athlete_id = require_athlete_id(
         request
     )
-
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
 
     return get_running_performance(
         athlete_id
@@ -848,17 +746,6 @@ def running_performance(
         request
     )
 
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
-
     return get_running_performance(
         athlete_id
     )
@@ -876,17 +763,6 @@ def analytics_insights(
     athlete_id = require_athlete_id(
         request
     )
-
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
 
     return get_insights(
         athlete_id
@@ -908,17 +784,6 @@ def analytics_training_load(
         request
     )
 
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
-
     return get_training_load(
         athlete_id
     )
@@ -938,17 +803,6 @@ def analytics_evolution(
     athlete_id = require_athlete_id(
         request
     )
-
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
 
     weekly_data = get_weekly(
         athlete_id
@@ -975,17 +829,6 @@ def analytics_performance_comparison(
         request
     )
 
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
-
     return calculate_performance_comparison(
         athlete_id
     )
@@ -1005,17 +848,6 @@ def analytics_ai_context(
     athlete_id = require_athlete_id(
         request
     )
-
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
 
     weekly_data = get_weekly(
         athlete_id
@@ -1088,17 +920,6 @@ def analytics_ai_insights(
     athlete_id = require_athlete_id(
         request
     )
-
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
 
     # --------------------------------------------------------
     # CACHE
@@ -1227,17 +1048,6 @@ def analytics_athlete_score(
         request
     )
 
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
-
     weekly_data = get_weekly(
         athlete_id
     )
@@ -1291,17 +1101,6 @@ def analytics_ai_coach(
     athlete_id = require_athlete_id(
         request
     )
-
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
 
     weekly_data = get_weekly(
         athlete_id
@@ -1378,17 +1177,6 @@ def analytics_weekly_training_plan(
     athlete_id = require_athlete_id(
         request
     )
-
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
 
     weekly_data = get_weekly(
         athlete_id

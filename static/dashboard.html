@@ -1148,6 +1148,17 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
 
 let ATHLETE_ID = null;
 
+async function apiFetch(url, options) {
+    const response = await fetch(url, options);
+
+    if (response.status === 401) {
+        window.location.href = "/";
+        throw new Error("Sessão expirada.");
+    }
+
+    return response;
+}
+
 const AUTO_SYNC_MAX_AGE_MS =
     60 * 60 * 1000;
 
@@ -1694,7 +1705,7 @@ async function fetchActivityCount() {
     try {
 
         const response =
-            await fetch(
+            await apiFetch(
                 "/analytics/summary"
             );
 
@@ -1808,7 +1819,7 @@ function refreshDashboardData() {
 async function runStravaSyncRequest() {
 
     const response =
-        await fetch(
+        await apiFetch(
             "/strava/sync",
             {
                 method:
@@ -2182,7 +2193,7 @@ async function loadDashboard() {
         }
 
         const response =
-            await fetch(
+            await apiFetch(
                 `/analytics/summary`
             );
 
@@ -2282,7 +2293,7 @@ async function loadAthleteScore() {
     try {
 
         const response =
-            await fetch(
+            await apiFetch(
                 `/analytics/athlete-score`
             );
 
@@ -2475,7 +2486,7 @@ async function loadWeeklyTrainingPlan() {
     try {
 
         const response =
-            await fetch(
+            await apiFetch(
                 `/analytics/weekly-training-plan`
             );
 
@@ -2624,7 +2635,7 @@ async function loadAICoach() {
     try {
 
         const response =
-            await fetch(
+            await apiFetch(
                 `/analytics/ai-coach`
             );
 
@@ -2713,7 +2724,7 @@ async function loadInsights() {
     try {
 
         const response =
-            await fetch(
+            await apiFetch(
                 `/analytics/ai-insights`
             );
 
@@ -2859,7 +2870,7 @@ async function loadRunningPerformance() {
     try {
 
         const response =
-            await fetch(
+            await apiFetch(
                 `/analytics/running-performance`
             );
 
@@ -3101,7 +3112,7 @@ async function loadTrainingLoad() {
     try {
 
         const response =
-            await fetch(
+            await apiFetch(
                 "/analytics/training-load"
             );
 
@@ -3223,7 +3234,7 @@ async function loadEvolution() {
     try {
 
         const response =
-            await fetch(
+            await apiFetch(
                 "/analytics/evolution"
             );
 
@@ -3310,7 +3321,7 @@ async function loadRecentActivities() {
     try {
 
         const response =
-            await fetch(
+            await apiFetch(
                 "/activities"
             );
 
@@ -3430,7 +3441,7 @@ async function loadWeeklyChart() {
     try {
 
         const response =
-            await fetch(
+            await apiFetch(
                 `/analytics/weekly`
             );
 

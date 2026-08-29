@@ -22,12 +22,12 @@ class StravaAuth(Base):
         nullable=False,
     )
 
-    # Stored as plaintext (token_version=0) or Fernet ciphertext (1).
+    # Stored as Fernet ciphertext (token_version=1). Plaintext (0) is rejected.
     access_token = Column(String)
     refresh_token = Column(String)
     expires_at = Column(Integer)
 
-    # 0 = plaintext legacy; 1 = Fernet at rest.
+    # 1 = Fernet at rest (required). 0 is legacy and rejected by readers.
     token_version = Column(
         Integer,
         nullable=False,
