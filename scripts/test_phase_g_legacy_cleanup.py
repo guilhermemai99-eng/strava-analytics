@@ -75,8 +75,8 @@ def main() -> int:
             "average_heart_rate": 120,
         },
     )
-    assert post.status_code == 404, post.status_code
-    print("PASS POST /activities -> 404")
+    assert post.status_code in {404, 405}, post.status_code
+    print(f"PASS POST /activities -> {post.status_code} (legacy create removed)")
 
     # Live routes still registered (auth may 200/401/302 depending on Phase F)
     for path in LIVE_GET:
