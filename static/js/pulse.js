@@ -154,6 +154,14 @@
       .replace(/'/g, "&#39;");
   }
 
+  function proxiedMediaUrl(raw) {
+    if (!raw) return raw;
+    const url = String(raw).trim();
+    if (!url || url.startsWith("/") || url.startsWith("data:")) return url;
+    if (url.includes("/api/media/proxy")) return url;
+    return `/api/media/proxy?url=${encodeURIComponent(url)}`;
+  }
+
   function formatKm(meters) {
     if (meters == null || Number.isNaN(Number(meters))) return "—";
     return (Number(meters) / 1000).toFixed(Number(meters) >= 10000 ? 1 : 2);
@@ -578,7 +586,7 @@
 
   function authorAvatarHtml(author) {
     if (author?.avatar_url) {
-      return `<div class="pulse-avatar"><img src="${escapeHtml(author.avatar_url)}" alt=""></div>`;
+      return `<div class="pulse-avatar"><img src="${escapeHtml(proxiedMediaUrl(author.avatar_url))}" alt=""></div>`;
     }
     return `<div class="pulse-avatar">${escapeHtml(author?.initials || "P")}</div>`;
   }
@@ -612,7 +620,7 @@
         <div class="feed-media has-photo has-map is-stacked">
           <img
             class="feed-media-photo"
-            src="${escapeHtml(media.primary_image_url)}"
+            src="${escapeHtml(proxiedMediaUrl(media.primary_image_url))}"
             alt=""
             loading="lazy"
             decoding="async"
@@ -629,7 +637,7 @@
           ${fallback}
           <img
             class="feed-media-photo"
-            src="${escapeHtml(media.primary_image_url)}"
+            src="${escapeHtml(proxiedMediaUrl(media.primary_image_url))}"
             alt=""
             loading="lazy"
             decoding="async"
@@ -1126,7 +1134,7 @@
   }
 
   function renderAvatarHtml(profile, extraClass = "") {
-    const url = profile?.avatar_url;
+    const url = proxiedMediaUrl(profile?.avatar_url);
     const initials = escapeHtml(profile?.initials || "P");
     if (url) {
       return `<div class="pulse-avatar ${extraClass}"><img src="${escapeHtml(url)}" alt=""></div>`;
@@ -2769,7 +2777,7 @@
       els.sidebarAvatar.innerHTML = "";
       if (profile.avatar_url) {
         const img = document.createElement("img");
-        img.src = profile.avatar_url;
+        img.src = proxiedMediaUrl(profile.avatar_url);
         img.alt = "";
         els.sidebarAvatar.appendChild(img);
       } else {
