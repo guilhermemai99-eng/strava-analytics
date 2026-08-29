@@ -269,6 +269,12 @@ def require_athlete_id(
 # HOME
 # ============================================================
 
+@app.get("/health")
+def health():
+    """Lightweight probe for Railway / load balancers (no auth, no DB)."""
+    return {"status": "ok"}
+
+
 @app.get("/")
 def home(
     request: Request
