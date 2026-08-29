@@ -377,77 +377,40 @@
 
     els.viewRoot.innerHTML = html;
     els.coachSidebarPanel.innerHTML = renderCoachWarmup();
+    bindViewInteractions();
   }
 
-  /* ——— Data ——— */
+  function bindViewInteractions() {
+    els.viewRoot.querySelectorAll("[data-activity-id]").forEach((tile) => {
+      tile.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openActivity(tile.dataset.activityId);
+      });
+    });
 
-  function applyProfileChrome(profile) {
-    els.sidebarName.textContent = profile.display_name || "Runner";
-    els.sidebarHandle.textContent = handleLabel(profile);
-    els.sidebarAvatar.innerHTML = "";
-    if (profile.avatar_url) {
-      const img = document.createElement("img");
-      img.src = profile.avatar_url;
-      img.alt = "";
-      els.sidebarAvatar.appendChild(img);
-    } else {
-      els.sidebarAvatar.textContent = profile.initials || "P";
-    }
-
-    document.getElementById("settingsDisplayName").value =
-      profile.display_name_custom || profile.display_name || "";
-    document.getElementById("settingsHandle").value = profile.handle || "";
-    document.getElementById("settingsBio").value = profile.bio || "";
+    els.viewRoot.querySelectorAll("[data-action]").forEach((btn) => {
+      btn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const action = btn.dataset.action;
+        if (action === "edit-profile" || action === "open-settings") openSettings();
+        if (action === "followers-tease") showToast("Nobody’s watching. Yet.");
+        if (action === "following-tease") {
+          showToast("Follow someone. Running alone is overrated.");
+        }
+      });
+    });
   }
-
-  async function loadProfileBundle(force = false) {
-    if (state.loadedProfile && !force) return;
-
-    const [profileRes, activitiesRes, summaryRes] = await Promise.all([
-      apiFetch("/api/me/profile"),
-      apiFetch("/activities?limit=50"),
-      apiFetch("/analytics/summary").catch(() => null),
-    ]);
-
-    if (!profileRes.ok) throw new Error("That didn’t go the distance.");
-    state.profile = await profileRes.json();
-
-    if (activitiesRes.ok) {
-      const raw = await activitiesRes.json();
-      state.activities = Array.isArray(raw) ? raw : [];
-    } else {
-      state.activities = [];
-    }
-
-    if (summaryRes && summaryRes.ok) {
-      state.summary = await summaryRes.json();
-      if (state.profile && !state.profile.stats) {
-        state.profile.stats = state.summary;
-      }
-    }
-
-    state.loadedProfile = true;
-    applyProfileChrome(state.profile);
-  }
-
-  async function ensureAuth() {
-    const res = await fetch("/auth/me");
-    if (!res.ok) {
-      window.location.href = "/";
-      throw new Error("unauth");
-    }
-    return res.json();
-  }
-
-  /* ——— Settings / modal ——— */
 
   function openSettings() {
     els.drawerBackdrop.hidden = false;
-    requestAnimationFrame(() => {
-      els.drawerBackdrop.classList.add("is-open");
-      els.settingsDrawer.classList.add("is-open");
-      els.settingsDrawer.setAttribute("aria-hidden", "false");
-    });
+    els.settingsDrawer.hidden = false;
+    // Force reflow so transitions apply after un-hiding.
+    void els.settingsDrawer.offsetWidth;
+    els.drawerBackdrop.classList.add("is-open");
+    els.settingsDrawer.classList.add("is-open");
+    els.settingsDrawer.setAttribute("aria-hidden", "false");
   }
 
   function closeSettings() {
@@ -493,7 +456,8 @@
     `;
 
     els.activityModal.hidden = false;
-    requestAnimationFrame(() => els.activityModal.classList.add("is-open"));
+    void els.activityModal.offsetWidth;
+    els.activityModal.classList.add("is-open");
   }
 
   function closeActivity() {
@@ -501,6 +465,68 @@
     setTimeout(() => {
       els.activityModal.hidden = true;
     }, 250);
+  }
+
+  function applyProfileChrome(profile) {
+    els.sidebarName.textContent = profile.display_name || "Runner";
+    els.sidebarHandle.textContent = handleLabel(profile);
+    els.sidebarAvatar.innerHTML = "";
+    if (profile.avatar_url) {
+      const img = document.createElement("img");
+      img.src = profile.avatar_url;
+      img.alt = "";
+      els.sidebarAvatar.appendChild(img);
+    } else {
+      els.sidebarAvatar.textContent = profile.initials || "P";
+    }
+
+    document.getElementById("settingsDisplayName").value =
+      profile.display_name_custom || profile.display_name || "";
+    document.getElementById("settingsHandle").value = profile.handle || "";
+    document.getElementById("settingsBio").value = profile.bio || "";
+  }
+
+  async function loadProfileBundle(force = false) {
+    if (state.loadedProfile && !force) return;
+
+    const [profileRes, activitiesRes, summaryRes] = await Promise.all([
+      apiFetch("/api/me/profile"),
+      apiFetch("/activities?limit=50"),
+      apiFetch("/analytics/summary").catch(() => null),
+    ]);
+
+    if (!profileRes.ok) throw new Error("That didn’t go the distance.");
+    state.profile = await profileRes.json();
+
+    if (activitiesRes.ok) {
+      const raw = await activitiesRes.json();
+      state.activities = (Array.isArray(raw) ? raw : []).slice().sort((a, b) => {
+        const da = new Date(a.start_date_local || a.start_date || 0).getTime();
+        const db = new Date(b.start_date_local || b.start_date || 0).getTime();
+        return db - da;
+      });
+    } else {
+      state.activities = [];
+    }
+
+    if (summaryRes && summaryRes.ok) {
+      state.summary = await summaryRes.json();
+      if (state.profile && !state.profile.stats) {
+        state.profile.stats = state.summary;
+      }
+    }
+
+    state.loadedProfile = true;
+    applyProfileChrome(state.profile);
+  }
+
+  async function ensureAuth() {
+    const res = await fetch("/auth/me");
+    if (!res.ok) {
+      window.location.href = "/";
+      throw new Error("unauth");
+    }
+    return res.json();
   }
 
   async function syncStrava(quiet = false) {
