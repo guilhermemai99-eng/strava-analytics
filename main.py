@@ -493,7 +493,7 @@ def strava_callback(
 
     response = RedirectResponse(
 
-        url="/dashboard",
+        url="/dashboard?boot=1",
 
         status_code=302
 
@@ -623,6 +623,21 @@ def strava_sync(
 
             "error":
                 str(error)
+
+        }
+
+    except Exception as error:
+
+        print(
+            "strava_sync unexpected error:",
+            repr(error)
+        )
+
+        return {
+
+            "error":
+                "Falha ao sincronizar atividades. "
+                "Tenta novamente dentro de momentos."
 
         }
 

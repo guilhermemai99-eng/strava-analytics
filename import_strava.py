@@ -2,6 +2,7 @@ import sys
 
 import requests
 
+import athlete  # noqa: F401  # ensure athletes table is registered for FK
 from database import SessionLocal
 from models import Activity
 from strava_tokens import (

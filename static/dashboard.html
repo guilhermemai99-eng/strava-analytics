@@ -553,6 +553,124 @@
             to { background-position: -100% 0; }
         }
 
+        .boot-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 28px 20px;
+            background:
+                radial-gradient(900px 520px at 50% 0%, rgba(215, 181, 109, 0.14), transparent 55%),
+                linear-gradient(180deg, rgba(7, 7, 7, 0.96), rgba(7, 7, 7, 0.98));
+            backdrop-filter: blur(10px);
+        }
+
+        .boot-overlay.is-visible {
+            display: flex;
+            animation: bootFadeIn 0.35s ease;
+        }
+
+        .boot-overlay.is-leaving {
+            animation: bootFadeOut 0.28s ease forwards;
+        }
+
+        @keyframes bootFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes bootFadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+
+        .boot-stage {
+            width: min(460px, 100%);
+            text-align: center;
+        }
+
+        .boot-brand {
+            color: var(--accent);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            margin-bottom: 22px;
+        }
+
+        .boot-orb {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 28px;
+            border-radius: 50%;
+            border: 1px solid rgba(215, 181, 109, 0.35);
+            background:
+                radial-gradient(circle at 35% 30%, rgba(215, 181, 109, 0.35), transparent 55%),
+                rgba(215, 181, 109, 0.08);
+            animation: bootPulse 1.8s ease-in-out infinite;
+        }
+
+        @keyframes bootPulse {
+            0%, 100% { transform: scale(1); opacity: 0.85; }
+            50% { transform: scale(1.06); opacity: 1; }
+        }
+
+        .boot-title {
+            margin: 0;
+            font-size: clamp(28px, 5vw, 36px);
+            line-height: 1.1;
+            letter-spacing: -0.8px;
+            font-weight: 620;
+        }
+
+        .boot-copy {
+            margin: 14px auto 0;
+            max-width: 34ch;
+            color: var(--muted);
+            font-size: 15px;
+            line-height: 1.55;
+        }
+
+        .boot-eta {
+            margin-top: 22px;
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+
+        .boot-progress {
+            margin: 26px auto 0;
+            width: min(280px, 100%);
+            height: 3px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+        }
+
+        .boot-progress > span {
+            display: block;
+            height: 100%;
+            width: 18%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            animation: bootBar 1.4s ease-in-out infinite;
+        }
+
+        @keyframes bootBar {
+            0% { transform: translateX(-120%); }
+            100% { transform: translateX(420%); }
+        }
+
+        body.is-booting .sidebar,
+        body.is-booting .shell,
+        body.is-booting .bottom-nav {
+            filter: blur(2px);
+            pointer-events: none;
+        }
+
         .bottom-nav { display: none; }
 
         .future-note {
@@ -662,6 +780,31 @@
 
 
 <body>
+
+
+<div
+    class="boot-overlay"
+    id="bootOverlay"
+    aria-live="polite"
+    aria-busy="true"
+>
+    <div class="boot-stage">
+        <div class="boot-brand">Pulse</div>
+        <div class="boot-orb" aria-hidden="true"></div>
+        <h2 class="boot-title" id="bootTitle">
+            A preparar o teu dashboard
+        </h2>
+        <p class="boot-copy" id="bootCopy">
+            O treinador está a analisar os teus treinos.
+        </p>
+        <div class="boot-eta" id="bootEta">
+            A estimar tempo...
+        </div>
+        <div class="boot-progress" aria-hidden="true">
+            <span></span>
+        </div>
+    </div>
+</div>
 
 
 <aside class="sidebar">
@@ -1015,6 +1158,33 @@
 
 let ATHLETE_ID = null;
 
+const AUTO_SYNC_MAX_AGE_MS =
+    60 * 60 * 1000;
+
+const BOOT_PHASES = [
+    {
+        title: "A ligar ao Strava",
+        copy: "Estamos a ir buscar a tua conta e os treinos mais recentes."
+    },
+    {
+        title: "A importar os teus treinos",
+        copy: "A sincronizar atividades, distâncias e ritmos."
+    },
+    {
+        title: "O treinador está a analisar",
+        copy: "A preparar score, insights e o plano da semana."
+    },
+    {
+        title: "Quase pronto",
+        copy: "A montar o teu dashboard de performance."
+    }
+];
+
+let bootEtaTimer = null;
+let bootPhaseTimer = null;
+let bootEtaSecondsLeft = 0;
+let syncInFlight = false;
+
 
 function lastSyncStorageKey() {
 
@@ -1109,105 +1279,679 @@ function setSyncMessage(
 }
 
 
-function refreshDashboardData() {
+function formatEtaSeconds(
+    totalSeconds
+) {
 
-    loadDashboard();
+    const seconds =
+        Math.max(
+            0,
+            Math.ceil(
+                totalSeconds
+            )
+        );
 
-    loadAthleteScore();
+    if (seconds <= 0) {
 
-    loadAICoach();
+        return "A finalizar...";
 
-    loadWeeklyTrainingPlan();
+    }
 
-    loadInsights();
+    if (seconds < 60) {
 
-    loadRunningPerformance();
+        return (
+            "Tempo estimado: cerca de " +
+            seconds +
+            " s"
+        );
 
-    loadWeeklyChart();
+    }
 
-    loadTrainingLoad();
+    const minutes =
+        Math.floor(
+            seconds / 60
+        );
 
-    loadEvolution();
+    const rest =
+        seconds % 60;
 
-    loadRecentActivities();
+    if (rest === 0) {
+
+        return (
+            "Tempo estimado: cerca de " +
+            minutes +
+            " min"
+        );
+
+    }
+
+    return (
+        "Tempo estimado: cerca de " +
+        minutes +
+        " min " +
+        rest +
+        " s"
+    );
 
 }
 
 
-async function syncStrava() {
+function setBootContent(
+    title,
+    copy,
+    etaText
+) {
+
+    const titleEl =
+        document.getElementById(
+            "bootTitle"
+        );
+
+    const copyEl =
+        document.getElementById(
+            "bootCopy"
+        );
+
+    const etaEl =
+        document.getElementById(
+            "bootEta"
+        );
+
+    if (titleEl && title) {
+
+        titleEl.textContent =
+            title;
+
+    }
+
+    if (copyEl && copy) {
+
+        copyEl.textContent =
+            copy;
+
+    }
+
+    if (etaEl && etaText != null) {
+
+        etaEl.textContent =
+            etaText;
+
+    }
+
+}
+
+
+function stopBootTimers() {
+
+    if (bootEtaTimer) {
+
+        clearInterval(
+            bootEtaTimer
+        );
+
+        bootEtaTimer = null;
+
+    }
+
+    if (bootPhaseTimer) {
+
+        clearInterval(
+            bootPhaseTimer
+        );
+
+        bootPhaseTimer = null;
+
+    }
+
+}
+
+
+function showBootOverlay(
+    options
+) {
+
+    const opts =
+        options || {};
+
+    const overlay =
+        document.getElementById(
+            "bootOverlay"
+        );
+
+    if (!overlay) {
+
+        return;
+    }
+
+    stopBootTimers();
+
+    document.body.classList.add(
+        "is-booting"
+    );
+
+    overlay.classList.remove(
+        "is-leaving"
+    );
+
+    overlay.classList.add(
+        "is-visible"
+    );
+
+    overlay.setAttribute(
+        "aria-busy",
+        "true"
+    );
+
+    const phase =
+        BOOT_PHASES[0];
+
+    setBootContent(
+        opts.title || phase.title,
+        opts.copy || phase.copy,
+        opts.etaText || "A estimar tempo..."
+    );
+
+    bootEtaSecondsLeft =
+        Number(
+            opts.etaSeconds
+        );
+
+    if (
+        !Number.isFinite(
+            bootEtaSecondsLeft
+        )
+        ||
+        bootEtaSecondsLeft <= 0
+    ) {
+
+        bootEtaSecondsLeft = 45;
+
+    }
+
+    setBootContent(
+        null,
+        null,
+        formatEtaSeconds(
+            bootEtaSecondsLeft
+        )
+    );
+
+    let phaseIndex = 0;
+
+    bootPhaseTimer =
+        setInterval(
+            function () {
+
+                phaseIndex =
+                    Math.min(
+                        phaseIndex + 1,
+                        BOOT_PHASES.length - 1
+                    );
+
+                const next =
+                    BOOT_PHASES[
+                        phaseIndex
+                    ];
+
+                setBootContent(
+                    next.title,
+                    next.copy,
+                    null
+                );
+
+            },
+            9000
+        );
+
+    bootEtaTimer =
+        setInterval(
+            function () {
+
+                bootEtaSecondsLeft =
+                    Math.max(
+                        0,
+                        bootEtaSecondsLeft - 1
+                    );
+
+                if (
+                    bootEtaSecondsLeft <= 0
+                ) {
+
+                    setBootContent(
+                        null,
+                        null,
+                        "Ainda a processar... quase lá"
+                    );
+
+                    return;
+
+                }
+
+                setBootContent(
+                    null,
+                    null,
+                    formatEtaSeconds(
+                        bootEtaSecondsLeft
+                    )
+                );
+
+            },
+            1000
+        );
+
+}
+
+
+function hideBootOverlay() {
+
+    const overlay =
+        document.getElementById(
+            "bootOverlay"
+        );
+
+    stopBootTimers();
+
+    document.body.classList.remove(
+        "is-booting"
+    );
+
+    if (!overlay) {
+
+        return;
+    }
+
+    overlay.setAttribute(
+        "aria-busy",
+        "false"
+    );
+
+    if (
+        !overlay.classList.contains(
+            "is-visible"
+        )
+    ) {
+
+        return;
+    }
+
+    overlay.classList.add(
+        "is-leaving"
+    );
+
+    setTimeout(
+        function () {
+
+            overlay.classList.remove(
+                "is-visible",
+                "is-leaving"
+            );
+
+        },
+        260
+    );
+
+}
+
+
+function clearBootQueryParam() {
+
+    try {
+
+        const url =
+            new URL(
+                window.location.href
+            );
+
+        if (
+            !url.searchParams.has(
+                "boot"
+            )
+        ) {
+
+            return;
+        }
+
+        url.searchParams.delete(
+            "boot"
+        );
+
+        window.history.replaceState(
+            {},
+            "",
+            url.pathname +
+                url.search +
+                url.hash
+        );
+
+    }
+
+    catch (error) {
+
+        // ignore
+
+    }
+
+}
+
+
+function hasFreshLoginBoot() {
+
+    try {
+
+        const url =
+            new URL(
+                window.location.href
+            );
+
+        return (
+            url.searchParams.get(
+                "boot"
+            )
+            ===
+            "1"
+        );
+
+    }
+
+    catch (error) {
+
+        return false;
+
+    }
+
+}
+
+
+function getLastSyncAgeMs() {
+
+    const stored =
+        localStorage.getItem(
+            lastSyncStorageKey()
+        );
+
+    if (!stored) {
+
+        return null;
+
+    }
+
+    const then =
+        new Date(
+            stored
+        ).getTime();
+
+    if (
+        Number.isNaN(
+            then
+        )
+    ) {
+
+        return null;
+
+    }
+
+    return (
+        Date.now()
+        -
+        then
+    );
+
+}
+
+
+async function fetchActivityCount() {
+
+    try {
+
+        const response =
+            await fetch(
+                "/analytics/summary"
+            );
+
+        if (!response.ok) {
+
+            return null;
+
+        }
+
+        const data =
+            await response.json();
+
+        const total =
+            Number(
+                data.total_activities
+            );
+
+        return Number.isFinite(
+            total
+        )
+            ? total
+            : null;
+
+    }
+
+    catch (error) {
+
+        return null;
+
+    }
+
+}
+
+
+async function shouldAutoSync() {
+
+    if (
+        hasFreshLoginBoot()
+    ) {
+
+        return {
+            needed: true,
+            reason: "login",
+            etaSeconds: 70
+        };
+
+    }
+
+    const count =
+        await fetchActivityCount();
+
+    if (
+        count === 0
+        ||
+        count === null
+    ) {
+
+        return {
+            needed: true,
+            reason: "empty",
+            etaSeconds: 75
+        };
+
+    }
+
+    const ageMs =
+        getLastSyncAgeMs();
+
+    if (
+        ageMs === null
+        ||
+        ageMs >
+            AUTO_SYNC_MAX_AGE_MS
+    ) {
+
+        return {
+            needed: true,
+            reason: "stale",
+            etaSeconds: 35
+        };
+
+    }
+
+    return {
+        needed: false,
+        reason: "fresh",
+        etaSeconds: 8
+    };
+
+}
+
+
+function refreshDashboardData() {
+
+    return Promise.all([
+        loadDashboard(),
+        loadAthleteScore(),
+        loadAICoach(),
+        loadWeeklyTrainingPlan(),
+        loadInsights(),
+        loadRunningPerformance(),
+        loadWeeklyChart(),
+        loadTrainingLoad(),
+        loadEvolution(),
+        loadRecentActivities()
+    ]);
+
+}
+
+
+async function runStravaSyncRequest() {
+
+    const response =
+        await fetch(
+            "/strava/sync",
+            {
+                method:
+                    "POST"
+            }
+        );
+
+    let data = {};
+
+    try {
+
+        data =
+            await response.json();
+
+    }
+
+    catch (parseError) {
+
+        throw new Error(
+            "Não foi possível ler a resposta da sincronização."
+        );
+
+    }
+
+    if (
+        !response.ok
+        ||
+        data.error
+    ) {
+
+        throw new Error(
+            data.error
+                ||
+                "Não foi possível sincronizar com o Strava."
+        );
+
+    }
+
+    const imported =
+        Number(
+            data.imported
+        );
+
+    const importedCount =
+        Number.isFinite(
+            imported
+        )
+            ? imported
+            : 0;
+
+    localStorage.setItem(
+        lastSyncStorageKey(),
+        new Date().toISOString()
+    );
+
+    showLastSync();
+
+    return {
+        imported:
+            importedCount,
+        data:
+            data
+    };
+
+}
+
+
+async function syncStrava(
+    options
+) {
+
+    const opts =
+        options || {};
 
     const button =
         document.getElementById(
             "syncStravaButton"
         );
 
-    if (!button || button.disabled) {
+    if (
+        syncInFlight
+    ) {
 
-        return;
+        return null;
+
     }
 
-    button.disabled = true;
+    if (
+        !opts.silent
+        &&
+        button
+        &&
+        button.disabled
+    ) {
 
-    button.textContent =
-        "A sincronizar...";
+        return null;
 
-    setSyncMessage(
-        "",
-        ""
-    );
+    }
+
+    syncInFlight = true;
+
+    if (
+        button
+    ) {
+
+        button.disabled =
+            true;
+
+        button.textContent =
+            "A sincronizar...";
+
+    }
+
+    if (
+        !opts.keepMessage
+    ) {
+
+        setSyncMessage(
+            "",
+            ""
+        );
+
+    }
 
     try {
 
-        const response =
-            await fetch(
-                "/strava/sync",
-                {
-                    method:
-                        "POST"
-                }
-            );
-
-        let data = {};
-
-        try {
-
-            data =
-                await response.json();
-
-        }
-
-        catch (parseError) {
-
-            throw new Error(
-                "Não foi possível ler a resposta da sincronização."
-            );
-
-        }
-
-        if (!response.ok || data.error) {
-
-            throw new Error(
-                data.error
-                    ||
-                    "Não foi possível sincronizar com o Strava."
-            );
-
-        }
-
-        const imported =
-            Number(
-                data.imported
-            );
-
-        const importedCount =
-            Number.isFinite(imported)
-                ? imported
-                : 0;
+        const result =
+            await runStravaSyncRequest();
 
         const importedText =
-            importedCount === 1
+            result.imported === 1
                 ? "1 atividade importada."
-                : importedCount +
+                : result.imported +
                     " atividades importadas.";
 
         setSyncMessage(
@@ -1216,14 +1960,15 @@ async function syncStrava() {
             "success"
         );
 
-        localStorage.setItem(
-            lastSyncStorageKey(),
-            new Date().toISOString()
-        );
+        if (
+            !opts.skipRefresh
+        ) {
 
-        showLastSync();
+            await refreshDashboardData();
 
-        refreshDashboardData();
+        }
+
+        return result;
 
     }
 
@@ -1236,14 +1981,156 @@ async function syncStrava() {
             "error"
         );
 
+        if (
+            !opts.swallowError
+        ) {
+
+            throw error;
+
+        }
+
+        return null;
+
     }
 
     finally {
 
-        button.disabled = false;
+        syncInFlight =
+            false;
 
-        button.textContent =
-            "↻ Sincronizar Strava";
+        if (
+            button
+        ) {
+
+            button.disabled =
+                false;
+
+            button.textContent =
+                "↻ Sincronizar Strava";
+
+        }
+
+    }
+
+}
+
+
+async function bootDashboard() {
+
+    showBootOverlay(
+        {
+            title:
+                "A preparar o teu dashboard",
+            copy:
+                "A verificar a tua sessão e os treinos.",
+            etaSeconds:
+                12
+        }
+    );
+
+    try {
+
+        const authenticated =
+            await loadCurrentAthlete();
+
+        if (
+            !authenticated
+        ) {
+
+            return;
+        }
+
+        const decision =
+            await shouldAutoSync();
+
+        if (
+            decision.needed
+        ) {
+
+            showBootOverlay(
+                {
+                    title:
+                        decision.reason === "login"
+                            ? "Bem-vindo de volta"
+                            : "A sincronizar os teus treinos",
+                    copy:
+                        "O treinador está a analisar os teus treinos. Não precisas de fazer nada.",
+                    etaSeconds:
+                        decision.etaSeconds
+                }
+            );
+
+            try {
+
+                await syncStrava(
+                    {
+                        skipRefresh:
+                            true,
+                        swallowError:
+                            false,
+                        keepMessage:
+                            true
+                    }
+                );
+
+            }
+
+            catch (syncError) {
+
+                setBootContent(
+                    "Não foi possível sincronizar agora",
+                    syncError.message
+                        ||
+                        "Vamos abrir o dashboard com os dados disponíveis.",
+                    "A continuar..."
+                );
+
+                await new Promise(
+                    function (resolve) {
+
+                        setTimeout(
+                            resolve,
+                            1200
+                        );
+
+                    }
+                );
+
+            }
+
+        }
+
+        setBootContent(
+            "A carregar o dashboard",
+            "A montar score, métricas e recomendações.",
+            "Quase pronto..."
+        );
+
+        await refreshDashboardData();
+
+        clearBootQueryParam();
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Boot dashboard:",
+            error
+        );
+
+        setSyncMessage(
+            error.message
+                ||
+                "Erro ao carregar o dashboard.",
+            "error"
+        );
+
+    }
+
+    finally {
+
+        hideBootOverlay();
 
     }
 
@@ -2780,30 +3667,40 @@ document.getElementById(
     "syncStravaButton"
 ).addEventListener(
     "click",
-    syncStrava
+    function () {
+
+        showBootOverlay(
+            {
+                title:
+                    "A sincronizar com o Strava",
+                copy:
+                    "O treinador está a atualizar os teus treinos.",
+                etaSeconds:
+                    40
+            }
+        );
+
+        syncStrava(
+            {
+                skipRefresh:
+                    false,
+                swallowError:
+                    true
+            }
+        ).finally(
+            function () {
+
+                hideBootOverlay();
+
+            }
+        );
+
+    }
 );
 
 showLastSync();
 
-loadDashboard();
-
-loadAthleteScore();
-
-loadAICoach();
-
-loadWeeklyTrainingPlan();
-
-loadInsights();
-
-loadRunningPerformance();
-
-loadWeeklyChart();
-
-loadTrainingLoad();
-
-loadEvolution();
-
-loadRecentActivities();
+bootDashboard();
 
 </script>
 
