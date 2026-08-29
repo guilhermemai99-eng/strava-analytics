@@ -493,7 +493,7 @@ def strava_callback(
 
     response = RedirectResponse(
 
-        url="/dashboard",
+        url="/dashboard?boot=1",
 
         status_code=302
 
