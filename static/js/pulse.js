@@ -2851,6 +2851,12 @@
     loadCoachMessages(false);
     refreshUnreadBadge();
 
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible") return;
+      refreshUnreadBadge();
+      if (state.page === "messages") loadInbox(true);
+    });
+
     const initial = parseLocationHash();
     if (initial.page === "u") {
       openUserProfile(

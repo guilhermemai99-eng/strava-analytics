@@ -1707,7 +1707,7 @@ body {
   background: rgba(7, 9, 8, 0.92);
   backdrop-filter: blur(14px);
   border-top: 1px solid var(--line);
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 4px;
 }
 
@@ -1719,7 +1719,7 @@ body {
   padding: 8px 4px;
   border-radius: 12px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 }
 
