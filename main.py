@@ -1,5 +1,5 @@
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import RedirectResponse, FileResponse, Response
+from fastapi.responses import RedirectResponse, FileResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
@@ -58,6 +58,7 @@ from follow_helpers import (
     relationship_payload,
     suggest_people,
 )
+from account_helpers import AccountDeleteError, delete_athlete_account
 from public_profile_helpers import can_view_profile, serialize_public_profile
 from ai_coach_chat import (
     CoachChatError,
@@ -958,6 +959,33 @@ def logout(request: Request):
     return response
 
 
+@app.delete("/api/me/account")
+def delete_my_account(request: Request):
+    """Permanently delete the authenticated athlete and dependent data."""
+    athlete_id = require_athlete_id(request)
+    raw_token = request.cookies.get(SESSION_COOKIE_NAME)
+    db = SessionLocal()
+    try:
+        try:
+            result = delete_athlete_account(db, athlete_id)
+        except AccountDeleteError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+    finally:
+        db.close()
+
+    response = JSONResponse(
+        content={
+            "ok": True,
+            "message": "Your account has officially vanished into the void.",
+            **result,
+        }
+    )
+    response.delete_cookie(SESSION_COOKIE_NAME)
+    # raw_token already revoked inside delete; cookie cleared for the browser.
+    _ = raw_token
+    return response
+
+
 # ============================================================
 # STRAVA — SINCRONIZAÇÃO
 # ============================================================
@@ -1177,6 +1205,20 @@ def unfollow_profile(handle: str, request: Request):
 
 # --- /api/users/{athlete_id} aliases (session auth; never trust client ids for actor) ---
 
+@app.get("/api/users/{athlete_id}")
+def get_user_profile(athlete_id: int, request: Request):
+    """Full public profile by internal athlete id (Follow/graph never requires a handle)."""
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        target, viewer = _require_visible_profile(
+            db, athlete_id=athlete_id, viewer_id=viewer_id
+        )
+        return serialize_public_profile(db, target=target, viewer=viewer)
+    finally:
+        db.close()
+
+
 @app.get("/api/users/{athlete_id}/relationship")
 def get_user_relationship(athlete_id: int, request: Request):
     viewer_id = require_athlete_id(request)
@@ -1331,6 +1373,8 @@ def get_explore(request: Request):
 
         return {
             "me": {
+                "athlete_id": athlete.id,
+                "handle": athlete.handle,
                 "is_profile_public": bool(athlete.is_profile_public),
                 "city": athlete.city,
                 "country": athlete.country,

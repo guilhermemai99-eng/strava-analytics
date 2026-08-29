@@ -3,11 +3,7 @@
   "use strict";
 
   const PAGES = ["feed", "explore", "coach", "profile"];
-  const COACH_TAGLINES = [
-    "Your legs don’t lie.",
-    "Let’s make those miles count.",
-    "Still alive after that long run?",
-  ];
+  const Copy = window.PulseCopy || null;
 
   const TILE_BACKGROUNDS = [
     "linear-gradient(145deg, #1f3a28 0%, #0c1410 70%)",
@@ -18,11 +14,26 @@
     "linear-gradient(155deg, #24301c 0%, #0e120c 70%)",
   ];
 
-  const FEED_LOADING_LINES = [
-    "Finding the miles…",
-    "Checking who’s been avoiding recovery…",
-    "Loading questionable pace decisions…",
-  ];
+  function copyPick(path, key) {
+    if (!Copy) return "";
+    return Copy.pick(path, key);
+  }
+
+  function copyFresh(path) {
+    if (!Copy) return "";
+    return Copy.pickFresh(path);
+  }
+
+  function copyEmpty(kind) {
+    if (!Copy) {
+      return { title: "Nothing here yet.", body: "" };
+    }
+    return Copy.emptyState(kind);
+  }
+
+  function errLine(fallback) {
+    return copyFresh("errors") || fallback || "That didn’t go the distance.";
+  }
 
   const state = {
     page: "feed",
@@ -32,6 +43,7 @@
     loadedProfile: false,
     viewed: {
       handle: null,
+      athleteId: null,
       status: "idle",
       data: null,
       error: null,
@@ -39,6 +51,7 @@
     people: {
       kind: null,
       handle: null,
+      athleteId: null,
       status: "idle",
       items: [],
       error: null,
@@ -52,7 +65,7 @@
       items: [],
       message: null,
       error: null,
-      loadingLine: FEED_LOADING_LINES[0],
+      loadingLine: copyPick("loading", "feed.loading") || "Crunching the numbers…",
     },
     coach: {
       status: "idle",
@@ -89,6 +102,10 @@
     peopleModal: document.getElementById("peopleModal"),
     peopleModalBody: document.getElementById("peopleModalBody"),
     peopleModalTitle: document.getElementById("peopleModalTitle"),
+    confirmModal: document.getElementById("confirmModal"),
+    confirmModalTitle: document.getElementById("confirmModalTitle"),
+    confirmModalBody: document.getElementById("confirmModalBody"),
+    confirmModalActions: document.getElementById("confirmModalActions"),
     toast: document.getElementById("toast"),
     syncChip: document.getElementById("syncChip"),
     settingsMsg: document.getElementById("settingsMsg"),
@@ -154,7 +171,27 @@
   function handleLabel(profile) {
     if (profile?.handle) return `@${profile.handle}`;
     if (profile?.strava?.username) return `@${profile.strava.username}`;
-    return "@runner";
+    return "New athlete";
+  }
+
+  function publicHandleLabel(person) {
+    const handle = person?.handle || null;
+    if (handle) return `@${handle}`;
+    return "New athlete";
+  }
+
+  function displayNameOf(person) {
+    return person?.display_name || person?.name || "New athlete";
+  }
+
+  function athleteIdOf(person) {
+    const raw = person?.athlete_id ?? person?.id ?? person;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  function profileIncomplete(profile) {
+    return !profile?.handle;
   }
 
   function showToast(message) {
@@ -173,7 +210,7 @@
   }
 
   function pickTagline() {
-    return COACH_TAGLINES[Math.floor(Math.random() * COACH_TAGLINES.length)];
+    return copyFresh("coachTaglines") || "Your legs don’t lie.";
   }
 
   function tileBackground(activity, index) {
@@ -516,7 +553,6 @@
     const author = item.author || {};
     const activity = item.activity || {};
     const location = item.location?.display_name;
-    const handle = author.username ? `@${author.username}` : "@runner";
     const when = relativeWhen(
       activity.start_date_local || activity.start_date || item.created_at
     );
@@ -532,11 +568,11 @@
     return `
       <article class="feed-post" data-feed-activity-id="${escapeHtml(activity.id)}">
         <div class="feed-post-head">
-          <button type="button" class="feed-author-btn" data-action="open-user" data-handle="${escapeHtml(author.handle || author.username || "")}">
+          <button type="button" class="feed-author-btn" data-action="open-user" data-athlete-id="${escapeHtml(author.athlete_id || "")}" data-handle="${escapeHtml(author.handle || "")}">
             ${authorAvatarHtml(author)}
             <div class="feed-post-meta">
-              <strong>${escapeHtml(author.name || "Runner")}</strong>
-              <span>${escapeHtml(handle)}${when ? ` · ${escapeHtml(when)}` : ""}</span>
+              <strong>${escapeHtml(displayNameOf(author))}</strong>
+              <span>${escapeHtml(publicHandleLabel(author))}${when ? ` · ${escapeHtml(when)}` : ""}</span>
             </div>
           </button>
           <div class="feed-post-type">${escapeHtml(activity.type || "Run")}</div>
@@ -560,6 +596,14 @@
           <div class="feed-metric"><span>Pace</span><strong>${escapeHtml(pace)}</strong></div>
           <div class="feed-metric"><span>Time</span><strong>${escapeHtml(duration)}</strong></div>
         </div>
+        ${
+          (() => {
+            const line = Copy ? Copy.activityInsight(activity) : null;
+            return line
+              ? `<p class="feed-insight">${escapeHtml(line)}</p>`
+              : "";
+          })()
+        }
       </article>
     `;
   }
@@ -571,7 +615,7 @@
     if (feed.status === "loading" || feed.status === "idle") {
       body = `
         <div class="feed-status">
-          <h2>${escapeHtml(feed.loadingLine || "Finding the miles…")}</h2>
+          <h2>${escapeHtml(feed.loadingLine || "Crunching the numbers…")}</h2>
           <p>Pulling your runs into something worth scrolling.</p>
         </div>
         <div class="post-skeleton" aria-hidden="true">
@@ -587,16 +631,17 @@
     } else if (feed.status === "error") {
       body = `
         <div class="feed-status">
-          <h2>That didn’t go the distance.</h2>
+          <h2>${escapeHtml(errLine())}</h2>
           <p>${escapeHtml(feed.error || "Try again.")}</p>
           <button type="button" class="btn btn-primary" data-action="retry-feed">Retry</button>
         </div>
       `;
     } else if (!feed.items.length) {
+      const empty = copyEmpty("feed");
       body = `
-        <div class="feed-empty">
-          <h2 class="feed-empty-hero">No miles yet.</h2>
-          <p class="feed-empty-copy">Your couch is currently undefeated. Sync Strava and change that.</p>
+        <div class="feed-empty empty-state-block">
+          <h2 class="feed-empty-hero">${escapeHtml(empty.title)}</h2>
+          <p class="feed-empty-copy">${escapeHtml(empty.body)}</p>
           <div class="cta-row">
             <button type="button" class="btn btn-primary" data-action="open-settings">Open Settings</button>
           </div>
@@ -626,13 +671,12 @@
   async function loadFeed(force = false) {
     if (state.feed.status === "ready" && !force) return;
     state.feed.status = "loading";
-    state.feed.loadingLine =
-      FEED_LOADING_LINES[Math.floor(Math.random() * FEED_LOADING_LINES.length)];
+    state.feed.loadingLine = copyFresh("loading") || "Crunching the numbers…";
     if (state.page === "feed") render();
 
     try {
       const res = await apiFetch("/api/feed?limit=30");
-      if (!res.ok) throw new Error("That didn’t go the distance.");
+      if (!res.ok) throw new Error(errLine());
       const data = await res.json();
       state.feed.items = Array.isArray(data.items) ? data.items : [];
       state.feed.message = data.message || null;
@@ -647,8 +691,9 @@
   }
 
   function renderRunnerCard(athlete) {
-    const handle = athlete.handle || athlete.username;
-    const handleText = handle ? `@${handle}` : "no handle yet";
+    const athleteId = athleteIdOf(athlete);
+    const handle = athlete.handle || "";
+    const handleText = publicHandleLabel(athlete);
     const location = athlete.location?.display_name || "Somewhere on Earth";
     const count = athlete.stats?.activity_count;
     const km = athlete.stats?.total_distance_km;
@@ -663,17 +708,18 @@
       avatar_url: athlete.avatar_url,
       initials: athlete.initials || "P",
     };
-    const followCtl = !handle
+    const idAttr = athleteId ? `data-athlete-id="${escapeHtml(athleteId)}"` : "";
+    const followCtl = !athleteId
       ? ""
       : athlete.is_following
-        ? `<button type="button" class="btn btn-ghost btn-follow is-following" data-action="confirm-unfollow" data-handle="${escapeHtml(handle)}">Following</button>`
-        : `<button type="button" class="btn btn-primary btn-follow" data-action="follow-user" data-handle="${escapeHtml(handle)}">Follow</button>`;
+        ? `<button type="button" class="btn btn-ghost btn-follow is-following" data-action="confirm-unfollow" ${idAttr} data-handle="${escapeHtml(handle)}">Following</button>`
+        : `<button type="button" class="btn btn-primary btn-follow" data-action="follow-user" ${idAttr} data-handle="${escapeHtml(handle)}">Follow</button>`;
     return `
       <div class="runner-card-wrap">
-        <button type="button" class="runner-card" data-action="open-user" data-handle="${escapeHtml(handle || "")}">
+        <button type="button" class="runner-card" data-action="open-user" ${idAttr} data-handle="${escapeHtml(handle)}">
           ${renderAvatarHtml(avatarProfile)}
           <div>
-            <p class="runner-card-name">${escapeHtml(athlete.name || "Runner")}</p>
+            <p class="runner-card-name">${escapeHtml(displayNameOf(athlete))}</p>
             <p class="runner-card-meta">${escapeHtml(handleText)} · ${escapeHtml(location)}</p>
             <p class="runner-card-stats is-inline">${escapeHtml(stats)}</p>
           </div>
@@ -735,6 +781,10 @@
     }
 
     const me = ex.me || {};
+    const incompleteHint =
+      profileIncomplete(state.profile) || profileIncomplete(me)
+        ? `<div class="explore-privacy explore-hint"><p>Complete your profile to help people find you.</p><button type="button" class="btn btn-ghost" data-action="edit-profile">Edit Profile</button></div>`
+        : "";
     const privacy = me.is_profile_public
       ? `<div class="explore-privacy"><p>You’re visible in Explore. Own the miles.</p></div>`
       : `<div class="explore-privacy">
@@ -757,9 +807,12 @@
 
     const sections = Array.isArray(ex.sections) ? ex.sections : [];
     if (sections.length === 0 && suggestions.length === 0) {
-      return `${privacy}<p class="explore-empty">Quiet streets. Public runners show up here.</p>`;
+      const empty = copyEmpty("explore");
+      return `${incompleteHint}${privacy}<div class="empty-state-block" style="margin-top:28px"><h2>${escapeHtml(
+        empty.title
+      )}</h2><p>${escapeHtml(empty.body)}</p></div>`;
     }
-    return `${privacy}${suggestedBlock}${sections.map(renderExploreSection).join("")}`;
+    return `${incompleteHint}${privacy}${suggestedBlock}${sections.map(renderExploreSection).join("")}`;
   }
 
   function renderExplore() {
@@ -876,7 +929,6 @@
   }
 
   function openAthletePeek(athlete) {
-    const handle = athlete.handle || athlete.username;
     const location = athlete.location?.display_name || "Somewhere on Earth";
     const count = athlete.stats?.activity_count ?? 0;
     const km = athlete.stats?.total_distance_km;
@@ -884,12 +936,18 @@
       avatar_url: athlete.avatar_url,
       initials: athlete.initials || "P",
     };
-    els.activityModalTitle.textContent = athlete.name || "Runner";
+    const athleteId = athleteIdOf(athlete);
+    const followCtl = athleteId
+      ? athlete.is_following
+        ? `<button type="button" class="btn btn-ghost btn-follow is-following" data-action="confirm-unfollow" data-athlete-id="${escapeHtml(athleteId)}" data-handle="${escapeHtml(athlete.handle || "")}">Following</button>`
+        : `<button type="button" class="btn btn-primary btn-follow" data-action="follow-user" data-athlete-id="${escapeHtml(athleteId)}" data-handle="${escapeHtml(athlete.handle || "")}">Follow</button>`
+      : "";
+    els.activityModalTitle.textContent = displayNameOf(athlete);
     els.activityModalBody.innerHTML = `
       <div style="display:flex;gap:16px;align-items:center;margin-bottom:18px;">
         ${renderAvatarHtml(avatarProfile, "is-lg")}
         <div>
-          <p class="profile-handle" style="margin:0">${escapeHtml(handle ? `@${handle}` : "no handle yet")}</p>
+          <p class="profile-handle" style="margin:0">${escapeHtml(publicHandleLabel(athlete))}</p>
           <p class="form-hint" style="margin:6px 0 0">${escapeHtml(location)}</p>
         </div>
       </div>
@@ -899,9 +957,14 @@
         <div class="stat-pill"><span>Distance</span><strong>${escapeHtml(km != null ? `${km} km` : "—")}</strong></div>
         <div class="stat-pill"><span>Last</span><strong>${escapeHtml(formatDate(athlete.last_activity_at))}</strong></div>
       </div>
-      <p class="form-hint" style="margin-top:18px;">
-        Follows land later. For now: look, don’t lurk.
-      </p>
+      <div class="profile-actions" style="margin-top:18px;">
+        ${followCtl}
+        ${
+          athleteId
+            ? `<button type="button" class="btn btn-ghost" data-action="open-user" data-athlete-id="${escapeHtml(athleteId)}" data-handle="${escapeHtml(athlete.handle || "")}">Open profile</button>`
+            : ""
+        }
+      </div>
     `;
     els.activityModal.hidden = false;
     void els.activityModal.offsetWidth;
@@ -978,8 +1041,21 @@
     const following = Number(p.following_count || 0);
     const grid =
       state.activities.length === 0
-        ? `<div class="tile-empty">Zero runs. Plenty of potential.<br><span style="color:var(--faint)">Sync Strava in Settings when you’re ready.</span></div>`
+        ? (() => {
+            const empty = copyEmpty("activities");
+            return `<div class="tile-empty empty-state-block"><strong>${escapeHtml(
+              empty.title
+            )}</strong><br><span style="color:var(--faint)">${escapeHtml(
+              empty.body
+            )}</span></div>`;
+          })()
         : state.activities.map(renderActivityTile).join("");
+
+    const insightLine =
+      Copy && Copy.profileInsight ? Copy.profileInsight(p, state.activities) : null;
+    const insight = insightLine
+      ? `<p class="profile-insight">${escapeHtml(insightLine)}</p>`
+      : "";
 
     return `
       <section class="pulse-page" data-page="profile">
@@ -990,17 +1066,23 @@
             <h1>${escapeHtml(p.display_name || "Runner")}</h1>
             <p class="profile-handle">${escapeHtml(handleLabel(p))}</p>
             ${p.bio ? `<p class="profile-bio">${escapeHtml(p.bio)}</p>` : ""}
+            ${insight}
             <div class="profile-social profile-social-counts">
               <button type="button" class="profile-count" disabled><strong>${escapeHtml(
                 Number(p.posts_count ?? p.stats?.total_activities ?? state.activities.length)
               )}</strong> posts</button>
-              <button type="button" class="profile-count" data-action="open-followers" data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(followers)}</strong> followers</button>
-              <button type="button" class="profile-count" data-action="open-following" data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(following)}</strong> following</button>
+              <button type="button" class="profile-count" data-action="open-followers" data-athlete-id="${escapeHtml(p.athlete_id || "")}" data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(followers)}</strong> followers</button>
+              <button type="button" class="profile-count" data-action="open-following" data-athlete-id="${escapeHtml(p.athlete_id || "")}" data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(following)}</strong> following</button>
             </div>
             <div class="profile-actions">
               <button type="button" class="btn btn-primary" data-action="edit-profile">Edit Profile</button>
               <button type="button" class="btn btn-ghost" data-action="open-settings">Settings</button>
             </div>
+            ${
+              profileIncomplete(p)
+                ? `<p class="form-hint" style="margin-top:10px">Complete your profile to help people find you.</p>`
+                : ""
+            }
           </div>
         </div>
 
@@ -1074,11 +1156,13 @@
             )
             .join("");
 
+    const athleteId = athleteIdOf(p);
+    const idAttr = athleteId ? `data-athlete-id="${escapeHtml(athleteId)}"` : "";
     const followBtn = p.is_following
-      ? `<button type="button" class="btn btn-ghost btn-follow is-following" data-action="confirm-unfollow" data-handle="${escapeHtml(p.handle || "")}">${
+      ? `<button type="button" class="btn btn-ghost btn-follow is-following" data-action="confirm-unfollow" ${idAttr} data-handle="${escapeHtml(p.handle || "")}">${
           p.is_mutual ? "Friends" : "Following"
         }</button>`
-      : `<button type="button" class="btn btn-primary btn-follow" data-action="follow-user" data-handle="${escapeHtml(p.handle || "")}">Follow</button>`;
+      : `<button type="button" class="btn btn-primary btn-follow" data-action="follow-user" ${idAttr} data-handle="${escapeHtml(p.handle || "")}">Follow</button>`;
 
     const followedBy =
       p.is_followed_by && !p.is_following
@@ -1093,8 +1177,8 @@
         <div class="profile-header">
           ${renderAvatarHtml(p, "is-lg")}
           <div class="profile-identity">
-            <h1>${escapeHtml(p.display_name || "Runner")}</h1>
-            <p class="profile-handle">${escapeHtml(p.handle ? `@${p.handle}` : "@runner")}</p>
+            <h1>${escapeHtml(displayNameOf(p))}</h1>
+            <p class="profile-handle">${escapeHtml(publicHandleLabel(p))}</p>
             ${p.bio ? `<p class="profile-bio">${escapeHtml(p.bio)}</p>` : ""}
             ${
               p.location?.display_name
@@ -1105,8 +1189,8 @@
               <button type="button" class="profile-count" disabled><strong>${escapeHtml(
                 Number(p.posts_count ?? p.stats?.activity_count ?? activities.length)
               )}</strong> posts</button>
-              <button type="button" class="profile-count" data-action="open-followers" data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(followers)}</strong> followers</button>
-              <button type="button" class="profile-count" data-action="open-following" data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(following)}</strong> following</button>
+              <button type="button" class="profile-count" data-action="open-followers" ${idAttr} data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(followers)}</strong> followers</button>
+              <button type="button" class="profile-count" data-action="open-following" ${idAttr} data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(following)}</strong> following</button>
             </div>
             <div class="profile-actions">
               ${followBtn}
@@ -1142,16 +1226,21 @@
     const raw = (location.hash || "#feed").slice(1);
     if (raw.startsWith("u/")) {
       const handle = decodeURIComponent(raw.slice(2)).replace(/^@/, "").trim();
-      return { page: "u", handle };
+      return { page: "u", handle, athleteId: null };
+    }
+    if (raw.startsWith("id/")) {
+      const athleteId = athleteIdOf(decodeURIComponent(raw.slice(3)).trim());
+      return { page: "u", handle: null, athleteId };
     }
     const page = PAGES.includes(raw) ? raw : "feed";
-    return { page, handle: null };
+    return { page, handle: null, athleteId: null };
   }
 
   function navigate(page, { replace = false } = {}) {
     const next = PAGES.includes(page) ? page : "feed";
     state.page = next;
     state.viewed.handle = null;
+    state.viewed.athleteId = null;
     setNavActive(next);
     const hash = `#${next}`;
     if (replace) {
@@ -1171,29 +1260,112 @@
     }
   }
 
-  function openUserProfile(handle, { replace = false } = {}) {
-    const clean = String(handle || "")
-      .trim()
-      .replace(/^@/, "");
-    if (!clean) {
-      showToast("No handle yet. Edit Profile first.");
+  function openUserProfile(ref, { replace = false } = {}) {
+    let athleteId = null;
+    let handle = null;
+    if (ref && typeof ref === "object") {
+      athleteId = athleteIdOf(ref.athleteId ?? ref.athlete_id ?? ref.id);
+      handle = String(ref.handle || "")
+        .trim()
+        .replace(/^@/, "");
+    } else if (typeof ref === "string" || typeof ref === "number") {
+      const asId = athleteIdOf(ref);
+      const asHandle = String(ref || "")
+        .trim()
+        .replace(/^@/, "");
+      // Numeric-only strings are athlete ids; handles are alphanumeric/underscore.
+      if (/^\d+$/.test(asHandle) && asId) {
+        athleteId = asId;
+      } else {
+        handle = asHandle;
+      }
+    }
+
+    if (!athleteId && !handle) {
+      showToast("That runner isn’t available yet.");
       return;
     }
-    if (state.profile?.handle && state.profile.handle === clean) {
+
+    const meId = athleteIdOf(state.profile);
+    if (
+      (athleteId && meId && athleteId === meId) ||
+      (handle && state.profile?.handle && state.profile.handle === handle)
+    ) {
       navigate("profile", { replace });
       return;
     }
+
     state.page = "u";
-    state.viewed.handle = clean;
+    state.viewed.handle = handle || null;
+    state.viewed.athleteId = athleteId;
     setNavActive("profile");
-    const hash = `#u/${encodeURIComponent(clean)}`;
-    if (replace) {
-      history.replaceState({ page: "u", handle: clean }, "", hash);
-    } else if (location.hash !== hash) {
-      history.pushState({ page: "u", handle: clean }, "", hash);
+
+    let hash;
+    if (handle) {
+      hash = `#u/${encodeURIComponent(handle)}`;
+    } else {
+      hash = `#id/${encodeURIComponent(String(athleteId))}`;
     }
-    loadViewedProfile(clean, true);
+    const hist = { page: "u", handle: handle || null, athleteId };
+    if (replace) {
+      history.replaceState(hist, "", hash);
+    } else if (location.hash !== hash) {
+      history.pushState(hist, "", hash);
+    }
+    if (athleteId) {
+      loadViewedProfileById(athleteId, true);
+    } else {
+      loadViewedProfile(handle, true);
+    }
     render();
+  }
+
+  function openUserFromEl(el) {
+    if (!el) return;
+    openUserProfile({
+      athleteId: el.dataset.athleteId,
+      handle: el.dataset.handle,
+    });
+  }
+
+  async function loadViewedProfileById(athleteId, force = false) {
+    const id = athleteIdOf(athleteId);
+    if (!id) return;
+    if (
+      !force &&
+      state.viewed.athleteId === id &&
+      state.viewed.status === "ready" &&
+      state.viewed.data
+    ) {
+      return;
+    }
+    state.viewed.athleteId = id;
+    state.viewed.status = "loading";
+    state.viewed.error = null;
+    if (state.page === "u") render();
+
+    try {
+      const res = await apiFetch(`/api/users/${encodeURIComponent(id)}`);
+      if (res.status === 404) throw new Error("That profile isn’t public — or vanished.");
+      if (!res.ok) throw new Error("That didn’t go the distance.");
+      const data = await res.json();
+      if (state.viewed.athleteId !== id) return;
+      state.viewed.data = data;
+      state.viewed.handle = data.handle || null;
+      state.viewed.status = "ready";
+      if (data.is_self && state.profile) {
+        state.profile.follower_count = data.follower_count;
+        state.profile.following_count = data.following_count;
+        if (data.handle) state.profile.handle = data.handle;
+      }
+    } catch (err) {
+      if (state.viewed.athleteId !== id) return;
+      state.viewed.status = "error";
+      state.viewed.error = err.message || "Try again.";
+      state.viewed.data = null;
+    }
+
+    if (state.page === "u") render();
   }
 
   async function loadViewedProfile(handle, force = false) {
@@ -1219,9 +1391,9 @@
       const data = await res.json();
       if (state.viewed.handle !== clean) return;
       state.viewed.data = data;
+      state.viewed.athleteId = athleteIdOf(data);
       state.viewed.status = "ready";
       if (data.is_self) {
-        // Sync own counts onto me profile.
         if (state.profile) {
           state.profile.follower_count = data.follower_count;
           state.profile.following_count = data.following_count;
@@ -1241,16 +1413,17 @@
   let followInFlight = new Set();
   let followGhostGuardUntil = 0;
 
-  function followButtonsFor(handle) {
-    const clean = String(handle || "").trim().replace(/^@/, "");
-    return Array.from(document.querySelectorAll(".btn-follow[data-handle]")).filter(
-      (el) => String(el.dataset.handle || "").replace(/^@/, "") === clean
+  function followButtonsFor(athleteId) {
+    const id = athleteIdOf(athleteId);
+    if (!id) return [];
+    return Array.from(document.querySelectorAll(".btn-follow[data-athlete-id]")).filter(
+      (el) => athleteIdOf(el.dataset.athleteId) === id
     );
   }
 
-  function applyFollowButtonDom(handle, { isFollowing, isMutual }) {
-    const clean = String(handle || "").trim().replace(/^@/, "");
-    followButtonsFor(clean).forEach((btn) => {
+  function applyFollowButtonDom(athleteId, { isFollowing, isMutual }) {
+    const id = athleteIdOf(athleteId);
+    followButtonsFor(id).forEach((btn) => {
       btn.disabled = false;
       btn.dataset.armed = "0";
       btn.classList.toggle("is-following", !!isFollowing);
@@ -1277,22 +1450,43 @@
       });
   }
 
-  async function toggleFollow(handle, wantFollow) {
-    const clean = String(handle || "").trim().replace(/^@/, "");
-    if (!clean) {
-      showToast("No handle yet.");
+  function syncExploreFollowFlag(athleteId, isFollowing) {
+    const id = athleteIdOf(athleteId);
+    if (!id) return;
+    const mark = (list) =>
+      (list || []).map((a) =>
+        athleteIdOf(a) === id ? { ...a, is_following: isFollowing } : a
+      );
+    state.explore.suggestions = mark(state.explore.suggestions);
+    state.explore.searchResults = mark(state.explore.searchResults);
+    state.explore.sections = (state.explore.sections || []).map((section) => ({
+      ...section,
+      athletes: mark(section.athletes),
+    }));
+  }
+
+  async function toggleFollow(ref, wantFollow) {
+    const athleteId =
+      typeof ref === "object" && ref !== null
+        ? athleteIdOf(ref.athleteId ?? ref.athlete_id ?? ref.id)
+        : athleteIdOf(ref);
+    if (!athleteId) {
+      showToast("That runner isn’t available yet.");
       return;
     }
     if (Date.now() < followGhostGuardUntil) return;
-    if (followInFlight.has(clean)) return;
-    followInFlight.add(clean);
+    if (followInFlight.has(athleteId)) return;
+    followInFlight.add(athleteId);
     followGhostGuardUntil = Date.now() + 450;
 
     const prevViewed = state.viewed.data ? { ...state.viewed.data } : null;
     const prevPeople = state.people.items.map((p) => ({ ...p }));
+    const viewingThis =
+      state.viewed.athleteId === athleteId ||
+      athleteIdOf(state.viewed.data) === athleteId;
 
     // Optimistic UI — update DOM in place (no full re-render mid-tap on mobile).
-    if (state.viewed.handle === clean && state.viewed.data) {
+    if (viewingThis && state.viewed.data) {
       const delta = wantFollow ? 1 : -1;
       const nextCount = Math.max(
         0,
@@ -1305,7 +1499,7 @@
         follower_count: nextCount,
         followers_count: nextCount,
       };
-      applyFollowButtonDom(clean, {
+      applyFollowButtonDom(athleteId, {
         isFollowing: wantFollow,
         isMutual: state.viewed.data.is_mutual,
       });
@@ -1313,13 +1507,18 @@
     }
 
     state.people.items = state.people.items.map((p) => {
-      if ((p.handle || p.username) !== clean) return p;
+      if (athleteIdOf(p) !== athleteId) return p;
       return { ...p, is_following: wantFollow };
     });
+    syncExploreFollowFlag(athleteId, wantFollow);
     if (els.peopleModal && !els.peopleModal.hidden) paintPeopleModal();
+    if (state.page === "explore") {
+      // Keep Explore follow buttons in sync without remounting mid-tap when possible.
+      applyFollowButtonDom(athleteId, { isFollowing: wantFollow, isMutual: false });
+    }
 
     try {
-      const path = `/api/profiles/${encodeURIComponent(clean)}/follow`;
+      const path = `/api/users/${encodeURIComponent(athleteId)}/follow`;
       const res = await apiFetch(path, { method: wantFollow ? "POST" : "DELETE" });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -1328,10 +1527,12 @@
         );
       }
       const data = await res.json();
-      if (state.viewed.handle === clean) {
+      if (viewingThis) {
         state.viewed.data = { ...(state.viewed.data || {}), ...data };
+        state.viewed.athleteId = athleteIdOf(data) || athleteId;
+        state.viewed.handle = data.handle || state.viewed.handle;
         state.viewed.status = "ready";
-        applyFollowButtonDom(clean, {
+        applyFollowButtonDom(athleteId, {
           isFollowing: !!data.is_following,
           isMutual: !!data.is_mutual,
         });
@@ -1339,42 +1540,63 @@
           Number(data.follower_count ?? data.followers_count ?? 0)
         );
       }
+      syncExploreFollowFlag(athleteId, !!data.is_following);
+      applyFollowButtonDom(athleteId, {
+        isFollowing: !!data.is_following,
+        isMutual: !!data.is_mutual,
+      });
+      if (wantFollow && Math.random() < 0.55) {
+        const line = copyFresh("follow");
+        if (line) showToast(line);
+      } else if (!wantFollow) {
+        const line = copyFresh("success.unfollow");
+        if (line) showToast(line);
+      }
       // Refresh own following count quietly — do not remount mid-interaction.
       loadProfileBundle(true).catch(() => {});
       if (els.peopleModal && !els.peopleModal.hidden) {
-        openPeopleList(state.people.kind, state.people.handle, true);
+        openPeopleList(state.people.kind, {
+          athleteId: state.people.athleteId,
+          handle: state.people.handle,
+        }, true);
       }
     } catch (err) {
-      if (prevViewed && state.viewed.handle === clean) {
+      if (prevViewed && viewingThis) {
         state.viewed.data = prevViewed;
-        applyFollowButtonDom(clean, {
+        applyFollowButtonDom(athleteId, {
           isFollowing: !!prevViewed.is_following,
           isMutual: !!prevViewed.is_mutual,
         });
         applyFollowerCountDom(Number(prevViewed.follower_count || 0));
       }
       state.people.items = prevPeople;
+      syncExploreFollowFlag(athleteId, !wantFollow);
       if (els.peopleModal && !els.peopleModal.hidden) paintPeopleModal();
-      showToast(err.message || "That didn’t go the distance.");
+      if (state.page === "explore") render();
+      showToast(err.message || errLine());
     } finally {
-      followInFlight.delete(clean);
+      followInFlight.delete(athleteId);
     }
   }
 
   function renderPeopleRow(person) {
-    const handle = person.handle || person.username || "";
+    const athleteId = athleteIdOf(person);
+    const handle = person.handle || "";
+    const idAttr = athleteId ? `data-athlete-id="${escapeHtml(athleteId)}"` : "";
     const followCtl = person.is_self
       ? `<span class="form-hint">You</span>`
-      : person.is_following
-        ? `<button type="button" class="btn btn-ghost btn-follow is-following" data-action="confirm-unfollow" data-handle="${escapeHtml(handle)}">Following</button>`
-        : `<button type="button" class="btn btn-primary btn-follow" data-action="follow-user" data-handle="${escapeHtml(handle)}">Follow</button>`;
+      : !athleteId
+        ? ""
+        : person.is_following
+          ? `<button type="button" class="btn btn-ghost btn-follow is-following" data-action="confirm-unfollow" ${idAttr} data-handle="${escapeHtml(handle)}">Following</button>`
+          : `<button type="button" class="btn btn-primary btn-follow" data-action="follow-user" ${idAttr} data-handle="${escapeHtml(handle)}">Follow</button>`;
     return `
       <div class="people-row-wrap">
-        <button type="button" class="people-row" data-action="open-user" data-handle="${escapeHtml(handle)}">
+        <button type="button" class="people-row" data-action="open-user" ${idAttr} data-handle="${escapeHtml(handle)}">
           ${renderAvatarHtml(person)}
           <div>
-            <p class="people-row-name">${escapeHtml(person.display_name || "Runner")}</p>
-            <p class="people-row-meta">${escapeHtml(handle ? `@${handle}` : "@runner")}</p>
+            <p class="people-row-name">${escapeHtml(displayNameOf(person))}</p>
+            <p class="people-row-meta">${escapeHtml(publicHandleLabel(person))}</p>
           </div>
         </button>
         ${followCtl}
@@ -1391,15 +1613,16 @@
       </div>
     `;
     if (state.people.status === "loading" && state.people.items.length === 0) {
-      els.peopleModalBody.innerHTML = `${head}<p class="people-empty">Loading…</p>`;
+      els.peopleModalBody.innerHTML = `${head}<p class="people-empty">${escapeHtml(
+        copyFresh("loading") || "Loading…"
+      )}</p>`;
       return;
     }
     if (state.people.items.length === 0) {
-      const empty =
-        kind === "followers"
-          ? "No one’s following your pace yet."
-          : "Running solo. Socially, too. For now.";
-      els.peopleModalBody.innerHTML = `${head}<p class="people-empty">${escapeHtml(empty)}</p>`;
+      const empty = copyEmpty(kind === "followers" ? "followers" : "following");
+      els.peopleModalBody.innerHTML = `${head}<div class="empty-state-block" style="padding:12px 4px"><h2 style="font-size:22px">${escapeHtml(
+        empty.title
+      )}</h2><p>${escapeHtml(empty.body)}</p></div>`;
       return;
     }
     const more = state.people.hasMore
@@ -1411,12 +1634,28 @@
 
   let peopleSearchTimer = null;
 
-  async function openPeopleList(kind, handle, soft = false) {
-    const clean = String(handle || state.profile?.handle || "").trim().replace(/^@/, "");
-    if (!clean || (kind !== "followers" && kind !== "following")) return;
+  async function openPeopleList(kind, ref, soft = false) {
+    if (kind !== "followers" && kind !== "following") return;
+    let athleteId = null;
+    let handle = null;
+    if (ref && typeof ref === "object") {
+      athleteId = athleteIdOf(ref.athleteId ?? ref.athlete_id ?? ref.id);
+      handle = String(ref.handle || "")
+        .trim()
+        .replace(/^@/, "");
+    } else {
+      handle = String(ref || state.profile?.handle || "")
+        .trim()
+        .replace(/^@/, "");
+      athleteId = athleteIdOf(state.profile);
+    }
+    if (!athleteId && state.profile) athleteId = athleteIdOf(state.profile);
+    if (!athleteId && !handle) return;
+
     const keepQ = soft ? state.people.q || "" : "";
     state.people.kind = kind;
-    state.people.handle = clean;
+    state.people.handle = handle || null;
+    state.people.athleteId = athleteId;
     state.people.q = keepQ;
     state.people.offset = 0;
     state.people.items = soft ? state.people.items : [];
@@ -1431,8 +1670,9 @@
 
   async function fetchPeoplePage({ reset = false } = {}) {
     const kind = state.people.kind;
-    const clean = state.people.handle;
-    if (!kind || !clean) return;
+    const athleteId = state.people.athleteId;
+    const handle = state.people.handle;
+    if (!kind || (!athleteId && !handle)) return;
     const offset = reset ? 0 : state.people.offset;
     const q = state.people.q || "";
     state.people.status = "loading";
@@ -1442,9 +1682,10 @@
         offset: String(offset),
       });
       if (q.trim().length >= 2) params.set("q", q.trim());
-      const res = await apiFetch(
-        `/api/profiles/${encodeURIComponent(clean)}/${kind}?${params.toString()}`
-      );
+      const base = athleteId
+        ? `/api/users/${encodeURIComponent(athleteId)}/${kind}`
+        : `/api/profiles/${encodeURIComponent(handle)}/${kind}`;
+      const res = await apiFetch(`${base}?${params.toString()}`);
       if (!res.ok) throw new Error("Couldn’t load that list.");
       const data = await res.json();
       const batch = Array.isArray(data.people) ? data.people : [];
@@ -1452,6 +1693,8 @@
       state.people.total = Number(data.total || state.people.items.length);
       state.people.hasMore = !!data.has_more;
       state.people.offset = data.next_offset != null ? data.next_offset : state.people.items.length;
+      if (data.athlete_id) state.people.athleteId = athleteIdOf(data.athlete_id);
+      if (data.handle) state.people.handle = data.handle;
       state.people.status = "ready";
       paintPeopleModal();
     } catch (err) {
@@ -1467,32 +1710,196 @@
     }, 250);
   }
 
-  function confirmUnfollow(handle) {
-    const clean = String(handle || "").trim().replace(/^@/, "");
-    if (!clean) return;
+  function closeConfirmModal() {
+    if (!els.confirmModal) return;
+    els.confirmModal.classList.remove("is-open");
+    setTimeout(() => {
+      els.confirmModal.hidden = true;
+      if (els.confirmModalActions) els.confirmModalActions.innerHTML = "";
+    }, 250);
+  }
+
+  function openConfirmModal({ title, body, actions, closeOnConfirm = true }) {
+    if (!els.confirmModal) return Promise.resolve({ confirmed: false });
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        if (result.confirmed && !closeOnConfirm) {
+          resolve(result);
+          return;
+        }
+        closeConfirmModal();
+        resolve(result);
+      };
+
+      els.confirmModalTitle.textContent = title || "Confirm";
+      els.confirmModalBody.textContent = body || "";
+      els.confirmModalActions.innerHTML = "";
+
+      (actions || []).forEach((action) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = action.danger
+          ? "btn btn-danger"
+          : action.primary
+            ? "btn btn-primary"
+            : "btn btn-ghost";
+        btn.textContent = action.label;
+        btn.dataset.confirmRole = action.role || "cancel";
+        btn.addEventListener("click", () => {
+          if (action.role === "confirm") {
+            finish({ confirmed: true, button: btn });
+          } else {
+            finish({ confirmed: false });
+          }
+        });
+        els.confirmModalActions.appendChild(btn);
+      });
+
+      els.confirmModal.hidden = false;
+      void els.confirmModal.offsetWidth;
+      els.confirmModal.classList.add("is-open");
+
+      const onBackdrop = (e) => {
+        if (e.target === els.confirmModal && !settled) {
+          els.confirmModal.removeEventListener("click", onBackdrop);
+          finish({ confirmed: false });
+        }
+      };
+      els.confirmModal.addEventListener("click", onBackdrop);
+    });
+  }
+
+  async function confirmUnfollow(ref) {
+    const athleteId =
+      typeof ref === "object" && ref !== null
+        ? athleteIdOf(ref.athleteId ?? ref.athlete_id ?? ref.id)
+        : athleteIdOf(ref);
+    if (!athleteId) return;
     if (Date.now() < followGhostGuardUntil) return;
 
-    const btn = followButtonsFor(clean).find(
-      (el) => el.dataset.action === "confirm-unfollow"
-    );
-    if (btn && btn.dataset.armed === "1") {
-      toggleFollow(clean, false);
-      return;
-    }
-    document.querySelectorAll('[data-action="confirm-unfollow"]').forEach((el) => {
-      el.dataset.armed = "0";
-      el.classList.remove("is-unfollow");
-      const h = String(el.dataset.handle || "").replace(/^@/, "");
-      const mutual =
-        state.viewed.handle === h && state.viewed.data && state.viewed.data.is_mutual;
-      el.textContent = mutual ? "Friends" : "Following";
+    const handle =
+      (typeof ref === "object" && ref && ref.handle) ||
+      (state.viewed.athleteId === athleteId && state.viewed.data
+        ? state.viewed.data.handle
+        : "") ||
+      "";
+    const name =
+      (state.viewed.athleteId === athleteId && state.viewed.data
+        ? displayNameOf(state.viewed.data)
+        : null) ||
+      (handle ? `@${handle}` : "this runner");
+    const handleLabelText = handle || "runner";
+
+    const titleTpl =
+      (Copy && Copy.COPY.unfollow.titles[0]) || "Unfollow {name}?";
+    const bodyTpl = copyFresh("unfollow.bodies") ||
+      "Are you sure you want to stop following @{handle}?";
+    const title = Copy
+      ? Copy.format(titleTpl, { name, handle: handleLabelText })
+      : `Unfollow ${name}?`;
+    const body = Copy
+      ? Copy.format(bodyTpl, { name, handle: handleLabelText })
+      : bodyTpl;
+
+    const result = await openConfirmModal({
+      title,
+      body,
+      actions: [
+        {
+          label: (Copy && Copy.COPY.unfollow.keep) || "Keep following",
+          role: "cancel",
+        },
+        {
+          label: (Copy && Copy.COPY.unfollow.confirm) || "Unfollow",
+          role: "confirm",
+          danger: true,
+        },
+      ],
     });
-    if (btn) {
-      btn.dataset.armed = "1";
-      btn.textContent = "Unfollow";
-      btn.classList.add("is-unfollow");
-    } else {
-      toggleFollow(clean, false);
+    if (!result.confirmed) return;
+    await toggleFollow(athleteId, false);
+  }
+
+  async function runDeleteAccountFlow() {
+    const step1 = Copy && Copy.COPY.deleteAccount.step1;
+    const first = await openConfirmModal({
+      title: (step1 && step1.title) || "Leaving already?",
+      body:
+        (step1 && step1.body) ||
+        "Are you sure you want to delete your account?",
+      actions: [
+        { label: (step1 && step1.keep) || "Keep my account", role: "cancel" },
+        {
+          label: (step1 && step1.confirm) || "Delete account",
+          role: "confirm",
+          danger: true,
+        },
+      ],
+    });
+    if (!first.confirmed) return;
+
+    const step2 = Copy && Copy.COPY.deleteAccount.step2;
+    const second = await openConfirmModal({
+      title: (step2 && step2.title) || "Last chance. Seriously.",
+      body:
+        (step2 && step2.body) ||
+        "This is permanent. No undo button.",
+      closeOnConfirm: false,
+      actions: [
+        {
+          label: (step2 && step2.keep) || "Wait, I changed my mind",
+          role: "cancel",
+        },
+        {
+          label: (step2 && step2.confirm) || "Yes, delete everything",
+          role: "confirm",
+          danger: true,
+        },
+      ],
+    });
+    if (!second.confirmed) return;
+
+    const confirmBtn = second.button;
+    const cancelBtn = els.confirmModalActions.querySelector(
+      '[data-confirm-role="cancel"]'
+    );
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = "Deleting…";
+    }
+    if (cancelBtn) cancelBtn.disabled = true;
+
+    try {
+      const res = await apiFetch("/api/me/account", { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof err.detail === "string" ? err.detail : errLine()
+        );
+      }
+      const data = await res.json().catch(() => ({}));
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (_e) {
+        /* ignore */
+      }
+      closeConfirmModal();
+      closeSettings();
+      showToast(
+        data.message ||
+          (Copy && Copy.COPY.deleteAccount.done) ||
+          "Your account has officially vanished into the void."
+      );
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 900);
+    } catch (err) {
+      closeConfirmModal();
+      showToast(err.message || errLine());
     }
   }
 
@@ -1564,16 +1971,38 @@
     if (action === "retry-explore") loadExplore(true);
     if (action === "retry-explore-search") runExploreSearch(state.explore.searchQ || "");
     if (action === "clear-coach") clearCoachChat();
-    if (action === "open-user") openUserProfile(el?.dataset?.handle);
-    if (action === "follow-user") toggleFollow(el?.dataset?.handle, true);
-    if (action === "unfollow-user") toggleFollow(el?.dataset?.handle, false);
-    if (action === "confirm-unfollow") confirmUnfollow(el?.dataset?.handle);
-    if (action === "open-followers") openPeopleList("followers", el?.dataset?.handle);
-    if (action === "open-following") openPeopleList("following", el?.dataset?.handle);
-    if (action === "people-load-more") fetchPeoplePage({ reset: false });
-    if (action === "peek-athlete") {
-      openUserProfile(el?.dataset?.handle);
+    if (action === "open-user" || action === "peek-athlete") openUserFromEl(el);
+    if (action === "follow-user") {
+      toggleFollow(
+        { athleteId: el?.dataset?.athleteId, handle: el?.dataset?.handle },
+        true
+      );
     }
+    if (action === "unfollow-user") {
+      toggleFollow(
+        { athleteId: el?.dataset?.athleteId, handle: el?.dataset?.handle },
+        false
+      );
+    }
+    if (action === "confirm-unfollow") {
+      confirmUnfollow({
+        athleteId: el?.dataset?.athleteId,
+        handle: el?.dataset?.handle,
+      });
+    }
+    if (action === "open-followers") {
+      openPeopleList("followers", {
+        athleteId: el?.dataset?.athleteId,
+        handle: el?.dataset?.handle,
+      });
+    }
+    if (action === "open-following") {
+      openPeopleList("following", {
+        athleteId: el?.dataset?.athleteId,
+        handle: el?.dataset?.handle,
+      });
+    }
+    if (action === "people-load-more") fetchPeoplePage({ reset: false });
   }
 
   function openSettings() {
@@ -1660,7 +2089,7 @@
   }
 
   function applyProfileChrome(profile) {
-    els.sidebarName.textContent = profile.display_name || "Runner";
+    els.sidebarName.textContent = displayNameOf(profile);
     els.sidebarHandle.textContent = handleLabel(profile);
     els.sidebarAvatar.innerHTML = "";
     if (profile.avatar_url) {
@@ -1732,13 +2161,13 @@
       if (data.error) {
         showToast(data.error);
       } else if (!quiet) {
-        showToast("Miles refreshed.");
+        showToast(copyFresh("success.sync") || "Fresh data.");
         await loadProfileBundle(true);
         await loadFeed(true);
         if (state.page === "profile" || state.page === "feed") render();
       }
     } catch (err) {
-      showToast("That didn’t go the distance.");
+      showToast(errLine());
     } finally {
       els.syncChip.classList.remove("is-show");
     }
@@ -1785,12 +2214,22 @@
         const action = actionEl.dataset.action;
         if (action === "open-user") {
           closePeopleModal();
-          openUserProfile(actionEl.dataset.handle);
+          openUserFromEl(actionEl);
           return;
         }
         handleAction(action, actionEl);
       }
     });
+    const closeConfirmBtn = document.getElementById("closeConfirmModal");
+    if (closeConfirmBtn) {
+      closeConfirmBtn.addEventListener("click", closeConfirmModal);
+    }
+    const deleteBtn = document.getElementById("deleteAccountBtn");
+    if (deleteBtn) {
+      deleteBtn.addEventListener("click", () => {
+        runDeleteAccountFlow();
+      });
+    }
     els.peopleModal.addEventListener("input", (e) => {
       if (e.target.id !== "peopleSearch") return;
       state.people.q = e.target.value;
@@ -1869,7 +2308,8 @@
       state.profile = await res.json();
       state.loadedProfile = true;
       applyProfileChrome(state.profile);
-      els.settingsMsg.textContent = "Saved. You’re still you — just clearer.";
+      els.settingsMsg.textContent =
+        copyFresh("success.profile") || "Saved. You’re still you — just clearer.";
       els.settingsMsg.className = "form-msg is-ok";
       // Refresh Explore so “Show me” / city changes land immediately.
       state.explore.status = "idle";
@@ -1901,7 +2341,10 @@
     window.addEventListener("popstate", () => {
       const loc = parseLocationHash();
       if (loc.page === "u") {
-        openUserProfile(loc.handle, { replace: true });
+        openUserProfile(
+          { athleteId: loc.athleteId, handle: loc.handle },
+          { replace: true }
+        );
       } else {
         navigate(loc.page, { replace: true });
       }
@@ -1916,7 +2359,10 @@
 
     const initial = parseLocationHash();
     if (initial.page === "u") {
-      openUserProfile(initial.handle, { replace: true });
+      openUserProfile(
+        { athleteId: initial.athleteId, handle: initial.handle },
+        { replace: true }
+      );
     } else {
       navigate(initial.page, { replace: true });
     }

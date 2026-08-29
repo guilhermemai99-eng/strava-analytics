@@ -208,10 +208,12 @@ def serialize_follow_person(
     viewer_follows: bool = False,
     is_self: bool = False,
 ) -> dict:
+    name = display_name_for(athlete)
     return {
         "id": athlete.id,
         "athlete_id": athlete.id,
-        "display_name": display_name_for(athlete),
+        "name": name,
+        "display_name": name,
         "handle": athlete.handle,
         "username": athlete.handle or athlete.username,
         "initials": initials_for(athlete),
@@ -371,6 +373,14 @@ def _serialize_people(
     *,
     viewer_id: int,
 ) -> list[dict]:
+    from profile_helpers import ensure_handle
+
+    # Assign stable public handles when missing so @urls work — Follow still
+    # keys off athlete.id either way.
+    for athlete in athletes:
+        if not athlete.handle:
+            ensure_handle(db, athlete)
+
     ids = [a.id for a in athletes]
     counts = follow_counts_map(db, ids)
     follows = following_set(db, viewer_id=viewer_id, target_ids=ids)
