@@ -21,7 +21,7 @@
     --up: #7ddea0;
     --down: #e08b7a;
     --sidebar: 220px;
-    --topbar: 78px;
+    --topbar: auto;
     --radius: 16px;
     --font-display: "Syne", ui-sans-serif, system-ui, sans-serif;
     --font-body: "DM Sans", ui-sans-serif, system-ui, sans-serif;
@@ -114,6 +114,54 @@ a { color: inherit; text-decoration: none; }
     transform: translateX(2px);
 }
 
+.nav-back-pulse {
+    margin-bottom: 8px;
+    border: 1px solid rgba(184, 242, 90, 0.28);
+    color: var(--text);
+    text-decoration: none;
+    display: block;
+    box-sizing: border-box;
+}
+
+.lab-home-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    margin: 0 0 6px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    font-family: var(--font-body);
+    letter-spacing: 0.04em;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.lab-home-link:hover {
+    color: var(--accent);
+}
+
+.lab-kicker {
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin: 0 0 4px;
+}
+
+.lab-sub {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.35;
+    max-width: 36ch;
+}
+
 .nav-spacer { flex: 1; }
 .nav-logout { color: #b7b1a8; }
 
@@ -130,7 +178,7 @@ a { color: inherit; text-decoration: none; }
     justify-content: space-between;
     align-items: center;
     gap: 16px;
-    padding: 0 28px;
+    padding: 14px 28px;
     border-bottom: 1px solid var(--line);
     background: rgba(6, 8, 7, 0.72);
     backdrop-filter: blur(14px);
@@ -1141,6 +1189,15 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
         padding: 0 12px;
         font-size: 11px;
     }
+    .lab-home-link {
+        min-height: 44px;
+        padding: 8px 0;
+        font-size: 13px;
+        touch-action: manipulation;
+    }
+    .lab-sub {
+        max-width: 28ch;
+    }
     .sync-meta, .sync-message { font-size: 10px; max-width: 42vw; }
     .page { padding: 12px 14px 18px; gap: 10px; }
     .overview-grid {
@@ -1251,7 +1308,7 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
 <div class="app">
     <aside class="sidebar">
         <div class="brand">Pul<span>se</span></div>
-        <a class="nav-link" href="/dashboard" style="margin-bottom:8px;border:1px solid rgba(184,242,90,0.28);">← Pulse home</a>
+        <a class="nav-link nav-back-pulse" href="/dashboard">← Home</a>
         <button type="button" class="nav-link active" data-nav="overview">Overview</button>
         <button type="button" class="nav-link" data-nav="performance">Performance</button>
         <button type="button" class="nav-link" data-nav="training">Training</button>
@@ -1264,9 +1321,11 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
 
     <div class="main">
         <header class="topbar">
-            <div>
-                <div class="eyebrow">Pulse Performance</div>
+            <div class="lab-top-identity">
+                <a class="lab-home-link" href="/dashboard">← Home</a>
+                <div class="lab-kicker">Lab</div>
                 <h1 id="pageTitle">Overview</h1>
+                <p class="lab-sub">Your training, without the noise.</p>
                 <div class="athlete-chip" id="athleteLabel">Atleta —</div>
             </div>
             <div class="sync-bar">

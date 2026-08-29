@@ -28,6 +28,9 @@ def test_lab_keeps_legacy_analytics(client, make_session, make_athlete):
         or "Athlete Score" in response.text
         or "Sincronizar Strava" in response.text
     )
+    assert "← Home" in response.text
+    assert 'href="/dashboard"' in response.text
+    assert "lab-home-link" in response.text
 
 
 def test_dashboard_requires_auth(client):
