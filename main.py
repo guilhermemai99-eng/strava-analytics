@@ -20,6 +20,13 @@ from oauth_helpers import (
     create_oauth_state,
 )
 from athlete_helpers import upsert_athlete_from_strava
+from session_helpers import (
+    SESSION_COOKIE_NAME,
+    SESSION_TTL_DAYS,
+    create_session,
+    resolve_athlete_id,
+    revoke_session,
+)
 
 from import_strava import sync_strava_activities
 from strava_tokens import StravaTokenError
@@ -134,27 +141,33 @@ class ActivityCreate(BaseModel):
 # HELPERS — AUTENTICAÇÃO
 # ============================================================
 
+def _cookie_secure() -> bool:
+    return bool(
+        os.getenv("RAILWAY_ENVIRONMENT")
+        or os.getenv("SESSION_COOKIE_SECURE") == "1"
+    )
+
+
 def get_current_athlete_id(
     request: Request
 ):
 
-    athlete_id = request.cookies.get(
-        "athlete_id"
+    raw_token = request.cookies.get(
+        SESSION_COOKIE_NAME
     )
 
-    if not athlete_id:
-
-        return None
+    db = SessionLocal()
 
     try:
 
-        return int(
-            athlete_id
+        return resolve_athlete_id(
+            db,
+            raw_token
         )
 
-    except (TypeError, ValueError):
+    finally:
 
-        return None
+        db.close()
 
 
 def require_athlete_id(
@@ -461,6 +474,13 @@ def strava_callback(
 
         db.commit()
 
+        raw_session_token = create_session(
+            db,
+            athlete_id,
+            user_agent=request.headers.get("user-agent"),
+            ip_address=request.client.host if request.client else None,
+        )
+
 
     finally:
 
@@ -468,7 +488,7 @@ def strava_callback(
 
 
     # ========================================================
-    # CRIAR SESSÃO
+    # CRIAR SESSÃO (cookie opaco)
     # ========================================================
 
     response = RedirectResponse(
@@ -482,15 +502,15 @@ def strava_callback(
 
     response.set_cookie(
 
-        key="athlete_id",
+        key=SESSION_COOKIE_NAME,
 
-        value=str(
-            athlete_id
-        ),
+        value=raw_session_token,
 
         httponly=True,
 
-        max_age=60 * 60 * 24 * 30,
+        secure=_cookie_secure(),
+
+        max_age=60 * 60 * 24 * SESSION_TTL_DAYS,
 
         samesite="lax"
 
@@ -540,14 +560,28 @@ def get_current_athlete(
 # ============================================================
 
 @app.get("/auth/logout")
-def logout():
+def logout(request: Request):
+
+    raw_token = request.cookies.get(
+        SESSION_COOKIE_NAME
+    )
+
+    db = SessionLocal()
+
+    try:
+
+        revoke_session(db, raw_token)
+
+    finally:
+
+        db.close()
 
     response = RedirectResponse(
         url="/"
     )
 
     response.delete_cookie(
-        "athlete_id"
+        SESSION_COOKIE_NAME
     )
 
     return response
