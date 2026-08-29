@@ -99,4 +99,4 @@ def test_alembic_upgrade_head_on_empty_database():
     }.issubset(tables)
     assert "token_version" in cols
     assert "updated_at" in cols
-    assert version == "0004_token_encryption_ready"
+    assert version == "0005_pulse_profile_fields"
