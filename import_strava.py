@@ -16,19 +16,56 @@ from pr_cache import clear_cache
 
 STRAVA_ACTIVITIES_URL = "https://www.strava.com/api/v3/athlete/activities"
 STRAVA_ACTIVITY_URL = "https://www.strava.com/api/v3/activities/{activity_id}"
+STRAVA_ACTIVITY_PHOTOS_URL = (
+    "https://www.strava.com/api/v3/activities/{activity_id}/photos"
+)
 
-# Cap detail fetches per sync so photo enrichment cannot explode rate limits.
-MAX_PHOTO_DETAIL_FETCHES = 15
+# Cap detail/photo fetches per sync so enrichment cannot explode rate limits.
+MAX_MEDIA_DETAIL_FETCHES = 25
+
+# Prefer largest Strava CDN sizes for Feed cards.
+_PHOTO_SIZE_PREF = ("2048", "1200", "1000", "800", "600", "300", "100")
 
 
-def _map_polyline(item: dict) -> str | None:
-    raw = (item.get("map") or {}).get("summary_polyline")
-    if isinstance(raw, str) and raw.strip():
-        return raw.strip()
+def _map_polyline(item: dict | None) -> str | None:
+    if not item:
+        return None
+    map_obj = item.get("map") or {}
+    if not isinstance(map_obj, dict):
+        return None
+    for key in ("summary_polyline", "polyline"):
+        raw = map_obj.get(key)
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
+    return None
+
+
+def _best_url_from_urls_map(urls: dict) -> str | None:
+    if not isinstance(urls, dict) or not urls:
+        return None
+    for key in _PHOTO_SIZE_PREF:
+        value = urls.get(key)
+        if value:
+            return str(value)
+    # Numeric keys descending (largest first).
+    numeric_keys = []
+    for key in urls.keys():
+        try:
+            numeric_keys.append(int(key))
+        except (TypeError, ValueError):
+            continue
+    for key in sorted(numeric_keys, reverse=True):
+        value = urls.get(str(key)) or urls.get(key)
+        if value:
+            return str(value)
+    for value in urls.values():
+        if value:
+            return str(value)
     return None
 
 
 def _extract_primary_photo_url(detail: dict) -> tuple[str | None, int]:
+    """From activity detail payload (photos.primary.urls). Often max 600."""
     photos = detail.get("photos") or {}
     count = photos.get("count")
     if count is None:
@@ -40,38 +77,75 @@ def _extract_primary_photo_url(detail: dict) -> tuple[str | None, int]:
 
     primary = photos.get("primary") or {}
     urls = primary.get("urls") or {}
-    if not isinstance(urls, dict) or not urls:
-        return None, count
-
-    # Prefer larger sizes for feed cards.
-    preferred = ["600", "1200", "1000", "800", "300", "100"]
-    for key in preferred:
-        if key in urls and urls[key]:
-            return str(urls[key]), count
-
-    # Fallback: first non-empty URL value.
-    for value in urls.values():
-        if value:
-            return str(value), count
-    return None, count
+    return _best_url_from_urls_map(urls), count
 
 
-def _fetch_activity_detail(access_token: str, strava_id: int) -> dict | None:
+def _extract_photo_url_from_photos_list(photos: list) -> tuple[str | None, int]:
+    """From GET /activities/{id}/photos?size=2048&photo_sources=true."""
+    if not isinstance(photos, list) or not photos:
+        return None, 0
+    # Prefer native Strava photos (source=1) over Instagram (source=2).
+    ordered = sorted(
+        photos,
+        key=lambda p: (
+            0 if (p or {}).get("source") == 1 else 1,
+            0 if (p or {}).get("default_photo") else 1,
+        ),
+    )
+    best = None
+    for photo in ordered:
+        if not isinstance(photo, dict):
+            continue
+        url = _best_url_from_urls_map(photo.get("urls") or {})
+        if url:
+            best = url
+            break
+    return best, len(photos)
+
+
+def is_low_res_photo_url(url: str | None) -> bool:
+    """Heuristic: Strava 100/600 CDN variants look soft on Feed cards."""
+    if not url:
+        return True
+    u = url.lower()
+    soft_markers = (
+        "-100.jpg",
+        "-100.jpeg",
+        "-100.png",
+        "-100.webp",
+        "-600.jpg",
+        "-600.jpeg",
+        "-600.png",
+        "-600.webp",
+        "/100-",
+        "/600-",
+        "_100.",
+        "_600.",
+        "100x100",
+        "600x600",
+    )
+    return any(m in u for m in soft_markers)
+
+
+def _fetch_json(
+    url: str,
+    access_token: str,
+    *,
+    params: dict | None = None,
+) -> dict | list | None:
     try:
         response = requests.get(
-            STRAVA_ACTIVITY_URL.format(activity_id=strava_id),
+            url,
             headers={"Authorization": f"Bearer {access_token}"},
+            params=params,
             timeout=15,
         )
     except requests.RequestException as exc:
-        print(f"photo detail network error for {strava_id}: {exc!r}")
+        print(f"strava media network error: {exc!r} url={url}")
         return None
 
     if response.status_code != 200:
-        print(
-            f"photo detail failed for {strava_id}: "
-            f"{response.status_code}"
-        )
+        print(f"strava media failed: {response.status_code} url={url}")
         return None
 
     try:
@@ -80,53 +154,105 @@ def _fetch_activity_detail(access_token: str, strava_id: int) -> dict | None:
         return None
 
 
-def _maybe_enrich_photo(
-    access_token: str,
-    activity: Activity,
-    list_item: dict,
-    remaining_fetches: list[int],
-) -> None:
-    """Fetch primary photo URL when Strava hints media exists.
+def _fetch_activity_detail(access_token: str, strava_id: int) -> dict | None:
+    data = _fetch_json(
+        STRAVA_ACTIVITY_URL.format(activity_id=strava_id),
+        access_token,
+    )
+    return data if isinstance(data, dict) else None
 
-    Mutates remaining_fetches[0] as a simple mutable counter.
-    Never raises — activity stays valid without a photo.
-    """
 
-    if activity.photo_url:
-        return
-    if remaining_fetches[0] <= 0:
-        return
+def _fetch_activity_photos_hq(access_token: str, strava_id: int) -> list | None:
+    data = _fetch_json(
+        STRAVA_ACTIVITY_PHOTOS_URL.format(activity_id=strava_id),
+        access_token,
+        params={"size": 2048, "photo_sources": "true"},
+    )
+    return data if isinstance(data, list) else None
 
+
+def _list_photo_hint(list_item: dict) -> int:
     hint = list_item.get("total_photo_count")
     try:
         hint_count = int(hint) if hint is not None else 0
     except (TypeError, ValueError):
         hint_count = 0
+    if hint_count > 0:
+        return hint_count
+    photos_summary = list_item.get("photos") or {}
+    try:
+        return int(photos_summary.get("count") or 0)
+    except (TypeError, ValueError):
+        return 0
 
-    # total_photo_count is unreliable on some Strava responses; still try
-    # a limited number of detail fetches for recent activities missing photos
-    # only when the list payload suggests media.
-    if hint_count <= 0:
-        photos_summary = list_item.get("photos") or {}
-        try:
-            hint_count = int(photos_summary.get("count") or 0)
-        except (TypeError, ValueError):
-            hint_count = 0
 
-    if hint_count <= 0:
-        return
+def _maybe_enrich_media(
+    access_token: str,
+    activity: Activity,
+    list_item: dict,
+    remaining_fetches: list[int],
+) -> dict:
+    """Backfill polyline + upgrade photo URL. Soft-fail; never raises."""
+    changed = {"map": False, "photo": False}
 
+    # 1) Map from list payload (free).
+    if not activity.summary_polyline:
+        poly = _map_polyline(list_item)
+        if poly:
+            activity.summary_polyline = poly
+            changed["map"] = True
+
+    needs_map = not activity.summary_polyline
+    hint_count = _list_photo_hint(list_item)
+    needs_photo = hint_count > 0 and (
+        not activity.photo_url or is_low_res_photo_url(activity.photo_url)
+    )
+
+    if not needs_map and not needs_photo:
+        return changed
+    if remaining_fetches[0] <= 0:
+        return changed
+
+    # 2) Detail fetch: map + photo summary fallback.
     remaining_fetches[0] -= 1
     detail = _fetch_activity_detail(access_token, activity.strava_id)
-    if not detail:
-        return
+    time.sleep(0.12)
 
-    url, count = _extract_primary_photo_url(detail)
-    if url:
-        activity.photo_url = url
-    activity.photo_count = count or hint_count
-    # Be polite to Strava when enriching multiple activities.
-    time.sleep(0.15)
+    if detail:
+        if needs_map:
+            poly = _map_polyline(detail)
+            if poly:
+                activity.summary_polyline = poly
+                changed["map"] = True
+                needs_map = False
+
+        if needs_photo:
+            url, count = _extract_primary_photo_url(detail)
+            if count:
+                activity.photo_count = count
+            # Detail primary is often ≤600 — keep as interim, then upgrade.
+            if url and (not activity.photo_url or is_low_res_photo_url(activity.photo_url)):
+                if url != activity.photo_url:
+                    activity.photo_url = url
+                    changed["photo"] = True
+
+    # 3) Dedicated photos endpoint for 2048 when media is expected.
+    if needs_photo and remaining_fetches[0] > 0:
+        remaining_fetches[0] -= 1
+        photos = _fetch_activity_photos_hq(access_token, activity.strava_id)
+        time.sleep(0.12)
+        if photos is not None:
+            url, count = _extract_photo_url_from_photos_list(photos)
+            if count:
+                activity.photo_count = max(int(activity.photo_count or 0), count)
+            if url and url != activity.photo_url:
+                activity.photo_url = url
+                changed["photo"] = True
+
+    if hint_count and not activity.photo_count:
+        activity.photo_count = hint_count
+
+    return changed
 
 
 def _activity_from_list_item(athlete_id: int, item: dict) -> Activity:
@@ -177,10 +303,11 @@ def sync_strava_activities(athlete_id):
     total_imported = 0
     total_updated = 0
     photos_enriched = 0
+    maps_enriched = 0
     page = 1
     per_page = 100
-    photo_budget = [MAX_PHOTO_DETAIL_FETCHES]
-    pending_photo_rows: list[tuple[Activity, dict]] = []
+    media_budget = [MAX_MEDIA_DETAIL_FETCHES]
+    pending_media_rows: list[tuple[Activity, dict]] = []
 
     try:
         access_token = get_valid_access_token(db, athlete_id)
@@ -239,31 +366,44 @@ def sync_strava_activities(athlete_id):
                     if polyline and not existing.summary_polyline:
                         existing.summary_polyline = polyline
                         changed = True
+                        maps_enriched += 1
 
                     if changed:
                         total_updated += 1
 
-                    if not existing.photo_url:
-                        pending_photo_rows.append((existing, item))
+                    needs_photo = _list_photo_hint(item) > 0 and (
+                        not existing.photo_url
+                        or is_low_res_photo_url(existing.photo_url)
+                    )
+                    needs_map = not existing.summary_polyline
+                    if needs_photo or needs_map:
+                        pending_media_rows.append((existing, item))
                     continue
 
                 activity = _activity_from_list_item(athlete_id, item)
                 db.add(activity)
                 total_imported += 1
-                pending_photo_rows.append((activity, item))
+                pending_media_rows.append((activity, item))
                 print("Importada:", item.get("name"))
 
             db.commit()
             page += 1
 
-        # Enrich photos after flush so new rows have PKs; failures are soft.
-        for activity, item in pending_photo_rows:
-            before = activity.photo_url
-            _maybe_enrich_photo(access_token, activity, item, photo_budget)
-            if activity.photo_url and activity.photo_url != before:
+        # Enrich media after flush so new rows have PKs; failures are soft.
+        for activity, item in pending_media_rows:
+            before_photo = activity.photo_url
+            before_map = activity.summary_polyline
+            result = _maybe_enrich_media(
+                access_token, activity, item, media_budget
+            )
+            if activity.photo_url and activity.photo_url != before_photo:
                 photos_enriched += 1
+            elif result.get("photo"):
+                photos_enriched += 1
+            if activity.summary_polyline and activity.summary_polyline != before_map:
+                maps_enriched += 1
 
-        if photos_enriched or total_updated:
+        if photos_enriched or maps_enriched or total_updated:
             db.commit()
 
         print()
@@ -273,6 +413,7 @@ def sync_strava_activities(athlete_id):
         print(f"Novas atividades importadas: {total_imported}")
         print(f"Atividades atualizadas (media): {total_updated}")
         print(f"Fotos enriquecidas: {photos_enriched}")
+        print(f"Mapas enriquecidos: {maps_enriched}")
 
         clear_ai_cache(athlete_id)
         clear_cache(athlete_id)
@@ -282,6 +423,7 @@ def sync_strava_activities(athlete_id):
             "imported": total_imported,
             "updated": total_updated,
             "photos_enriched": photos_enriched,
+            "maps_enriched": maps_enriched,
             "status": "ok",
         }
 
@@ -297,12 +439,8 @@ if __name__ == "__main__":
     try:
         cli_athlete_id = int(sys.argv[1])
     except ValueError:
-        print("athlete_id inválido.")
+        print("athlete_id deve ser um inteiro.")
         sys.exit(1)
 
-    try:
-        result = sync_strava_activities(cli_athlete_id)
-        print(result)
-    except StravaTokenError as error:
-        print(error)
-        sys.exit(1)
+    result = sync_strava_activities(cli_athlete_id)
+    print(result)
