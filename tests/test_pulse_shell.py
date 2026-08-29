@@ -16,7 +16,8 @@ def test_dashboard_serves_pulse_shell(client, make_session, make_athlete):
     assert 'data-nav="feed"' in body
     assert 'data-nav="explore"' in body
     assert 'data-nav="messages"' in body
-    assert 'data-nav="coach"' in body
+    assert 'data-nav="activity"' in body
+    assert 'pulse-mobile-header' in body
 
 
 def test_lab_keeps_legacy_analytics(client, make_session, make_athlete):
