@@ -427,6 +427,7 @@ def strava_callback(
     # ========================================================
 
     db = SessionLocal()
+    raw_session_token = None
 
     try:
 
@@ -498,10 +499,37 @@ def strava_callback(
             ip_address=request.client.host if request.client else None,
         )
 
+    except StravaTokenError as error:
+        db.rollback()
+        print("strava_callback token error:", repr(error))
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Não foi possível guardar a autenticação Strava. "
+                f"{error}"
+            ),
+        ) from error
+
+    except Exception as error:
+        db.rollback()
+        print("strava_callback unexpected error:", repr(error))
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Erro interno ao concluir o login. "
+                "Tenta novamente dentro de momentos."
+            ),
+        ) from error
 
     finally:
 
         db.close()
+
+    if not raw_session_token:
+        raise HTTPException(
+            status_code=500,
+            detail="Sessão não foi criada após o login.",
+        )
 
 
     # ========================================================
