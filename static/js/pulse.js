@@ -2,7 +2,7 @@
 (() => {
   "use strict";
 
-  const PAGES = ["feed", "explore", "coach", "profile"];
+  const PAGES = ["feed", "explore", "messages", "coach", "profile"];
   const Copy = window.PulseCopy || null;
 
   const TILE_BACKGROUNDS = [
@@ -84,6 +84,22 @@
       searchResults: [],
       peek: null,
       suggestions: [],
+    },
+    inbox: {
+      status: "idle",
+      items: [],
+      unread_total: 0,
+      error: null,
+    },
+    thread: {
+      status: "idle",
+      conversationId: null,
+      peer: null,
+      messages: [],
+      can_send: false,
+      is_mutual: false,
+      error: null,
+      sending: false,
     },
   };
 
@@ -1216,6 +1232,11 @@
             </div>
             <div class="profile-actions">
               ${followBtn}
+              ${
+                p.is_mutual
+                  ? `<button type="button" class="btn btn-primary btn-message" data-action="open-dm" ${idAttr} data-handle="${escapeHtml(p.handle || "")}">Message</button>`
+                  : `<p class="form-hint dm-mutual-hint">Follow each other to start messaging.</p>`
+              }
             </div>
             ${followedBy}
           </div>
@@ -1242,20 +1263,377 @@
     return activities.reduce((sum, a) => sum + (Number(a.moving_time_s) || 0), 0);
   }
 
+  /* ——— Direct messages (mutual-follow only) ——— */
+
+  function dmRelativeTime(iso) {
+    if (!iso) return "";
+    const then = new Date(iso).getTime();
+    if (Number.isNaN(then)) return "";
+    const diff = Date.now() - then;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "now";
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d`;
+    return formatDate(iso);
+  }
+
+  function dmClock(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function updateDmBadges(count) {
+    const n = Number(count) || 0;
+    ["sidebarDmBadge", "bottomDmBadge"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (n > 0) {
+        el.hidden = false;
+        el.textContent = n > 99 ? "99+" : String(n);
+      } else {
+        el.hidden = true;
+        el.textContent = "0";
+      }
+    });
+  }
+
+  function renderInboxRow(item) {
+    const peer = item.peer || {};
+    const last = item.last_message;
+    const preview = last
+      ? `${last.is_mine ? "You: " : ""}${last.content || ""}`
+      : "Say hi — the miles can wait.";
+    const unread = Number(item.unread_count || 0);
+    const when = dmRelativeTime(item.last_message_at || item.updated_at);
+    return `
+      <button type="button" class="dm-inbox-row ${unread ? "is-unread" : ""}" data-action="open-thread" data-conversation-id="${escapeHtml(item.id)}">
+        ${renderAvatarHtml(peer, "is-dm")}
+        <div class="dm-inbox-meta">
+          <div class="dm-inbox-top">
+            <strong>${escapeHtml(displayNameOf(peer))}</strong>
+            <span class="dm-inbox-time">${escapeHtml(when)}</span>
+          </div>
+          <div class="dm-inbox-preview ${unread ? "is-unread" : ""}">${escapeHtml(preview)}</div>
+        </div>
+        ${unread ? `<span class="dm-unread-dot" aria-label="${unread} unread"></span>` : ""}
+      </button>
+    `;
+  }
+
+  function renderMessagesInbox() {
+    const inbox = state.inbox;
+    let body = "";
+    if (inbox.status === "loading" || inbox.status === "idle") {
+      body = `<div class="dm-empty"><p>Loading messages…</p></div>`;
+    } else if (inbox.status === "error") {
+      body = `
+        <div class="dm-empty">
+          <p>${escapeHtml(inbox.error || errLine())}</p>
+          <button type="button" class="btn btn-primary" data-action="retry-inbox">Retry</button>
+        </div>`;
+    } else if (!inbox.items.length) {
+      body = `
+        <div class="dm-empty">
+          <h2>Your inbox is quiet.</h2>
+          <p>Messages open when you follow each other. Find runners in Explore.</p>
+          <button type="button" class="btn btn-primary" data-nav="explore">Explore</button>
+        </div>`;
+    } else {
+      body = `<div class="dm-inbox-list">${inbox.items.map(renderInboxRow).join("")}</div>`;
+    }
+
+    return `
+      <section class="pulse-page dm-page dm-inbox-page" data-page="messages">
+        <header class="dm-topbar">
+          <h1 class="dm-title">Messages</h1>
+        </header>
+        ${body}
+      </section>
+    `;
+  }
+
+  function renderDmBubbles(messages) {
+    if (!messages.length) {
+      return `<div class="dm-empty-thread"><p>No messages yet. Say something.</p></div>`;
+    }
+    let html = "";
+    let prevSender = null;
+    messages.forEach((msg, idx) => {
+      const mine = !!msg.is_mine;
+      const same = prevSender === msg.sender_id;
+      const next = messages[idx + 1];
+      const nextSame = next && next.sender_id === msg.sender_id;
+      const classes = [
+        "dm-bubble",
+        mine ? "is-mine" : "is-theirs",
+        same ? "is-grouped" : "",
+        nextSame ? "is-stack" : "is-tail",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      html += `
+        <div class="dm-bubble-row ${mine ? "is-mine" : "is-theirs"} ${same ? "is-grouped" : ""}">
+          <div class="${classes}">
+            <p>${escapeHtml(msg.content)}</p>
+            ${!nextSame ? `<time>${escapeHtml(dmClock(msg.created_at))}</time>` : ""}
+          </div>
+        </div>`;
+      prevSender = msg.sender_id;
+    });
+    return html;
+  }
+
+  function renderDmThread() {
+    const t = state.thread;
+    const peer = t.peer || {};
+    if (t.status === "loading" || t.status === "idle") {
+      return `
+        <section class="pulse-page dm-page dm-thread-page" data-page="dm">
+          <header class="dm-thread-top">
+            <button type="button" class="dm-back" data-action="back-inbox" aria-label="Back">←</button>
+            <h1 class="dm-title">Messages</h1>
+          </header>
+          <div class="dm-empty"><p>Opening chat…</p></div>
+        </section>`;
+    }
+    if (t.status === "error") {
+      return `
+        <section class="pulse-page dm-page dm-thread-page" data-page="dm">
+          <header class="dm-thread-top">
+            <button type="button" class="dm-back" data-action="back-inbox" aria-label="Back">←</button>
+            <h1 class="dm-title">Messages</h1>
+          </header>
+          <div class="dm-empty">
+            <p>${escapeHtml(t.error || errLine())}</p>
+            <button type="button" class="btn btn-primary" data-action="back-inbox">Back to inbox</button>
+          </div>
+        </section>`;
+    }
+
+    const composer = t.can_send
+      ? `
+        <form class="dm-composer" id="dmComposer" autocomplete="off">
+          <input type="text" id="dmInput" maxlength="2000" placeholder="Message…" enterkeyhint="send" />
+          <button type="submit" class="dm-send" aria-label="Send" ${t.sending ? "disabled" : ""}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l15-7-6 14-2-5-7-2z"/></svg>
+          </button>
+        </form>`
+      : `
+        <div class="dm-readonly">
+          You can message each other again when you both follow each other.
+        </div>`;
+
+    return `
+      <section class="pulse-page dm-page dm-thread-page is-open" data-page="dm">
+        <header class="dm-thread-top">
+          <button type="button" class="dm-back" data-action="back-inbox" aria-label="Back">←</button>
+          <button type="button" class="dm-peer" data-action="open-user" data-athlete-id="${escapeHtml(peer.athlete_id || "")}" data-handle="${escapeHtml(peer.handle || "")}">
+            ${renderAvatarHtml(peer, "is-sm")}
+            <div>
+              <strong>${escapeHtml(displayNameOf(peer))}</strong>
+              <span>${escapeHtml(publicHandleLabel(peer))}</span>
+            </div>
+          </button>
+        </header>
+        <div class="dm-thread-scroll" id="dmThreadScroll">
+          ${renderDmBubbles(t.messages)}
+        </div>
+        ${composer}
+      </section>
+    `;
+  }
+
+  async function loadInbox(force = false) {
+    if (state.inbox.status === "ready" && !force) return;
+    state.inbox.status = "loading";
+    if (state.page === "messages") render();
+    try {
+      const res = await apiFetch("/api/dms?limit=60");
+      if (!res.ok) throw new Error(errLine());
+      const data = await res.json();
+      state.inbox.items = Array.isArray(data.items) ? data.items : [];
+      state.inbox.unread_total = Number(data.unread_total || 0);
+      state.inbox.status = "ready";
+      state.inbox.error = null;
+      updateDmBadges(state.inbox.unread_total);
+    } catch (err) {
+      state.inbox.status = "error";
+      state.inbox.error = err.message || errLine();
+    }
+    if (state.page === "messages") render();
+  }
+
+  async function refreshUnreadBadge() {
+    try {
+      const res = await apiFetch("/api/dms/unread-count");
+      if (!res.ok) return;
+      const data = await res.json();
+      state.inbox.unread_total = Number(data.unread_total || 0);
+      updateDmBadges(state.inbox.unread_total);
+    } catch (_err) {
+      /* ignore */
+    }
+  }
+
+  function navigateDm(conversationId, { replace = false } = {}) {
+    state.page = "dm";
+    state.thread.conversationId = conversationId;
+    setNavActive("messages");
+    document.body.classList.add("dm-thread-active");
+    const hash = `#dm/${encodeURIComponent(conversationId)}`;
+    if (replace) history.replaceState({ page: "dm", conversationId }, "", hash);
+    else history.pushState({ page: "dm", conversationId }, "", hash);
+    render();
+    loadThread(conversationId, true);
+  }
+
+  function navigateInbox({ replace = false } = {}) {
+    document.body.classList.remove("dm-thread-active");
+    navigate("messages", { replace });
+    loadInbox(true);
+  }
+
+  async function openDmWithPeer(athleteId) {
+    if (!athleteId) {
+      showToast("That runner went missing.");
+      return;
+    }
+    try {
+      const res = await apiFetch(`/api/dms/with/${encodeURIComponent(athleteId)}`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.detail || "Follow each other to start messaging.");
+        return;
+      }
+      navigateDm(data.id);
+    } catch (err) {
+      showToast(err.message || errLine());
+    }
+  }
+
+  async function loadThread(conversationId, markRead = true) {
+    state.thread.status = "loading";
+    state.thread.conversationId = conversationId;
+    state.thread.error = null;
+    render();
+    try {
+      const res = await apiFetch(
+        `/api/dms/${encodeURIComponent(conversationId)}/messages?limit=80`
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.detail || errLine());
+      }
+      const conv = data.conversation || {};
+      state.thread.peer = conv.peer || null;
+      state.thread.can_send = !!conv.can_send;
+      state.thread.is_mutual = !!conv.is_mutual;
+      state.thread.messages = Array.isArray(data.messages) ? data.messages : [];
+      state.thread.status = "ready";
+      if (markRead) {
+        await apiFetch(`/api/dms/${encodeURIComponent(conversationId)}/read`, {
+          method: "POST",
+        }).catch(() => null);
+        await refreshUnreadBadge();
+      }
+    } catch (err) {
+      state.thread.status = "error";
+      state.thread.error = err.message || errLine();
+    }
+    render();
+    requestAnimationFrame(() => {
+      const sc = document.getElementById("dmThreadScroll");
+      if (sc) sc.scrollTop = sc.scrollHeight;
+    });
+  }
+
+  async function sendDmMessage(raw) {
+    const text = String(raw || "").trim();
+    if (!text || !state.thread.conversationId || state.thread.sending) return;
+    if (!state.thread.can_send) {
+      showToast("You can message each other again when you both follow each other.");
+      return;
+    }
+    state.thread.sending = true;
+    render();
+    try {
+      const res = await apiFetch(
+        `/api/dms/${encodeURIComponent(state.thread.conversationId)}/messages`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: text }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 403) {
+          state.thread.can_send = false;
+          state.thread.is_mutual = false;
+        }
+        throw new Error(data.detail || errLine());
+      }
+      state.thread.messages = [...state.thread.messages, data];
+      state.thread.sending = false;
+      // Keep inbox preview fresh next visit
+      state.inbox.status = "idle";
+      render();
+      requestAnimationFrame(() => {
+        const sc = document.getElementById("dmThreadScroll");
+        if (sc) sc.scrollTop = sc.scrollHeight;
+        const input = document.getElementById("dmInput");
+        if (input) input.focus();
+      });
+    } catch (err) {
+      state.thread.sending = false;
+      render();
+      showToast(err.message || errLine());
+    }
+  }
+
+  function wireDmComposer() {
+    const form = document.getElementById("dmComposer");
+    if (!form || form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const input = document.getElementById("dmInput");
+      const value = input ? input.value : "";
+      if (input) input.value = "";
+      sendDmMessage(value);
+    });
+  }
+
   /* ——— Routing ——— */
 
   function parseLocationHash() {
     const raw = (location.hash || "#feed").slice(1);
     if (raw.startsWith("u/")) {
       const handle = decodeURIComponent(raw.slice(2)).replace(/^@/, "").trim();
-      return { page: "u", handle, athleteId: null };
+      return { page: "u", handle, athleteId: null, conversationId: null };
     }
     if (raw.startsWith("id/")) {
       const athleteId = athleteIdOf(decodeURIComponent(raw.slice(3)).trim());
-      return { page: "u", handle: null, athleteId };
+      return { page: "u", handle: null, athleteId, conversationId: null };
+    }
+    if (raw.startsWith("dm/")) {
+      const conversationId = decodeURIComponent(raw.slice(3)).trim();
+      return {
+        page: "dm",
+        handle: null,
+        athleteId: null,
+        conversationId: conversationId || null,
+      };
     }
     const page = PAGES.includes(raw) ? raw : "feed";
-    return { page, handle: null, athleteId: null };
+    return { page, handle: null, athleteId: null, conversationId: null };
   }
 
   function navigate(page, { replace = false } = {}) {
@@ -1263,7 +1641,11 @@
     state.page = next;
     state.viewed.handle = null;
     state.viewed.athleteId = null;
-    setNavActive(next);
+    if (next !== "dm") {
+      document.body.classList.remove("dm-thread-active");
+      state.thread.conversationId = null;
+    }
+    setNavActive(next === "dm" ? "messages" : next);
     const hash = `#${next}`;
     if (replace) {
       history.replaceState({ page: next }, "", hash);
@@ -1276,6 +1658,9 @@
     }
     if (next === "explore") {
       loadExplore(false);
+    }
+    if (next === "messages") {
+      loadInbox(true);
     }
     if (next === "coach") {
       loadCoachMessages(false);
@@ -1472,6 +1857,39 @@
       });
   }
 
+  function applyProfileMessageDom(athleteId, { isMutual, handle }) {
+    const id = athleteIdOf(athleteId);
+    if (!id) return;
+    const actions = document.querySelector('[data-page="u"] .profile-actions');
+    if (!actions) return;
+    const followBtn = actions.querySelector(".btn-follow[data-athlete-id]");
+    if (!followBtn || athleteIdOf(followBtn.dataset.athleteId) !== id) return;
+
+    let msgBtn = actions.querySelector(".btn-message");
+    let hint = actions.querySelector(".dm-mutual-hint");
+    if (isMutual) {
+      if (hint) hint.remove();
+      if (!msgBtn) {
+        msgBtn = document.createElement("button");
+        msgBtn.type = "button";
+        msgBtn.className = "btn btn-primary btn-message";
+        msgBtn.dataset.action = "open-dm";
+        msgBtn.dataset.athleteId = id;
+        if (handle) msgBtn.dataset.handle = handle;
+        msgBtn.textContent = "Message";
+        actions.appendChild(msgBtn);
+      }
+    } else {
+      if (msgBtn) msgBtn.remove();
+      if (!hint) {
+        hint = document.createElement("p");
+        hint.className = "form-hint dm-mutual-hint";
+        hint.textContent = "Follow each other to start messaging.";
+        actions.appendChild(hint);
+      }
+    }
+  }
+
   function syncExploreFollowFlag(athleteId, isFollowing) {
     const id = athleteIdOf(athleteId);
     if (!id) return;
@@ -1525,6 +1943,10 @@
         isFollowing: wantFollow,
         isMutual: state.viewed.data.is_mutual,
       });
+      applyProfileMessageDom(athleteId, {
+        isMutual: state.viewed.data.is_mutual,
+        handle: state.viewed.data.handle || state.viewed.handle,
+      });
       applyFollowerCountDom(nextCount);
     }
 
@@ -1558,6 +1980,10 @@
           isFollowing: !!data.is_following,
           isMutual: !!data.is_mutual,
         });
+        applyProfileMessageDom(athleteId, {
+          isMutual: !!data.is_mutual,
+          handle: data.handle || state.viewed.handle,
+        });
         applyFollowerCountDom(
           Number(data.follower_count ?? data.followers_count ?? 0)
         );
@@ -1588,6 +2014,10 @@
         applyFollowButtonDom(athleteId, {
           isFollowing: !!prevViewed.is_following,
           isMutual: !!prevViewed.is_mutual,
+        });
+        applyProfileMessageDom(athleteId, {
+          isMutual: !!prevViewed.is_mutual,
+          handle: prevViewed.handle || state.viewed.handle,
         });
         applyFollowerCountDom(Number(prevViewed.follower_count || 0));
       }
@@ -1952,6 +2382,8 @@
     let html = "";
     if (state.page === "feed") html = renderFeed();
     else if (state.page === "explore") html = renderExplore();
+    else if (state.page === "messages") html = renderMessagesInbox();
+    else if (state.page === "dm") html = renderDmThread();
     else if (state.page === "coach") html = renderCoachPage();
     else if (state.page === "u") html = renderViewedProfile();
     else html = renderProfile();
@@ -1961,7 +2393,17 @@
     bindViewInteractions();
     wireCoachDom(els.viewRoot);
     wireCoachDom(els.coachSidebarPanel);
+    wireDmComposer();
     scrollCoachThreads();
+
+    if (state.page === "dm") {
+      requestAnimationFrame(() => {
+        const sc = document.getElementById("dmThreadScroll");
+        if (sc) sc.scrollTop = sc.scrollHeight;
+        const input = document.getElementById("dmInput");
+        if (input && state.thread.can_send) input.focus();
+      });
+    }
 
     if (wasExploreSearch) {
       const input = document.getElementById("exploreSearch");
@@ -2010,8 +2452,17 @@
     if (action === "retry-feed") loadFeed(true);
     if (action === "retry-explore") loadExplore(true);
     if (action === "retry-explore-search") runExploreSearch(state.explore.searchQ || "");
+    if (action === "retry-inbox") loadInbox(true);
     if (action === "clear-coach") clearCoachChat();
     if (action === "open-user" || action === "peek-athlete") openUserFromEl(el);
+    if (action === "open-dm") {
+      openDmWithPeer(athleteIdOf(el?.dataset?.athleteId));
+    }
+    if (action === "open-thread") {
+      const cid = el?.dataset?.conversationId;
+      if (cid) navigateDm(cid);
+    }
+    if (action === "back-inbox") navigateInbox();
     if (action === "follow-user") {
       toggleFollow(
         { athleteId: el?.dataset?.athleteId, handle: el?.dataset?.handle },
@@ -2385,6 +2836,8 @@
           { athleteId: loc.athleteId, handle: loc.handle },
           { replace: true }
         );
+      } else if (loc.page === "dm" && loc.conversationId) {
+        navigateDm(loc.conversationId, { replace: true });
       } else {
         navigate(loc.page, { replace: true });
       }
@@ -2396,6 +2849,13 @@
     await ensureAuth();
     await loadProfileBundle(true);
     loadCoachMessages(false);
+    refreshUnreadBadge();
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible") return;
+      refreshUnreadBadge();
+      if (state.page === "messages") loadInbox(true);
+    });
 
     const initial = parseLocationHash();
     if (initial.page === "u") {
@@ -2403,6 +2863,8 @@
         { athleteId: initial.athleteId, handle: initial.handle },
         { replace: true }
       );
+    } else if (initial.page === "dm" && initial.conversationId) {
+      navigateDm(initial.conversationId, { replace: true });
     } else {
       navigate(initial.page, { replace: true });
     }

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pulse</title>
-  <link rel="stylesheet" href="/static/css/pulse.css?v=media-hq-1">
+  <link rel="stylesheet" href="/static/css/pulse.css?v=dms-1">
 </head>
 <body>
   <div class="sync-chip" id="syncChip" aria-live="polite">Syncing Strava…</div>
@@ -24,6 +24,13 @@
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
           </span>
           Explore
+        </button>
+        <button type="button" class="pulse-nav-link" data-nav="messages">
+          <span class="pulse-nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 6h16v10H8l-4 3V6z"/></svg>
+          </span>
+          Messages
+          <span class="nav-badge" id="sidebarDmBadge" hidden>0</span>
         </button>
         <button type="button" class="pulse-nav-link" data-nav="coach">
           <span class="pulse-nav-ico" aria-hidden="true">
@@ -71,6 +78,11 @@
     <button type="button" data-nav="explore">
       <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
       Explore
+    </button>
+    <button type="button" data-nav="messages" class="bottom-nav-messages">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16v10H8l-4 3V6z"/></svg>
+      Messages
+      <span class="nav-badge nav-badge--float" id="bottomDmBadge" hidden>0</span>
     </button>
     <button type="button" data-nav="coach">
       <svg viewBox="0 0 24 24"><path d="M12 3l2.2 4.5L19 9l-3.5 3.4.8 4.8L12 15.2 7.7 17.2l.8-4.8L5 9l4.8-1.5L12 3z"/></svg>
@@ -188,6 +200,6 @@
   <div class="toast" id="toast" role="status"></div>
 
   <script src="/static/js/microcopy.js?v=personality-2"></script>
-  <script src="/static/js/pulse.js?v=media-hq-1" defer></script>
+  <script src="/static/js/pulse.js?v=dms-1" defer></script>
 </body>
 </html>
