@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from profile_helpers import ensure_handle, suggest_handle_for, validate_handle
-from session_helpers import SESSION_COOKIE_NAME
 
 
 def test_profile_endpoints_require_auth(client):
@@ -154,3 +153,101 @@ def test_follow_isolation_between_sessions(
     assert profile["is_following"] is False
     assert client.post("/api/profiles/iso_c/follow").status_code == 200
     assert client.get("/api/profiles/iso_c").json()["follower_count"] == 2
+
+
+def test_mutual_relationship_and_user_aliases(
+    client,
+    make_session,
+    make_athlete,
+):
+    make_athlete(940040, handle="mut_a", is_profile_public=True)
+    make_athlete(940041, handle="mut_b", is_profile_public=True)
+
+    raw_a, cookie = make_session(940040)
+    client.cookies.set(cookie, raw_a)
+    assert client.post("/api/users/940041/follow").status_code == 200
+
+    raw_b, cookie_b = make_session(940041)
+    client.cookies.set(cookie_b, raw_b)
+    assert client.post("/api/profiles/mut_a/follow").status_code == 200
+
+    rel = client.get("/api/profiles/mut_a/relationship").json()
+    assert rel["is_following"] is True
+    assert rel["is_followed_by"] is True
+    assert rel["is_mutual"] is True
+    assert rel["is_self"] is False
+
+    profile = client.get("/api/profiles/mut_a").json()
+    assert profile["is_mutual"] is True
+    assert profile["followers_count"] == 1
+
+    by_id = client.get("/api/users/940040/relationship").json()
+    assert by_id["is_mutual"] is True
+
+
+def test_followers_pagination_and_suggestions(
+    client,
+    make_session,
+    make_athlete,
+):
+    make_athlete(940050, handle="page_me", city="Porto", country="Portugal", is_profile_public=True)
+    make_athlete(
+        940051,
+        handle="page_a",
+        city="Porto",
+        country="Portugal",
+        is_profile_public=True,
+    )
+    make_athlete(
+        940052,
+        handle="page_b",
+        city="Porto",
+        country="Portugal",
+        is_profile_public=True,
+    )
+    make_athlete(
+        940053,
+        handle="page_c",
+        city="Lisboa",
+        country="Portugal",
+        is_profile_public=True,
+    )
+
+    raw_a, cookie = make_session(940051)
+    client.cookies.set(cookie, raw_a)
+    assert client.post("/api/profiles/page_me/follow").status_code == 200
+
+    raw_b, cookie_b = make_session(940052)
+    client.cookies.set(cookie_b, raw_b)
+    assert client.post("/api/profiles/page_me/follow").status_code == 200
+
+    raw_me, cookie_me = make_session(940050)
+    client.cookies.set(cookie_me, raw_me)
+
+    page1 = client.get(
+        "/api/profiles/page_me/followers",
+        params={"limit": 1, "offset": 0},
+    ).json()
+    assert page1["total"] == 2
+    assert page1["count"] == 1
+    assert page1["has_more"] is True
+    assert page1["next_offset"] == 1
+
+    page2 = client.get(
+        "/api/profiles/page_me/followers",
+        params={"limit": 1, "offset": 1},
+    ).json()
+    assert page2["count"] == 1
+    assert page2["has_more"] is False
+
+    sug = client.get("/api/profiles/suggestions").json()
+    handles = {p["handle"] for p in sug["people"]}
+    assert "page_a" in handles or "page_b" in handles or "page_c" in handles
+    assert "page_me" not in handles
+
+    ids = client.get("/api/feed/following-ids").json()
+    assert ids["count"] == 0
+    assert ids["athlete_ids"] == []
+    assert client.post("/api/profiles/page_c/follow").status_code == 200
+    ids2 = client.get("/api/feed/following-ids").json()
+    assert 940053 in ids2["athlete_ids"]

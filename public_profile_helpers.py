@@ -8,24 +8,12 @@ from follow_helpers import (
     follower_count,
     following_count,
     get_athlete_by_handle,
-    is_following,
+    relationship_payload,
 )
 from models import Activity
 from profile_helpers import display_name_for, ensure_handle, initials_for, public_avatar_url_for
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-
-
-SENSITIVE_ACTIVITY_KEYS = frozenset(
-    {
-        "start_lat",
-        "start_lng",
-        "end_lat",
-        "end_lng",
-        "map_polyline",
-        "summary_polyline",
-    }
-)
 
 
 def can_view_profile(viewer: Athlete, target: Athlete) -> bool:
@@ -112,9 +100,13 @@ def serialize_public_profile(
 
     stats = activity_stats_for(db, target.id)
     activities = list_profile_activities(db, target.id, limit=activity_limit)
+    rel = relationship_payload(db, viewer_id=viewer.id, target_id=target.id)
+    followers = follower_count(db, target.id)
+    following = following_count(db, target.id)
 
     return {
         "athlete_id": target.id,
+        "id": target.id,
         "display_name": display_name_for(target),
         "handle": target.handle,
         "username": target.handle or target.username,
@@ -127,17 +119,18 @@ def serialize_public_profile(
             "country": target.country,
         },
         "is_profile_public": bool(target.is_profile_public),
-        "is_self": is_self,
-        "is_following": (
-            False
-            if is_self
-            else is_following(db, follower_id=viewer.id, following_id=target.id)
-        ),
-        "follower_count": follower_count(db, target.id),
-        "following_count": following_count(db, target.id),
+        "is_self": rel["is_self"],
+        "is_following": rel["is_following"],
+        "is_followed_by": rel["is_followed_by"],
+        "is_mutual": rel["is_mutual"],
+        "relationship": rel,
+        "follower_count": followers,
+        "following_count": following,
+        "followers_count": followers,
         "stats": stats,
         "activities": activities,
-        "activity_count": len(activities),
+        "activity_count": stats["activity_count"],
+        "posts_count": stats["activity_count"],
     }
 
 

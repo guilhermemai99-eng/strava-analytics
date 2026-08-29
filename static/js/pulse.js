@@ -42,6 +42,10 @@
       status: "idle",
       items: [],
       error: null,
+      total: 0,
+      offset: 0,
+      hasMore: false,
+      q: "",
     },
     feed: {
       status: "idle",
@@ -66,6 +70,7 @@
       searchStatus: "idle",
       searchResults: [],
       peek: null,
+      suggestions: [],
     },
   };
 
@@ -729,11 +734,24 @@
           <button type="button" class="btn btn-ghost" data-action="open-settings">Settings</button>
         </div>`;
 
+    const suggestions = Array.isArray(ex.suggestions) ? ex.suggestions : [];
+    const suggestedBlock =
+      suggestions.length === 0
+        ? ""
+        : `
+      <section class="explore-section" data-explore-section="suggested">
+        <div class="explore-section-head">
+          <h2>Suggested for you</h2>
+          <span>${suggestions.length}</span>
+        </div>
+        <div class="runner-list">${suggestions.map(renderRunnerCard).join("")}</div>
+      </section>`;
+
     const sections = Array.isArray(ex.sections) ? ex.sections : [];
-    if (sections.length === 0) {
+    if (sections.length === 0 && suggestions.length === 0) {
       return `${privacy}<p class="explore-empty">Quiet streets. Public runners show up here.</p>`;
     }
-    return `${privacy}${sections.map(renderExploreSection).join("")}`;
+    return `${privacy}${suggestedBlock}${sections.map(renderExploreSection).join("")}`;
   }
 
   function renderExplore() {
@@ -771,11 +789,20 @@
     if (state.page === "explore" && !(state.explore.searchQ || "").trim()) render();
 
     try {
-      const res = await apiFetch("/api/explore");
+      const [res, sugRes] = await Promise.all([
+        apiFetch("/api/explore"),
+        apiFetch("/api/profiles/suggestions?limit=6"),
+      ]);
       if (!res.ok) throw new Error("That didn’t go the distance.");
       const data = await res.json();
       state.explore.me = data.me || null;
       state.explore.sections = Array.isArray(data.sections) ? data.sections : [];
+      if (sugRes.ok) {
+        const sug = await sugRes.json();
+        state.explore.suggestions = Array.isArray(sug.people) ? sug.people : [];
+      } else {
+        state.explore.suggestions = [];
+      }
       state.explore.status = "ready";
       state.explore.error = null;
     } catch (err) {
@@ -955,9 +982,12 @@
             <h1>${escapeHtml(p.display_name || "Runner")}</h1>
             <p class="profile-handle">${escapeHtml(handleLabel(p))}</p>
             ${p.bio ? `<p class="profile-bio">${escapeHtml(p.bio)}</p>` : ""}
-            <div class="profile-social">
-              <button type="button" data-action="open-followers" data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(followers)}</strong> followers</button>
-              <button type="button" data-action="open-following" data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(following)}</strong> following</button>
+            <div class="profile-social profile-social-counts">
+              <button type="button" class="profile-count" disabled><strong>${escapeHtml(
+                Number(p.posts_count ?? p.stats?.total_activities ?? state.activities.length)
+              )}</strong> posts</button>
+              <button type="button" class="profile-count" data-action="open-followers" data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(followers)}</strong> followers</button>
+              <button type="button" class="profile-count" data-action="open-following" data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(following)}</strong> following</button>
             </div>
             <div class="profile-actions">
               <button type="button" class="btn btn-primary" data-action="edit-profile">Edit Profile</button>
@@ -1037,8 +1067,17 @@
             .join("");
 
     const followBtn = p.is_following
-      ? `<button type="button" class="btn btn-ghost btn-follow is-following" data-action="unfollow-user" data-handle="${escapeHtml(p.handle || "")}">Following</button>`
+      ? `<button type="button" class="btn btn-ghost btn-follow is-following" data-action="confirm-unfollow" data-handle="${escapeHtml(p.handle || "")}">${
+          p.is_mutual ? "Friends" : "Following"
+        }</button>`
       : `<button type="button" class="btn btn-primary btn-follow" data-action="follow-user" data-handle="${escapeHtml(p.handle || "")}">Follow</button>`;
+
+    const followedBy =
+      p.is_followed_by && !p.is_following
+        ? `<p class="form-hint" style="margin-top:8px">Follows you</p>`
+        : p.is_mutual
+          ? `<p class="form-hint" style="margin-top:8px">You follow each other</p>`
+          : "";
 
     return `
       <section class="pulse-page" data-page="u">
@@ -1054,13 +1093,17 @@
                 ? `<p class="profile-handle" style="margin-top:-6px">${escapeHtml(p.location.display_name)}</p>`
                 : ""
             }
-            <div class="profile-social">
-              <button type="button" data-action="open-followers" data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(followers)}</strong> followers</button>
-              <button type="button" data-action="open-following" data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(following)}</strong> following</button>
+            <div class="profile-social profile-social-counts">
+              <button type="button" class="profile-count" disabled><strong>${escapeHtml(
+                Number(p.posts_count ?? p.stats?.activity_count ?? activities.length)
+              )}</strong> posts</button>
+              <button type="button" class="profile-count" data-action="open-followers" data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(followers)}</strong> followers</button>
+              <button type="button" class="profile-count" data-action="open-following" data-handle="${escapeHtml(p.handle || "")}"><strong>${escapeHtml(following)}</strong> following</button>
             </div>
             <div class="profile-actions">
               ${followBtn}
             </div>
+            ${followedBy}
           </div>
         </div>
 
@@ -1187,28 +1230,63 @@
     if (state.page === "u") render();
   }
 
+  let followInFlight = new Set();
+
   async function toggleFollow(handle, wantFollow) {
     const clean = String(handle || "").trim().replace(/^@/, "");
     if (!clean) return;
-    const path = `/api/profiles/${encodeURIComponent(clean)}/follow`;
-    const res = await apiFetch(path, { method: wantFollow ? "POST" : "DELETE" });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      showToast(typeof err.detail === "string" ? err.detail : "That didn’t go the distance.");
-      return;
+    if (followInFlight.has(clean)) return;
+    followInFlight.add(clean);
+
+    const prevViewed = state.viewed.data ? { ...state.viewed.data } : null;
+    // Optimistic UI
+    if (state.viewed.handle === clean && state.viewed.data) {
+      const delta = wantFollow ? 1 : -1;
+      state.viewed.data = {
+        ...state.viewed.data,
+        is_following: wantFollow,
+        is_mutual: wantFollow && !!state.viewed.data.is_followed_by,
+        follower_count: Math.max(0, Number(state.viewed.data.follower_count || 0) + delta),
+        followers_count: Math.max(0, Number(state.viewed.data.followers_count || state.viewed.data.follower_count || 0) + delta),
+      };
+      if (state.page === "u") render();
     }
-    const data = await res.json();
-    if (state.viewed.handle === clean) {
-      state.viewed.data = { ...(state.viewed.data || {}), ...data };
-      state.viewed.status = "ready";
-    }
-    if (state.profile && wantFollow === false) {
-      /* counts on me may change when unfollowing from lists */
-    }
-    await loadProfileBundle(true);
-    if (state.page === "u" || state.page === "profile") render();
-    if (els.peopleModal && !els.peopleModal.hidden) {
-      openPeopleList(state.people.kind, state.people.handle, true);
+    state.people.items = state.people.items.map((p) => {
+      if ((p.handle || p.username) !== clean) return p;
+      return { ...p, is_following: wantFollow };
+    });
+    if (!els.peopleModal.hidden) paintPeopleModal();
+
+    try {
+      const path = `/api/profiles/${encodeURIComponent(clean)}/follow`;
+      const res = await apiFetch(path, { method: wantFollow ? "POST" : "DELETE" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof err.detail === "string" ? err.detail : "That didn’t go the distance."
+        );
+      }
+      const data = await res.json();
+      if (state.viewed.handle === clean) {
+        state.viewed.data = { ...(state.viewed.data || {}), ...data };
+        state.viewed.status = "ready";
+      }
+      await loadProfileBundle(true);
+      if (state.page === "u" || state.page === "profile") render();
+      if (!els.peopleModal.hidden) {
+        openPeopleList(state.people.kind, state.people.handle, true);
+      }
+    } catch (err) {
+      if (prevViewed && state.viewed.handle === clean) {
+        state.viewed.data = prevViewed;
+        if (state.page === "u") render();
+      }
+      showToast(err.message || "That didn’t go the distance.");
+      if (!els.peopleModal.hidden) {
+        openPeopleList(state.people.kind, state.people.handle, true);
+      }
+    } finally {
+      followInFlight.delete(clean);
     }
   }
 
@@ -1217,10 +1295,10 @@
     const followCtl = person.is_self
       ? `<span class="form-hint">You</span>`
       : person.is_following
-        ? `<button type="button" class="btn btn-ghost btn-follow is-following" data-action="unfollow-user" data-handle="${escapeHtml(handle)}">Following</button>`
+        ? `<button type="button" class="btn btn-ghost btn-follow is-following" data-action="confirm-unfollow" data-handle="${escapeHtml(handle)}">Following</button>`
         : `<button type="button" class="btn btn-primary btn-follow" data-action="follow-user" data-handle="${escapeHtml(handle)}">Follow</button>`;
     return `
-      <div class="people-row-wrap" style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;">
+      <div class="people-row-wrap">
         <button type="button" class="people-row" data-action="open-user" data-handle="${escapeHtml(handle)}">
           ${renderAvatarHtml(person)}
           <div>
@@ -1233,34 +1311,78 @@
     `;
   }
 
+  function paintPeopleModal() {
+    const kind = state.people.kind;
+    const q = state.people.q || "";
+    const head = `
+      <div class="people-search-wrap">
+        <input id="peopleSearch" type="search" placeholder="Search runners" value="${escapeHtml(q)}" autocomplete="off">
+      </div>
+    `;
+    if (state.people.status === "loading" && state.people.items.length === 0) {
+      els.peopleModalBody.innerHTML = `${head}<p class="people-empty">Loading…</p>`;
+      return;
+    }
+    if (state.people.items.length === 0) {
+      const empty =
+        kind === "followers"
+          ? "No one’s following your pace yet."
+          : "Running solo. Socially, too. For now.";
+      els.peopleModalBody.innerHTML = `${head}<p class="people-empty">${escapeHtml(empty)}</p>`;
+      return;
+    }
+    const more = state.people.hasMore
+      ? `<button type="button" class="btn btn-ghost" style="width:100%;margin-top:8px" data-action="people-load-more">Load more</button>`
+      : "";
+    els.peopleModalBody.innerHTML =
+      head + state.people.items.map(renderPeopleRow).join("") + more;
+  }
+
+  let peopleSearchTimer = null;
+
   async function openPeopleList(kind, handle, soft = false) {
     const clean = String(handle || state.profile?.handle || "").trim().replace(/^@/, "");
     if (!clean || (kind !== "followers" && kind !== "following")) return;
+    const keepQ = soft ? state.people.q || "" : "";
     state.people.kind = kind;
     state.people.handle = clean;
+    state.people.q = keepQ;
+    state.people.offset = 0;
+    state.people.items = soft ? state.people.items : [];
     state.people.status = "loading";
     els.peopleModalTitle.textContent = kind === "followers" ? "Followers" : "Following";
-    els.peopleModalBody.innerHTML = `<p class="people-empty">Loading…</p>`;
     els.peopleModal.hidden = false;
     void els.peopleModal.offsetWidth;
     els.peopleModal.classList.add("is-open");
+    paintPeopleModal();
+    await fetchPeoplePage({ reset: true });
+  }
 
+  async function fetchPeoplePage({ reset = false } = {}) {
+    const kind = state.people.kind;
+    const clean = state.people.handle;
+    if (!kind || !clean) return;
+    const offset = reset ? 0 : state.people.offset;
+    const q = state.people.q || "";
+    state.people.status = "loading";
     try {
+      const params = new URLSearchParams({
+        limit: "30",
+        offset: String(offset),
+      });
+      if (q.trim().length >= 2) params.set("q", q.trim());
       const res = await apiFetch(
-        `/api/profiles/${encodeURIComponent(clean)}/${kind}?limit=50`
+        `/api/profiles/${encodeURIComponent(clean)}/${kind}?${params.toString()}`
       );
       if (!res.ok) throw new Error("Couldn’t load that list.");
       const data = await res.json();
-      state.people.items = Array.isArray(data.people) ? data.people : [];
+      const batch = Array.isArray(data.people) ? data.people : [];
+      state.people.items = reset ? batch : state.people.items.concat(batch);
+      state.people.total = Number(data.total || state.people.items.length);
+      state.people.hasMore = !!data.has_more;
+      state.people.offset = data.next_offset != null ? data.next_offset : state.people.items.length;
       state.people.status = "ready";
-      if (state.people.items.length === 0) {
-        els.peopleModalBody.innerHTML =
-          kind === "followers"
-            ? `<p class="people-empty">Nobody’s watching. Yet.</p>`
-            : `<p class="people-empty">Running solo. Socially, too. For now.</p>`;
-      } else {
-        els.peopleModalBody.innerHTML = state.people.items.map(renderPeopleRow).join("");
-      }
+      paintPeopleModal();
     } catch (err) {
       state.people.status = "error";
       els.peopleModalBody.innerHTML = `<p class="people-empty">${escapeHtml(err.message || "Try again.")}</p>`;
@@ -1272,6 +1394,30 @@
     setTimeout(() => {
       els.peopleModal.hidden = true;
     }, 250);
+  }
+
+  function confirmUnfollow(handle) {
+    const clean = String(handle || "").trim().replace(/^@/, "");
+    if (!clean) return;
+    // Soft confirm: second click label becomes Unfollow via replacing the button briefly.
+    const btn = document.querySelector(
+      `[data-action="confirm-unfollow"][data-handle="${CSS.escape(clean)}"]`
+    );
+    if (btn && btn.dataset.armed === "1") {
+      toggleFollow(clean, false);
+      return;
+    }
+    document.querySelectorAll('[data-action="confirm-unfollow"]').forEach((el) => {
+      el.dataset.armed = "0";
+      el.textContent = el.classList.contains("is-following") ? "Following" : "Following";
+    });
+    if (btn) {
+      btn.dataset.armed = "1";
+      btn.textContent = "Unfollow";
+      btn.classList.add("is-unfollow");
+    } else {
+      toggleFollow(clean, false);
+    }
   }
 
   function render() {
@@ -1343,10 +1489,11 @@
     if (action === "open-user") openUserProfile(el?.dataset?.handle);
     if (action === "follow-user") toggleFollow(el?.dataset?.handle, true);
     if (action === "unfollow-user") toggleFollow(el?.dataset?.handle, false);
+    if (action === "confirm-unfollow") confirmUnfollow(el?.dataset?.handle);
     if (action === "open-followers") openPeopleList("followers", el?.dataset?.handle);
     if (action === "open-following") openPeopleList("following", el?.dataset?.handle);
+    if (action === "people-load-more") fetchPeoplePage({ reset: false });
     if (action === "peek-athlete") {
-      // Legacy explore peek → full profile when handle known from card.
       openUserProfile(el?.dataset?.handle);
     }
   }
@@ -1563,6 +1710,22 @@
           return;
         }
         handleAction(action, actionEl);
+      }
+    });
+    els.peopleModal.addEventListener("input", (e) => {
+      if (e.target.id !== "peopleSearch") return;
+      state.people.q = e.target.value;
+      clearTimeout(peopleSearchTimer);
+      peopleSearchTimer = setTimeout(() => {
+        fetchPeoplePage({ reset: true });
+      }, 280);
+    });
+    els.peopleModal.addEventListener("keydown", (e) => {
+      if (e.target.id !== "peopleSearch") return;
+      if (e.key === "Enter") {
+        e.preventDefault();
+        clearTimeout(peopleSearchTimer);
+        fetchPeoplePage({ reset: true });
       }
     });
 

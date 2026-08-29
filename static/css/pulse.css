@@ -856,6 +856,72 @@ body {
   }
 }
 
+.people-row-wrap {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.people-search-wrap {
+  margin-bottom: 12px;
+}
+
+.people-search-wrap input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  outline: none;
+}
+
+.people-search-wrap input:focus {
+  border-color: var(--accent);
+}
+
+.profile-social-counts {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.profile-count {
+  background: none;
+  border: 0;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.profile-count:disabled {
+  cursor: default;
+  opacity: 0.9;
+}
+
+.profile-count strong {
+  display: inline;
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.btn-follow.is-unfollow {
+  border-color: #c45b5b;
+  color: #f2b4b4;
+}
+
+.btn-follow {
+  transition: background 0.18s var(--ease), border-color 0.18s var(--ease), color 0.18s var(--ease), transform 0.18s var(--ease);
+}
+
+.btn-follow:active {
+  transform: scale(0.97);
+}
+
 .people-list {
   display: flex;
   flex-direction: column;
@@ -919,7 +985,11 @@ body {
 }
 
 .feed-author-btn {
-  display: contents;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
   cursor: pointer;
   color: inherit;
   background: none;
