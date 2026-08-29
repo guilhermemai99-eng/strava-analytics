@@ -115,8 +115,14 @@ def test_avatar_upload_and_fallback(
     assert before["has_custom_avatar"] is False
     assert before["avatar_url"] == "https://example.com/strava.jpg"
 
-    # Minimal JPEG (magic bytes + padding)
-    jpeg = b"\xff\xd8\xff\xe0" + b"\x00" * 64
+    # Valid tiny JPEG via Pillow (upload path now re-encodes images).
+    import io as _io
+
+    from PIL import Image
+
+    buf = _io.BytesIO()
+    Image.new("RGB", (32, 32), color=(40, 180, 90)).save(buf, format="JPEG", quality=90)
+    jpeg = buf.getvalue()
     up = client.post(
         "/api/me/avatar",
         files={"file": ("avatar.jpg", io.BytesIO(jpeg), "image/jpeg")},
@@ -129,11 +135,37 @@ def test_avatar_upload_and_fallback(
     assert avatar.status_code == 200
     assert avatar.headers["content-type"].startswith("image/jpeg")
     assert avatar.content.startswith(b"\xff\xd8\xff")
+    # Stored image should be a processed JPEG (not empty).
+    assert len(avatar.content) > 100
 
     deleted = client.delete("/api/me/avatar")
     assert deleted.status_code == 200
     assert deleted.json()["has_custom_avatar"] is False
     assert deleted.json()["avatar_url"] == "https://example.com/strava.jpg"
+
+
+def test_avatar_process_accepts_large_png(tmp_path):
+    from avatar_helpers import process_avatar_image, validate_avatar_upload
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    # Noisy image so PNG is non-trivial; still under upload cap.
+    img = Image.new("RGB", (2000, 1500))
+    pixels = img.load()
+    for y in range(0, 1500, 3):
+        for x in range(0, 2000, 3):
+            pixels[x, y] = ((x * 17) % 256, (y * 13) % 256, 90)
+    img.save(buf, format="PNG")
+    raw = buf.getvalue()
+    validate_avatar_upload(raw, "image/png")
+    processed, ctype = process_avatar_image(raw)
+    assert ctype == "image/jpeg"
+    assert processed.startswith(b"\xff\xd8\xff")
+    # Longest edge capped at 1600 → stored JPEG stays compact.
+    assert len(processed) < 900_000
+    out = Image.open(io.BytesIO(processed))
+    assert max(out.size) <= 1600
 
 
 def test_avatar_rejects_invalid_file(client, make_session, make_athlete):

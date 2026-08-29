@@ -19,9 +19,12 @@ STRAVA_ACTIVITY_URL = "https://www.strava.com/api/v3/activities/{activity_id}"
 STRAVA_ACTIVITY_PHOTOS_URL = (
     "https://www.strava.com/api/v3/activities/{activity_id}/photos"
 )
+STRAVA_ACTIVITY_STREAMS_URL = (
+    "https://www.strava.com/api/v3/activities/{activity_id}/streams"
+)
 
-# Cap detail/photo fetches per sync so enrichment cannot explode rate limits.
-MAX_MEDIA_DETAIL_FETCHES = 25
+# Cap detail/photo/stream fetches per sync so enrichment cannot explode rate limits.
+MAX_MEDIA_DETAIL_FETCHES = 80
 
 # Prefer largest Strava CDN sizes for Feed cards.
 _PHOTO_SIZE_PREF = ("2048", "1200", "1000", "800", "600", "300", "100")
@@ -33,11 +36,81 @@ def _map_polyline(item: dict | None) -> str | None:
     map_obj = item.get("map") or {}
     if not isinstance(map_obj, dict):
         return None
-    for key in ("summary_polyline", "polyline"):
+    # Prefer full-resolution polyline from detail payloads.
+    for key in ("polyline", "summary_polyline"):
         raw = map_obj.get(key)
         if isinstance(raw, str) and raw.strip():
             return raw.strip()
     return None
+
+
+def encode_polyline(coords: list[tuple[float, float]]) -> str:
+    """Google encoded polyline (precision 5) from [[lat, lng], ...]."""
+    result: list[str] = []
+    prev_lat = 0
+    prev_lng = 0
+
+    def _write(value: int) -> None:
+        value = ~(value << 1) if value < 0 else (value << 1)
+        while value >= 0x20:
+            result.append(chr((0x20 | (value & 0x1F)) + 63))
+            value >>= 5
+        result.append(chr(value + 63))
+
+    for lat, lng in coords:
+        ilat = int(round(lat * 1e5))
+        ilng = int(round(lng * 1e5))
+        _write(ilat - prev_lat)
+        _write(ilng - prev_lng)
+        prev_lat = ilat
+        prev_lng = ilng
+
+    return "".join(result)
+
+
+def _downsample_latlng(
+    points: list[tuple[float, float]],
+    max_points: int = 200,
+) -> list[tuple[float, float]]:
+    if len(points) <= max_points:
+        return points
+    step = max(1, len(points) // max_points)
+    sampled = points[::step]
+    if sampled[-1] != points[-1]:
+        sampled.append(points[-1])
+    return sampled
+
+
+def _polyline_from_latlng_stream(payload: dict | list | None) -> str | None:
+    """Build encoded polyline from Strava latlng stream."""
+    data = None
+    if isinstance(payload, dict):
+        stream = payload.get("latlng") or {}
+        if isinstance(stream, dict):
+            data = stream.get("data")
+    elif isinstance(payload, list):
+        for stream in payload:
+            if isinstance(stream, dict) and stream.get("type") == "latlng":
+                data = stream.get("data")
+                break
+
+    if not isinstance(data, list) or len(data) < 2:
+        return None
+
+    coords: list[tuple[float, float]] = []
+    for point in data:
+        if not isinstance(point, (list, tuple)) or len(point) < 2:
+            continue
+        try:
+            lat = float(point[0])
+            lng = float(point[1])
+        except (TypeError, ValueError):
+            continue
+        coords.append((lat, lng))
+
+    if len(coords) < 2:
+        return None
+    return encode_polyline(_downsample_latlng(coords))
 
 
 def _best_url_from_urls_map(urls: dict) -> str | None:
@@ -171,6 +244,20 @@ def _fetch_activity_photos_hq(access_token: str, strava_id: int) -> list | None:
     return data if isinstance(data, list) else None
 
 
+def _fetch_activity_latlng_stream(
+    access_token: str,
+    strava_id: int,
+) -> dict | list | None:
+    data = _fetch_json(
+        STRAVA_ACTIVITY_STREAMS_URL.format(activity_id=strava_id),
+        access_token,
+        params={"keys": "latlng", "key_by_type": "true"},
+    )
+    if isinstance(data, (dict, list)):
+        return data
+    return None
+
+
 def _list_photo_hint(list_item: dict) -> int:
     hint = list_item.get("total_photo_count")
     try:
@@ -216,7 +303,7 @@ def _maybe_enrich_media(
     # 2) Detail fetch: map + photo summary fallback.
     remaining_fetches[0] -= 1
     detail = _fetch_activity_detail(access_token, activity.strava_id)
-    time.sleep(0.12)
+    time.sleep(0.08)
 
     if detail:
         if needs_map:
@@ -225,6 +312,12 @@ def _maybe_enrich_media(
                 activity.summary_polyline = poly
                 changed["map"] = True
                 needs_map = False
+        else:
+            # Upgrade summary → full polyline when detail has higher-res route.
+            poly = _map_polyline(detail)
+            if poly and poly != activity.summary_polyline:
+                activity.summary_polyline = poly
+                changed["map"] = True
 
         if needs_photo:
             url, count = _extract_primary_photo_url(detail)
@@ -236,11 +329,22 @@ def _maybe_enrich_media(
                     activity.photo_url = url
                     changed["photo"] = True
 
-    # 3) Dedicated photos endpoint for 2048 when media is expected.
+    # 3) Streams latlng → polyline when map still missing (owner can see private maps).
+    if needs_map and remaining_fetches[0] > 0:
+        remaining_fetches[0] -= 1
+        streams = _fetch_activity_latlng_stream(access_token, activity.strava_id)
+        time.sleep(0.08)
+        poly = _polyline_from_latlng_stream(streams)
+        if poly:
+            activity.summary_polyline = poly
+            changed["map"] = True
+            needs_map = False
+
+    # 4) Dedicated photos endpoint for 2048 when media is expected.
     if needs_photo and remaining_fetches[0] > 0:
         remaining_fetches[0] -= 1
         photos = _fetch_activity_photos_hq(access_token, activity.strava_id)
-        time.sleep(0.12)
+        time.sleep(0.08)
         if photos is not None:
             url, count = _extract_photo_url_from_photos_list(photos)
             if count:
@@ -390,6 +494,13 @@ def sync_strava_activities(athlete_id):
             page += 1
 
         # Enrich media after flush so new rows have PKs; failures are soft.
+        # Prefer map backfill first so Feed routes appear even when photo budget runs out.
+        pending_media_rows.sort(
+            key=lambda pair: (
+                0 if not (pair[0].summary_polyline or "").strip() else 1,
+                0 if _list_photo_hint(pair[1]) > 0 else 1,
+            )
+        )
         for activity, item in pending_media_rows:
             before_photo = activity.photo_url
             before_map = activity.summary_polyline

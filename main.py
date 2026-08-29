@@ -34,7 +34,11 @@ from profile_helpers import (
     ensure_handle,
     serialize_profile,
 )
-from avatar_helpers import AvatarValidationError, validate_avatar_upload
+from avatar_helpers import (
+    AvatarValidationError,
+    process_avatar_image,
+    validate_avatar_upload,
+)
 from feed_helpers import serialize_feed_item
 from explore_helpers import (
     get_public_athlete,
@@ -883,10 +887,11 @@ async def upload_my_avatar(
     data = await file.read()
 
     try:
-        content_type = validate_avatar_upload(
+        validate_avatar_upload(
             data,
             declared_type=file.content_type,
         )
+        data, content_type = process_avatar_image(data)
     except AvatarValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

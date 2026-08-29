@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
-# Max size kept small so BYTEA storage stays Railway-friendly without object storage.
-MAX_AVATAR_BYTES = 1_000_000
+import io
+
+# Upload cap: phone camera photos are often 2–8 MB.
+MAX_AVATAR_BYTES = 8_000_000
+# After resize/compress we keep storage Railway-friendly.
+MAX_AVATAR_STORED_BYTES = 1_500_000
+MAX_AVATAR_EDGE = 1600
+JPEG_QUALITY = 88
 
 ALLOWED_TYPES = {
     "image/jpeg": (b"\xff\xd8\xff",),
@@ -40,7 +46,7 @@ def validate_avatar_upload(data: bytes, declared_type: str | None = None) -> str
 
     if len(data) > MAX_AVATAR_BYTES:
         raise AvatarValidationError(
-            "Imagem demasiado grande (máx. 1 MB)."
+            "Imagem demasiado grande (máx. 8 MB)."
         )
 
     detected = detect_content_type(data)
@@ -57,3 +63,73 @@ def validate_avatar_upload(data: bytes, declared_type: str | None = None) -> str
                 )
 
     return detected
+
+
+def process_avatar_image(data: bytes) -> tuple[bytes, str]:
+    """Resize + JPEG-compress so large phone photos stay sharp but compact."""
+    try:
+        from PIL import Image, ImageOps
+    except ImportError as exc:  # pragma: no cover - env misconfig
+        raise AvatarValidationError(
+            "Processamento de imagem indisponível no servidor."
+        ) from exc
+
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            img = ImageOps.exif_transpose(img)
+            if img.mode not in ("RGB", "L"):
+                img = img.convert("RGBA")
+                background = Image.new("RGB", img.size, (12, 16, 14))
+                background.paste(img, mask=img.split()[-1] if img.mode == "RGBA" else None)
+                img = background
+            elif img.mode == "L":
+                img = img.convert("RGB")
+
+            w, h = img.size
+            longest = max(w, h)
+            if longest > MAX_AVATAR_EDGE:
+                scale = MAX_AVATAR_EDGE / float(longest)
+                img = img.resize(
+                    (max(1, int(w * scale)), max(1, int(h * scale))),
+                    Image.Resampling.LANCZOS,
+                )
+
+            out = io.BytesIO()
+            img.save(
+                out,
+                format="JPEG",
+                quality=JPEG_QUALITY,
+                optimize=True,
+                progressive=True,
+            )
+            processed = out.getvalue()
+    except AvatarValidationError:
+        raise
+    except Exception as exc:
+        raise AvatarValidationError(
+            "Não foi possível processar a imagem. Tenta outro ficheiro."
+        ) from exc
+
+    if not processed or len(processed) < 32:
+        raise AvatarValidationError("Imagem processada inválida.")
+
+    if len(processed) > MAX_AVATAR_STORED_BYTES:
+        # Second pass: smaller edge / lower quality.
+        try:
+            with Image.open(io.BytesIO(processed)) as img:
+                img = img.convert("RGB")
+                img.thumbnail((1200, 1200), Image.Resampling.LANCZOS)
+                out = io.BytesIO()
+                img.save(out, format="JPEG", quality=80, optimize=True)
+                processed = out.getvalue()
+        except Exception as exc:
+            raise AvatarValidationError(
+                "Imagem demasiado grande após compressão."
+            ) from exc
+
+    if len(processed) > MAX_AVATAR_STORED_BYTES:
+        raise AvatarValidationError(
+            "Imagem demasiado grande após compressão."
+        )
+
+    return processed, "image/jpeg"
