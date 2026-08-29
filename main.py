@@ -60,6 +60,17 @@ from follow_helpers import (
 )
 from account_helpers import AccountDeleteError, delete_athlete_account
 from public_profile_helpers import can_view_profile, serialize_public_profile
+from dm_helpers import (
+    DmError,
+    get_conversation_for_viewer,
+    get_or_create_conversation,
+    list_conversations,
+    list_messages,
+    mark_conversation_read,
+    send_message,
+    serialize_message,
+    total_unread,
+)
 from ai_coach_chat import (
     CoachChatError,
     build_coach_context,
@@ -1976,6 +1987,137 @@ def analytics_athlete_score(
 
 class CoachChatRequest(BaseModel):
     message: str
+
+
+# ============================================================
+# DIRECT MESSAGES — mutual follow only
+# ============================================================
+
+
+class DmSendRequest(BaseModel):
+    content: str
+
+
+def _dm_http(exc: DmError) -> HTTPException:
+    return HTTPException(status_code=exc.status_code, detail=str(exc))
+
+
+@app.get("/api/dms")
+def api_list_dms(request: Request, limit: int = 40):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        items = list_conversations(db, viewer_id=viewer_id, limit=limit)
+        return {
+            "items": items,
+            "unread_total": total_unread(db, viewer_id=viewer_id),
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/dms/unread-count")
+def api_dms_unread_count(request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        return {"unread_total": total_unread(db, viewer_id=viewer_id)}
+    finally:
+        db.close()
+
+
+@app.post("/api/dms/with/{peer_id}")
+def api_open_dm_with(peer_id: int, request: Request):
+    """Get-or-create a 1:1 conversation. Requires mutual follow."""
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        conv = get_or_create_conversation(
+            db, viewer_id=viewer_id, peer_id=peer_id
+        )
+        return get_conversation_for_viewer(
+            db, conversation_id=conv.id, viewer_id=viewer_id
+        )
+    except DmError as exc:
+        raise _dm_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.get("/api/dms/{conversation_id}")
+def api_get_dm(conversation_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        return get_conversation_for_viewer(
+            db, conversation_id=conversation_id, viewer_id=viewer_id
+        )
+    except DmError as exc:
+        raise _dm_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.get("/api/dms/{conversation_id}/messages")
+def api_list_dm_messages(
+    conversation_id: int,
+    request: Request,
+    limit: int = 50,
+    before_id: int | None = None,
+):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        messages = list_messages(
+            db,
+            conversation_id=conversation_id,
+            viewer_id=viewer_id,
+            limit=limit,
+            before_id=before_id,
+        )
+        summary = get_conversation_for_viewer(
+            db, conversation_id=conversation_id, viewer_id=viewer_id
+        )
+        return {
+            "conversation": summary,
+            "messages": messages,
+        }
+    except DmError as exc:
+        raise _dm_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.post("/api/dms/{conversation_id}/messages")
+def api_send_dm(conversation_id: int, request: Request, body: DmSendRequest):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        msg = send_message(
+            db,
+            conversation_id=conversation_id,
+            sender_id=viewer_id,
+            content=body.content,
+        )
+        return serialize_message(msg, viewer_id)
+    except DmError as exc:
+        raise _dm_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.post("/api/dms/{conversation_id}/read")
+def api_mark_dm_read(conversation_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        return mark_conversation_read(
+            db, conversation_id=conversation_id, viewer_id=viewer_id
+        )
+    except DmError as exc:
+        raise _dm_http(exc) from exc
+    finally:
+        db.close()
 
 
 # ============================================================
