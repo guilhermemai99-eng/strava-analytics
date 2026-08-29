@@ -2566,7 +2566,7 @@ async function loadInsights() {
         container.innerHTML = "";
 
 
-        data.insights.forEach(
+        data.insights.slice(0, 3).forEach(
             insight => {
 
                 const element =
