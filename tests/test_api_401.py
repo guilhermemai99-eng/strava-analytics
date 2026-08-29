@@ -5,10 +5,23 @@ from __future__ import annotations
 PROTECTED = [
     ("GET", "/activities"),
     ("GET", "/api/feed"),
+    ("GET", "/api/feed/following-ids"),
     ("GET", "/api/explore"),
     ("GET", "/api/explore/search"),
     ("GET", "/api/athletes/1/profile"),
     ("GET", "/api/athletes/1/avatar"),
+    ("GET", "/api/profiles/suggestions"),
+    ("GET", "/api/profiles/demo"),
+    ("GET", "/api/profiles/demo/relationship"),
+    ("GET", "/api/profiles/demo/followers"),
+    ("GET", "/api/profiles/demo/following"),
+    ("POST", "/api/profiles/demo/follow"),
+    ("DELETE", "/api/profiles/demo/follow"),
+    ("GET", "/api/users/1/relationship"),
+    ("GET", "/api/users/1/followers"),
+    ("GET", "/api/users/1/following"),
+    ("POST", "/api/users/1/follow"),
+    ("DELETE", "/api/users/1/follow"),
     ("GET", "/api/coach/messages"),
     ("POST", "/api/coach/chat"),
     ("DELETE", "/api/coach/messages"),
@@ -55,6 +68,8 @@ def test_protected_apis_return_401_without_session(client):
             resp = client.delete(path)
         elif method == "POST" and path == "/api/coach/chat":
             resp = client.post(path, json={"message": "hi"})
+        elif method == "POST" and path.endswith("/follow"):
+            resp = client.post(path)
         else:
             resp = client.post(path)
         assert resp.status_code == 401, f"{method} {path} -> {resp.status_code}"

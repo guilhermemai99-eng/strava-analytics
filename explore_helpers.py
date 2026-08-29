@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from athlete import Athlete
 from feed_helpers import location_display_for
 from models import Activity
-from profile_helpers import display_name_for, initials_for
+from profile_helpers import display_name_for, initials_for, public_avatar_url_for
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -18,22 +18,6 @@ def _iso_or_none(value) -> str | None:
     if hasattr(value, "isoformat"):
         return value.isoformat()
     return str(value)
-
-
-def public_avatar_url_for(athlete: Athlete) -> str | None:
-    if athlete.avatar_data and athlete.avatar_content_type:
-        stamp = ""
-        if athlete.updated_at is not None:
-            ts = athlete.updated_at
-            if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=timezone.utc)
-            stamp = f"?v={int(ts.timestamp())}"
-        return f"/api/athletes/{athlete.id}/avatar{stamp}"
-    if athlete.profile_medium:
-        return athlete.profile_medium
-    if athlete.profile:
-        return athlete.profile
-    return None
 
 
 def serialize_explore_athlete(

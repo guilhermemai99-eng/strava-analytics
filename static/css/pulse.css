@@ -856,6 +856,155 @@ body {
   }
 }
 
+.people-row-wrap {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.people-search-wrap {
+  margin-bottom: 12px;
+}
+
+.people-search-wrap input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  outline: none;
+}
+
+.people-search-wrap input:focus {
+  border-color: var(--accent);
+}
+
+.profile-social-counts {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.profile-count {
+  background: none;
+  border: 0;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.profile-count:disabled {
+  cursor: default;
+  opacity: 0.9;
+}
+
+.profile-count strong {
+  display: inline;
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.btn-follow.is-unfollow {
+  border-color: #c45b5b;
+  color: #f2b4b4;
+}
+
+.btn-follow {
+  transition: background 0.18s var(--ease), border-color 0.18s var(--ease), color 0.18s var(--ease), transform 0.18s var(--ease);
+}
+
+.btn-follow:active {
+  transform: scale(0.97);
+}
+
+.people-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(60vh, 480px);
+  overflow: auto;
+  padding-bottom: 8px;
+}
+
+.people-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  padding: 10px 8px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.15s var(--ease);
+}
+
+.people-row:hover,
+.people-row:focus-visible {
+  background: rgba(255, 255, 255, 0.04);
+  outline: none;
+}
+
+.people-row .pulse-avatar {
+  width: 42px;
+  height: 42px;
+  font-size: 13px;
+}
+
+.people-row-name {
+  margin: 0;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.people-row-meta {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.people-empty {
+  padding: 24px 8px;
+  color: var(--faint);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.btn-follow.is-following {
+  background: transparent;
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+.feed-author-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+  cursor: pointer;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+}
+
+.feed-author-btn:focus-visible .pulse-avatar,
+.feed-author-btn:focus-visible strong {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* ——— Profile ——— */
 
 .profile-header {

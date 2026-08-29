@@ -5,7 +5,7 @@ from __future__ import annotations
 from athlete import Athlete
 from feed_titles import pace_min_per_km, pulse_title_for_activity
 from models import Activity
-from profile_helpers import avatar_url_for, display_name_for, initials_for
+from profile_helpers import display_name_for, initials_for, public_avatar_url_for
 
 
 def format_duration(seconds: int | None) -> str | None:
@@ -74,7 +74,7 @@ def serialize_feed_author(athlete: Athlete) -> dict:
         "name": display_name_for(athlete),
         "username": handle,
         "handle": athlete.handle,
-        "avatar_url": avatar_url_for(athlete),
+        "avatar_url": public_avatar_url_for(athlete),
         "initials": initials_for(athlete),
     }
 
