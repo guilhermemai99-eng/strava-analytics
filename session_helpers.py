@@ -2,6 +2,7 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 
+import athlete  # noqa: F401  # ensure athletes table is registered for FK
 from user_session import UserSession, utcnow
 
 
