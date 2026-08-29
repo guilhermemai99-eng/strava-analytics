@@ -663,15 +663,23 @@
       avatar_url: athlete.avatar_url,
       initials: athlete.initials || "P",
     };
+    const followCtl = !handle
+      ? ""
+      : athlete.is_following
+        ? `<button type="button" class="btn btn-ghost btn-follow is-following" data-action="confirm-unfollow" data-handle="${escapeHtml(handle)}">Following</button>`
+        : `<button type="button" class="btn btn-primary btn-follow" data-action="follow-user" data-handle="${escapeHtml(handle)}">Follow</button>`;
     return `
-      <button type="button" class="runner-card" data-action="open-user" data-handle="${escapeHtml(athlete.handle || athlete.username || "")}">
-        ${renderAvatarHtml(avatarProfile)}
-        <div>
-          <p class="runner-card-name">${escapeHtml(athlete.name || "Runner")}</p>
-          <p class="runner-card-meta">${escapeHtml(handleText)} · ${escapeHtml(location)}</p>
-        </div>
-        <div class="runner-card-stats">${escapeHtml(stats)}</div>
-      </button>
+      <div class="runner-card-wrap">
+        <button type="button" class="runner-card" data-action="open-user" data-handle="${escapeHtml(handle || "")}">
+          ${renderAvatarHtml(avatarProfile)}
+          <div>
+            <p class="runner-card-name">${escapeHtml(athlete.name || "Runner")}</p>
+            <p class="runner-card-meta">${escapeHtml(handleText)} · ${escapeHtml(location)}</p>
+            <p class="runner-card-stats is-inline">${escapeHtml(stats)}</p>
+          </div>
+        </button>
+        ${followCtl}
+      </div>
     `;
   }
 
@@ -1231,31 +1239,84 @@
   }
 
   let followInFlight = new Set();
+  let followGhostGuardUntil = 0;
+
+  function followButtonsFor(handle) {
+    const clean = String(handle || "").trim().replace(/^@/, "");
+    return Array.from(document.querySelectorAll(".btn-follow[data-handle]")).filter(
+      (el) => String(el.dataset.handle || "").replace(/^@/, "") === clean
+    );
+  }
+
+  function applyFollowButtonDom(handle, { isFollowing, isMutual }) {
+    const clean = String(handle || "").trim().replace(/^@/, "");
+    followButtonsFor(clean).forEach((btn) => {
+      btn.disabled = false;
+      btn.dataset.armed = "0";
+      btn.classList.toggle("is-following", !!isFollowing);
+      btn.classList.remove("is-unfollow");
+      if (isFollowing) {
+        btn.dataset.action = "confirm-unfollow";
+        btn.textContent = isMutual ? "Friends" : "Following";
+        btn.classList.add("btn-ghost");
+        btn.classList.remove("btn-primary");
+      } else {
+        btn.dataset.action = "follow-user";
+        btn.textContent = "Follow";
+        btn.classList.add("btn-primary");
+        btn.classList.remove("btn-ghost");
+      }
+    });
+  }
+
+  function applyFollowerCountDom(count) {
+    document
+      .querySelectorAll('[data-action="open-followers"] strong')
+      .forEach((el) => {
+        el.textContent = String(count);
+      });
+  }
 
   async function toggleFollow(handle, wantFollow) {
     const clean = String(handle || "").trim().replace(/^@/, "");
-    if (!clean) return;
+    if (!clean) {
+      showToast("No handle yet.");
+      return;
+    }
+    if (Date.now() < followGhostGuardUntil) return;
     if (followInFlight.has(clean)) return;
     followInFlight.add(clean);
+    followGhostGuardUntil = Date.now() + 450;
 
     const prevViewed = state.viewed.data ? { ...state.viewed.data } : null;
-    // Optimistic UI
+    const prevPeople = state.people.items.map((p) => ({ ...p }));
+
+    // Optimistic UI — update DOM in place (no full re-render mid-tap on mobile).
     if (state.viewed.handle === clean && state.viewed.data) {
       const delta = wantFollow ? 1 : -1;
+      const nextCount = Math.max(
+        0,
+        Number(state.viewed.data.follower_count || 0) + delta
+      );
       state.viewed.data = {
         ...state.viewed.data,
         is_following: wantFollow,
         is_mutual: wantFollow && !!state.viewed.data.is_followed_by,
-        follower_count: Math.max(0, Number(state.viewed.data.follower_count || 0) + delta),
-        followers_count: Math.max(0, Number(state.viewed.data.followers_count || state.viewed.data.follower_count || 0) + delta),
+        follower_count: nextCount,
+        followers_count: nextCount,
       };
-      if (state.page === "u") render();
+      applyFollowButtonDom(clean, {
+        isFollowing: wantFollow,
+        isMutual: state.viewed.data.is_mutual,
+      });
+      applyFollowerCountDom(nextCount);
     }
+
     state.people.items = state.people.items.map((p) => {
       if ((p.handle || p.username) !== clean) return p;
       return { ...p, is_following: wantFollow };
     });
-    if (!els.peopleModal.hidden) paintPeopleModal();
+    if (els.peopleModal && !els.peopleModal.hidden) paintPeopleModal();
 
     try {
       const path = `/api/profiles/${encodeURIComponent(clean)}/follow`;
@@ -1270,21 +1331,31 @@
       if (state.viewed.handle === clean) {
         state.viewed.data = { ...(state.viewed.data || {}), ...data };
         state.viewed.status = "ready";
+        applyFollowButtonDom(clean, {
+          isFollowing: !!data.is_following,
+          isMutual: !!data.is_mutual,
+        });
+        applyFollowerCountDom(
+          Number(data.follower_count ?? data.followers_count ?? 0)
+        );
       }
-      await loadProfileBundle(true);
-      if (state.page === "u" || state.page === "profile") render();
-      if (!els.peopleModal.hidden) {
+      // Refresh own following count quietly — do not remount mid-interaction.
+      loadProfileBundle(true).catch(() => {});
+      if (els.peopleModal && !els.peopleModal.hidden) {
         openPeopleList(state.people.kind, state.people.handle, true);
       }
     } catch (err) {
       if (prevViewed && state.viewed.handle === clean) {
         state.viewed.data = prevViewed;
-        if (state.page === "u") render();
+        applyFollowButtonDom(clean, {
+          isFollowing: !!prevViewed.is_following,
+          isMutual: !!prevViewed.is_mutual,
+        });
+        applyFollowerCountDom(Number(prevViewed.follower_count || 0));
       }
+      state.people.items = prevPeople;
+      if (els.peopleModal && !els.peopleModal.hidden) paintPeopleModal();
       showToast(err.message || "That didn’t go the distance.");
-      if (!els.peopleModal.hidden) {
-        openPeopleList(state.people.kind, state.people.handle, true);
-      }
     } finally {
       followInFlight.delete(clean);
     }
@@ -1399,9 +1470,10 @@
   function confirmUnfollow(handle) {
     const clean = String(handle || "").trim().replace(/^@/, "");
     if (!clean) return;
-    // Soft confirm: second click label becomes Unfollow via replacing the button briefly.
-    const btn = document.querySelector(
-      `[data-action="confirm-unfollow"][data-handle="${CSS.escape(clean)}"]`
+    if (Date.now() < followGhostGuardUntil) return;
+
+    const btn = followButtonsFor(clean).find(
+      (el) => el.dataset.action === "confirm-unfollow"
     );
     if (btn && btn.dataset.armed === "1") {
       toggleFollow(clean, false);
@@ -1409,7 +1481,11 @@
     }
     document.querySelectorAll('[data-action="confirm-unfollow"]').forEach((el) => {
       el.dataset.armed = "0";
-      el.textContent = el.classList.contains("is-following") ? "Following" : "Following";
+      el.classList.remove("is-unfollow");
+      const h = String(el.dataset.handle || "").replace(/^@/, "");
+      const mutual =
+        state.viewed.handle === h && state.viewed.data && state.viewed.data.is_mutual;
+      el.textContent = mutual ? "Friends" : "Following";
     });
     if (btn) {
       btn.dataset.armed = "1";
@@ -1456,19 +1532,12 @@
   }
 
   function bindViewInteractions() {
+    // Activity tiles only — Follow/actions use document delegation (avoids double-fire on mobile).
     els.viewRoot.querySelectorAll("[data-activity-id]").forEach((tile) => {
       tile.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
         openActivity(tile.dataset.activityId);
-      });
-    });
-
-    els.viewRoot.querySelectorAll("[data-action]").forEach((btn) => {
-      btn.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        handleAction(btn.dataset.action, btn);
       });
     });
 
@@ -1481,6 +1550,15 @@
   }
 
   function handleAction(action, el) {
+    if (Date.now() < followGhostGuardUntil) {
+      if (
+        action === "follow-user" ||
+        action === "unfollow-user" ||
+        action === "confirm-unfollow"
+      ) {
+        return;
+      }
+    }
     if (action === "edit-profile" || action === "open-settings") openSettings();
     if (action === "retry-feed") loadFeed(true);
     if (action === "retry-explore") loadExplore(true);
@@ -1679,6 +1757,7 @@
     const actionEl = event.target.closest("[data-action]");
     if (actionEl) {
       event.preventDefault();
+      event.stopPropagation();
       handleAction(actionEl.dataset.action, actionEl);
       return;
     }

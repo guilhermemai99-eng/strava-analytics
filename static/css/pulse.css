@@ -738,10 +738,25 @@ body {
   font-weight: 600;
 }
 
-.runner-list {
-  display: flex;
-  flex-direction: column;
+.runner-card-wrap {
+  display: grid;
+  grid-template-columns: 1fr auto;
   gap: 10px;
+  align-items: center;
+}
+
+.runner-card-wrap .runner-card {
+  min-width: 0;
+}
+
+.runner-card-stats.is-inline {
+  display: block;
+  text-align: left;
+  margin-top: 4px;
+}
+
+.runner-card-wrap .btn-follow {
+  flex-shrink: 0;
 }
 
 .runner-card {
@@ -916,10 +931,22 @@ body {
 
 .btn-follow {
   transition: background 0.18s var(--ease), border-color 0.18s var(--ease), color 0.18s var(--ease), transform 0.18s var(--ease);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 44px;
+  min-width: 108px;
+  position: relative;
+  z-index: 2;
 }
 
 .btn-follow:active {
   transform: scale(0.97);
+}
+
+.profile-actions .btn {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 44px;
 }
 
 .people-list {
@@ -1663,6 +1690,17 @@ body {
   .profile-header {
     grid-template-columns: 1fr;
     justify-items: start;
+  }
+
+  .profile-actions {
+    width: 100%;
+  }
+
+  .profile-actions .btn-follow,
+  .profile-actions .btn {
+    flex: 1;
+    min-width: 0;
+    justify-content: center;
   }
 
   .activity-grid {
