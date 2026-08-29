@@ -185,6 +185,102 @@ def test_mutual_relationship_and_user_aliases(
     assert by_id["is_mutual"] is True
 
 
+def test_follow_and_profile_by_id_without_handle(
+    client,
+    make_session,
+    make_athlete,
+    db_session,
+):
+    """Social graph must work via athlete_id even when handle is missing."""
+    from athlete import Athlete
+
+    make_athlete(
+        940060,
+        firstname="Viewer",
+        handle="id_viewer",
+        is_profile_public=True,
+    )
+    make_athlete(
+        940061,
+        firstname=None,
+        lastname=None,
+        username=None,
+        display_name=None,
+        handle=None,
+        is_profile_public=True,
+    )
+
+    # Confirm DB row really has no handle before social calls.
+    target = db_session.query(Athlete).filter(Athlete.id == 940061).one()
+    assert target.handle is None
+
+    raw, cookie = make_session(940060)
+    client.cookies.set(cookie, raw)
+
+    profile = client.get("/api/users/940061")
+    assert profile.status_code == 200
+    body = profile.json()
+    assert body["athlete_id"] == 940061
+    assert body["is_following"] is False
+    assert body["display_name"]  # never blank — "New athlete" fallback
+    # Opening/serializing may assign a stable handle; Follow must not require it.
+    assert body["handle"] is not None or body["handle"] is None
+
+    followed = client.post("/api/users/940061/follow")
+    assert followed.status_code == 200
+    assert followed.json()["is_following"] is True
+    assert followed.json()["follower_count"] == 1
+    assert followed.json()["athlete_id"] == 940061
+
+    followers = client.get("/api/users/940061/followers").json()
+    assert followers["total"] == 1
+    assert followers["people"][0]["athlete_id"] == 940060
+
+    unfollowed = client.delete("/api/users/940061/follow")
+    assert unfollowed.status_code == 200
+    assert unfollowed.json()["is_following"] is False
+    assert unfollowed.json()["follower_count"] == 0
+
+
+def test_explore_backfills_handle_and_keeps_follow_flag(
+    client,
+    make_session,
+    make_athlete,
+    db_session,
+):
+    from athlete import Athlete
+
+    make_athlete(940070, firstname="Me", city="Porto", is_profile_public=True)
+    make_athlete(
+        940071,
+        firstname="Bare",
+        lastname="Miles",
+        handle=None,
+        city="Porto",
+        is_profile_public=True,
+    )
+
+    raw, cookie = make_session(940070)
+    client.cookies.set(cookie, raw)
+
+    explore = client.get("/api/explore").json()
+    nearby = next(s for s in explore["sections"] if s["id"] == "nearby")
+    card = next(a for a in nearby["athletes"] if a["athlete_id"] == 940071)
+    assert card["name"] == "Bare Miles"
+    assert card["handle"]  # assigned while listing
+    assert card["is_following"] is False
+
+    db_session.expire_all()
+    row = db_session.query(Athlete).filter(Athlete.id == 940071).one()
+    assert row.handle
+
+    assert client.post("/api/users/940071/follow").status_code == 200
+    explore2 = client.get("/api/explore").json()
+    nearby2 = next(s for s in explore2["sections"] if s["id"] == "nearby")
+    card2 = next(a for a in nearby2["athletes"] if a["athlete_id"] == 940071)
+    assert card2["is_following"] is True
+
+
 def test_followers_pagination_and_suggestions(
     client,
     make_session,

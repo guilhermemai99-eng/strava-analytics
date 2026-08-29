@@ -711,6 +711,11 @@ body {
   line-height: 1.4;
 }
 
+.explore-hint {
+  border-color: rgba(184, 242, 90, 0.22);
+  background: rgba(184, 242, 90, 0.04);
+}
+
 .explore-section {
   margin-top: 36px;
 }

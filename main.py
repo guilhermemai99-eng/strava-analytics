@@ -1177,6 +1177,20 @@ def unfollow_profile(handle: str, request: Request):
 
 # --- /api/users/{athlete_id} aliases (session auth; never trust client ids for actor) ---
 
+@app.get("/api/users/{athlete_id}")
+def get_user_profile(athlete_id: int, request: Request):
+    """Full public profile by internal athlete id (Follow/graph never requires a handle)."""
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        target, viewer = _require_visible_profile(
+            db, athlete_id=athlete_id, viewer_id=viewer_id
+        )
+        return serialize_public_profile(db, target=target, viewer=viewer)
+    finally:
+        db.close()
+
+
 @app.get("/api/users/{athlete_id}/relationship")
 def get_user_relationship(athlete_id: int, request: Request):
     viewer_id = require_athlete_id(request)
@@ -1331,6 +1345,8 @@ def get_explore(request: Request):
 
         return {
             "me": {
+                "athlete_id": athlete.id,
+                "handle": athlete.handle,
                 "is_profile_public": bool(athlete.is_profile_public),
                 "city": athlete.city,
                 "country": athlete.country,

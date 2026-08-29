@@ -54,7 +54,10 @@ def display_name_for(athlete: Athlete) -> str:
     if athlete.username:
         return athlete.username
 
-    return f"Atleta {athlete.id}"
+    if athlete.handle:
+        return athlete.handle
+
+    return "New athlete"
 
 
 def initials_for(athlete: Athlete) -> str:
