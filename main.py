@@ -29,7 +29,7 @@ from session_helpers import (
 )
 
 from import_strava import sync_strava_activities
-from strava_tokens import StravaTokenError
+from strava_tokens import StravaTokenError, store_strava_tokens
 
 from analytics import get_summary, get_weekly
 from running_performance import get_running_performance
@@ -418,53 +418,37 @@ def strava_callback(
 
         if existing_auth:
 
-            existing_auth.access_token = (
-
-                token_data.get(
+            store_strava_tokens(
+                existing_auth,
+                access_token=token_data.get(
                     "access_token"
-                )
-
-            )
-
-            existing_auth.refresh_token = (
-
-                token_data.get(
+                ),
+                refresh_token=token_data.get(
                     "refresh_token"
-                )
-
-            )
-
-            existing_auth.expires_at = (
-
-                token_data.get(
+                ),
+                expires_at=token_data.get(
                     "expires_at"
-                )
-
+                ),
             )
 
 
         else:
 
             new_auth = StravaAuth(
+                athlete_id=athlete_id,
+            )
 
-                athlete_id=
-                    athlete_id,
-
-                access_token=
-                    token_data.get(
-                        "access_token"
-                    ),
-
-                refresh_token=
-                    token_data.get(
-                        "refresh_token"
-                    ),
-
-                expires_at=
-                    token_data.get(
-                        "expires_at"
-                    )
-
+            store_strava_tokens(
+                new_auth,
+                access_token=token_data.get(
+                    "access_token"
+                ),
+                refresh_token=token_data.get(
+                    "refresh_token"
+                ),
+                expires_at=token_data.get(
+                    "expires_at"
+                ),
             )
 
             db.add(

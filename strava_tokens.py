@@ -4,7 +4,14 @@ import time
 import requests
 from dotenv import load_dotenv
 
-from strava_auth import StravaAuth
+from strava_auth import StravaAuth, utcnow
+from token_crypto import (
+    TOKEN_VERSION_FERNET,
+    TOKEN_VERSION_PLAINTEXT,
+    TokenEncryptionError,
+    decrypt_token,
+    encrypt_token,
+)
 
 
 load_dotenv()
@@ -17,6 +24,63 @@ REFRESH_MARGIN_SECONDS = 60
 
 class StravaTokenError(Exception):
     pass
+
+
+def _read_stored_token(raw_value, token_version):
+    """Return plaintext from a DB column using dual-read rules."""
+
+    if raw_value is None:
+        return None
+
+    version = (
+        TOKEN_VERSION_PLAINTEXT
+        if token_version is None
+        else int(token_version)
+    )
+
+    if version == TOKEN_VERSION_PLAINTEXT:
+        return raw_value
+
+    if version == TOKEN_VERSION_FERNET:
+        try:
+            return decrypt_token(raw_value)
+        except TokenEncryptionError as exc:
+            raise StravaTokenError(str(exc)) from exc
+
+    raise StravaTokenError(
+        f"Unsupported token_version={version}."
+    )
+
+
+def store_strava_tokens(
+    auth,
+    access_token,
+    refresh_token=None,
+    expires_at=None,
+):
+    """Encrypt tokens in-place and mark token_version=1."""
+
+    if not access_token:
+        raise StravaTokenError(
+            "access_token é obrigatório ao guardar tokens."
+        )
+
+    try:
+        auth.access_token = encrypt_token(access_token)
+
+        if refresh_token is not None:
+            auth.refresh_token = encrypt_token(refresh_token)
+
+        auth.token_version = TOKEN_VERSION_FERNET
+        auth.updated_at = utcnow()
+
+        if expires_at is not None:
+            auth.expires_at = expires_at
+
+    except TokenEncryptionError as exc:
+        raise StravaTokenError(str(exc)) from exc
+
+    return auth
 
 
 def get_valid_access_token(
@@ -64,18 +128,23 @@ def get_valid_access_token(
 
     expires_at = auth.expires_at or 0
 
+    plaintext_access = _read_stored_token(
+        auth.access_token,
+        auth.token_version,
+    )
+
 
     if (
         not force_refresh
         and
-        auth.access_token
+        plaintext_access
         and
         expires_at
         >
         now + REFRESH_MARGIN_SECONDS
     ):
 
-        return auth.access_token
+        return plaintext_access
 
 
     return _refresh_access_token(
@@ -107,7 +176,13 @@ def _refresh_access_token(db, auth):
         )
 
 
-    if not auth.refresh_token:
+    plaintext_refresh = _read_stored_token(
+        auth.refresh_token,
+        auth.token_version,
+    )
+
+
+    if not plaintext_refresh:
 
         raise StravaTokenError(
             "Não existe refresh_token "
@@ -131,7 +206,7 @@ def _refresh_access_token(db, auth):
                 "refresh_token",
 
             "refresh_token":
-                auth.refresh_token
+                plaintext_refresh
 
         },
 
@@ -172,18 +247,23 @@ def _refresh_access_token(db, auth):
         )
 
 
-    auth.access_token = access_token
-
-    if refresh_token:
-
-        auth.refresh_token = refresh_token
-
-    if expires_at:
-
-        auth.expires_at = expires_at
+    # Keep previous refresh if Strava omits a new one.
+    store_strava_tokens(
+        auth,
+        access_token=access_token,
+        refresh_token=(
+            refresh_token
+            if refresh_token
+            else plaintext_refresh
+        ),
+        expires_at=expires_at,
+    )
 
 
     db.commit()
 
 
-    return auth.access_token
+    return _read_stored_token(
+        auth.access_token,
+        auth.token_version,
+    )
