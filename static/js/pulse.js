@@ -15,7 +15,7 @@
     "linear-gradient(135deg, #16352f 0%, #0b1211 70%)",
     "linear-gradient(150deg, #3a2f18 0%, #12100c 70%)",
     "linear-gradient(145deg, #1a2c3a 0%, #0c1116 70%)",
-    "linear-gradient(155deg, #2d1f2e 0%, #120e14 70%)",
+    "linear-gradient(155deg, #24301c 0%, #0e120c 70%)",
   ];
 
   const state = {
