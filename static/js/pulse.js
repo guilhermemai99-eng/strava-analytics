@@ -18,12 +18,25 @@
     "linear-gradient(155deg, #24301c 0%, #0e120c 70%)",
   ];
 
+  const FEED_LOADING_LINES = [
+    "Finding the miles…",
+    "Checking who’s been avoiding recovery…",
+    "Loading questionable pace decisions…",
+  ];
+
   const state = {
     page: "feed",
     profile: null,
     activities: [],
     summary: null,
     loadedProfile: false,
+    feed: {
+      status: "idle",
+      items: [],
+      message: null,
+      error: null,
+      loadingLine: FEED_LOADING_LINES[0],
+    },
   };
 
   const els = {
@@ -174,43 +187,264 @@
     `;
   }
 
-  /* ——— Pages ——— */
+  /* ——— Feed helpers ——— */
+
+  function decodePolyline(encoded) {
+    if (!encoded) return [];
+    let index = 0;
+    const len = encoded.length;
+    let lat = 0;
+    let lng = 0;
+    const coordinates = [];
+
+    while (index < len) {
+      let result = 0;
+      let shift = 0;
+      let b;
+      do {
+        b = encoded.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      const dlat = result & 1 ? ~(result >> 1) : result >> 1;
+      lat += dlat;
+
+      result = 0;
+      shift = 0;
+      do {
+        b = encoded.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      const dlng = result & 1 ? ~(result >> 1) : result >> 1;
+      lng += dlng;
+      coordinates.push([lat / 1e5, lng / 1e5]);
+    }
+    return coordinates;
+  }
+
+  function polylineToSvg(encoded) {
+    const points = decodePolyline(encoded);
+    if (points.length < 2) return "";
+
+    let minLat = Infinity;
+    let maxLat = -Infinity;
+    let minLng = Infinity;
+    let maxLng = -Infinity;
+    points.forEach(([la, ln]) => {
+      minLat = Math.min(minLat, la);
+      maxLat = Math.max(maxLat, la);
+      minLng = Math.min(minLng, ln);
+      maxLng = Math.max(maxLng, ln);
+    });
+
+    const pad = 0.08;
+    const latSpan = Math.max(maxLat - minLat, 0.0001);
+    const lngSpan = Math.max(maxLng - minLng, 0.0001);
+    const width = 640;
+    const height = 400;
+    const path = points
+      .map(([la, ln], i) => {
+        const x = ((ln - minLng) / lngSpan) * (1 - pad * 2) * width + pad * width;
+        const y =
+          (1 - (la - minLat) / latSpan) * (1 - pad * 2) * height + pad * height;
+        return `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
+      })
+      .join(" ");
+
+    return `
+      <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+        <rect width="100%" height="100%" fill="#0c110e"/>
+        <path d="${path}" fill="none" stroke="#b8f25a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.92"/>
+      </svg>
+    `;
+  }
+
+  function relativeWhen(iso) {
+    if (!iso) return "";
+    const then = new Date(iso).getTime();
+    if (Number.isNaN(then)) return "";
+    const diff = Date.now() - then;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return mins <= 1 ? "just now" : `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 48) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 14) return `${days}d ago`;
+    return formatDate(iso);
+  }
+
+  function authorAvatarHtml(author) {
+    if (author?.avatar_url) {
+      return `<div class="pulse-avatar"><img src="${escapeHtml(author.avatar_url)}" alt=""></div>`;
+    }
+    return `<div class="pulse-avatar">${escapeHtml(author?.initials || "P")}</div>`;
+  }
+
+  function renderFeedMedia(item) {
+    const media = item.media || {};
+    const activity = item.activity || {};
+    if (media.primary_image_url) {
+      return `
+        <div class="feed-media">
+          <img src="${escapeHtml(media.primary_image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">
+        </div>
+      `;
+    }
+    if (media.summary_polyline) {
+      const svg = polylineToSvg(media.summary_polyline);
+      if (svg) return `<div class="feed-media">${svg}</div>`;
+    }
+    const km =
+      activity.distance_km != null
+        ? Number(activity.distance_km).toFixed(
+            Number(activity.distance_km) >= 10 ? 1 : 2
+          )
+        : "—";
+    const bg = TILE_BACKGROUNDS[(Number(activity.id) || 0) % TILE_BACKGROUNDS.length];
+    return `
+      <div class="feed-media">
+        <div class="feed-media-fallback" style="background:${bg}">
+          <div class="tile-label">${escapeHtml((activity.type || "Run").toUpperCase())}</div>
+          <div class="tile-distance">${escapeHtml(km)} KM</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderFeedPost(item) {
+    const author = item.author || {};
+    const activity = item.activity || {};
+    const location = item.location?.display_name;
+    const handle = author.username ? `@${author.username}` : "@runner";
+    const when = relativeWhen(
+      activity.start_date_local || activity.start_date || item.created_at
+    );
+    const distance =
+      activity.distance_km != null
+        ? `${Number(activity.distance_km).toFixed(
+            Number(activity.distance_km) >= 10 ? 1 : 2
+          )} KM`
+        : "—";
+    const pace = activity.pace_label ? `${activity.pace_label}/KM` : "—";
+    const duration = activity.duration_label || "—";
+
+    return `
+      <article class="feed-post" data-feed-activity-id="${escapeHtml(activity.id)}">
+        <div class="feed-post-head">
+          ${authorAvatarHtml(author)}
+          <div class="feed-post-meta">
+            <strong>${escapeHtml(author.name || "Runner")}</strong>
+            <span>${escapeHtml(handle)}${when ? ` · ${escapeHtml(when)}` : ""}</span>
+          </div>
+          <div class="feed-post-type">${escapeHtml(activity.type || "Run")}</div>
+        </div>
+        ${
+          location
+            ? `<div class="feed-location">📍 ${escapeHtml(location)}</div>`
+            : `<div class="feed-location">📍 Somewhere out there</div>`
+        }
+        <div class="feed-title-block">
+          <h3>${escapeHtml(activity.title || "Survived another one.")}</h3>
+          ${
+            activity.original_name
+              ? `<div class="original-name">${escapeHtml(activity.original_name)}</div>`
+              : ""
+          }
+        </div>
+        ${renderFeedMedia(item)}
+        <div class="feed-metrics">
+          <div class="feed-metric"><span>Distance</span><strong>${escapeHtml(distance)}</strong></div>
+          <div class="feed-metric"><span>Pace</span><strong>${escapeHtml(pace)}</strong></div>
+          <div class="feed-metric"><span>Time</span><strong>${escapeHtml(duration)}</strong></div>
+        </div>
+      </article>
+    `;
+  }
 
   function renderFeed() {
+    const feed = state.feed;
+    let body = "";
+
+    if (feed.status === "loading" || feed.status === "idle") {
+      body = `
+        <div class="feed-status">
+          <h2>${escapeHtml(feed.loadingLine || "Finding the miles…")}</h2>
+          <p>Pulling your runs into something worth scrolling.</p>
+        </div>
+        <div class="post-skeleton" aria-hidden="true">
+          <article class="post-card">
+            <div class="post-card-head">
+              <div class="pulse-avatar">R</div>
+              <div><strong>Loading</strong><div style="color:var(--faint);font-size:12px;">hold up</div></div>
+            </div>
+            <div class="post-card-body"></div>
+          </article>
+        </div>
+      `;
+    } else if (feed.status === "error") {
+      body = `
+        <div class="feed-status">
+          <h2>That didn’t go the distance.</h2>
+          <p>${escapeHtml(feed.error || "Try again.")}</p>
+          <button type="button" class="btn btn-primary" data-action="retry-feed">Retry</button>
+        </div>
+      `;
+    } else if (!feed.items.length) {
+      body = `
+        <div class="feed-empty">
+          <h2 class="feed-empty-hero">No miles yet.</h2>
+          <p class="feed-empty-copy">Your couch is currently undefeated. Sync Strava and change that.</p>
+          <div class="cta-row">
+            <button type="button" class="btn btn-primary" data-action="open-settings">Open Settings</button>
+          </div>
+        </div>
+      `;
+    } else {
+      const banner = feed.message
+        ? `<div class="feed-banner"><strong>${escapeHtml(
+            feed.message.eyebrow || "Your runs. Front row."
+          )}</strong><p>${escapeHtml(feed.message.body || "")}</p></div>`
+        : "";
+      body = `${banner}<div class="feed-list">${feed.items
+        .map(renderFeedPost)
+        .join("")}</div>`;
+    }
+
     return `
       <section class="pulse-page" data-page="feed">
         <p class="page-kicker">Feed</p>
         <h1 class="page-title">Where runners show up.</h1>
         <p class="page-sub">Running connects people. Your miles are the content.</p>
-
-        <div class="feed-empty">
-          <h2 class="feed-empty-hero">Your feed is quieter than your recovery run.</h2>
-          <p class="feed-empty-copy">
-            Nothing to stalk. Yet. Follow some runners and this place will start moving.
-          </p>
-          <div class="cta-row">
-            <button type="button" class="btn btn-primary" data-nav="explore">Explore runners</button>
-          </div>
-        </div>
-
-        <div class="post-skeleton" aria-hidden="true">
-          <article class="post-card">
-            <div class="post-card-head">
-              <div class="pulse-avatar">R</div>
-              <div>
-                <strong>Future post</strong>
-                <div style="color:var(--faint);font-size:12px;">@soon · layout ready</div>
-              </div>
-            </div>
-            <div class="post-card-body"></div>
-            <div class="post-card-stats">
-              <span>Distance</span><span>Pace</span><span>Time</span>
-            </div>
-          </article>
-        </div>
+        ${body}
       </section>
     `;
   }
+
+  async function loadFeed(force = false) {
+    if (state.feed.status === "ready" && !force) return;
+    state.feed.status = "loading";
+    state.feed.loadingLine =
+      FEED_LOADING_LINES[Math.floor(Math.random() * FEED_LOADING_LINES.length)];
+    if (state.page === "feed") render();
+
+    try {
+      const res = await apiFetch("/api/feed?limit=30");
+      if (!res.ok) throw new Error("That didn’t go the distance.");
+      const data = await res.json();
+      state.feed.items = Array.isArray(data.items) ? data.items : [];
+      state.feed.message = data.message || null;
+      state.feed.status = "ready";
+      state.feed.error = null;
+    } catch (err) {
+      state.feed.status = "error";
+      state.feed.error = err.message || "Try again.";
+    }
+
+    if (state.page === "feed") render();
+  }
+
+  /* ——— Pages ——— */
 
   function renderExplore() {
     return `
@@ -366,6 +600,9 @@
       history.pushState({ page: next }, "", hash);
     }
     render();
+    if (next === "feed") {
+      loadFeed(false);
+    }
   }
 
   function render() {
@@ -399,6 +636,14 @@
         if (action === "following-tease") {
           showToast("Follow someone. Running alone is overrated.");
         }
+        if (action === "retry-feed") loadFeed(true);
+      });
+    });
+
+    els.viewRoot.querySelectorAll("[data-feed-activity-id]").forEach((post) => {
+      post.addEventListener("click", (event) => {
+        if (event.target.closest("a,button")) return;
+        openActivity(post.dataset.feedActivityId);
       });
     });
   }
@@ -423,9 +668,28 @@
   }
 
   function openActivity(activityId) {
-    const activity = state.activities.find(
+    let activity = state.activities.find(
       (a) => String(a.id) === String(activityId)
     );
+
+    if (!activity) {
+      const feedItem = state.feed.items.find(
+        (item) => String(item.activity?.id) === String(activityId)
+      );
+      if (feedItem) {
+        activity = {
+          id: feedItem.activity.id,
+          name: feedItem.activity.original_name,
+          sport_type: feedItem.activity.sport_type,
+          distance_m: feedItem.activity.distance_m,
+          moving_time_s: feedItem.activity.moving_time_s,
+          elevation_gain_m: feedItem.activity.elevation_gain_m,
+          start_date_local: feedItem.activity.start_date_local,
+          start_date: feedItem.activity.start_date,
+        };
+      }
+    }
+
     if (!activity) {
       showToast("That run went missing.");
       return;
@@ -539,7 +803,8 @@
       } else if (!quiet) {
         showToast("Miles refreshed.");
         await loadProfileBundle(true);
-        if (state.page === "profile") render();
+        await loadFeed(true);
+        if (state.page === "profile" || state.page === "feed") render();
       }
     } catch (err) {
       showToast("That didn’t go the distance.");
@@ -694,9 +959,11 @@
         (params.toString() ? `?${params}` : "") +
         (location.hash || "#feed");
       history.replaceState({ page: state.page }, "", clean);
-      syncStrava(true).then(() => loadProfileBundle(true).then(() => {
-        if (state.page === "profile") render();
-      }));
+      syncStrava(true).then(() =>
+        Promise.all([loadProfileBundle(true), loadFeed(true)]).then(() => {
+          if (state.page === "profile" || state.page === "feed") render();
+        })
+      );
     }
   }
 

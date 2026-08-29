@@ -34,6 +34,7 @@ from profile_helpers import (
     serialize_profile,
 )
 from avatar_helpers import AvatarValidationError, validate_avatar_upload
+from feed_helpers import serialize_feed_item
 
 from import_strava import sync_strava_activities
 from strava_tokens import StravaTokenError, store_strava_tokens
@@ -888,6 +889,62 @@ def strava_sync(
                 "Tenta novamente dentro de momentos."
 
         }
+
+
+# ============================================================
+# FEED — atividades como posts
+# ============================================================
+
+@app.get("/api/feed")
+def get_feed(
+    request: Request,
+    limit: int = 30,
+):
+    """Own-athlete activity feed (follow graph lands later)."""
+
+    athlete_id = require_athlete_id(request)
+    safe_limit = max(1, min(int(limit), 50))
+
+    db = SessionLocal()
+    try:
+        athlete = (
+            db.query(Athlete)
+            .filter(Athlete.id == athlete_id)
+            .one_or_none()
+        )
+        if athlete is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Perfil não encontrado.",
+            )
+
+        activities = (
+            db.query(Activity)
+            .filter(Activity.athlete_id == athlete_id)
+            .order_by(Activity.start_date_local.desc())
+            .limit(safe_limit)
+            .all()
+        )
+
+        items = [
+            serialize_feed_item(activity, athlete)
+            for activity in activities
+        ]
+
+        return {
+            "scope": "self",
+            "message": {
+                "eyebrow": "Your runs. Front row.",
+                "body": (
+                    "The rest of the world is still lacing up. "
+                    "Follows land later — for now, it’s all you."
+                ),
+            },
+            "items": items,
+            "count": len(items),
+        }
+    finally:
+        db.close()
 
 
 # ============================================================

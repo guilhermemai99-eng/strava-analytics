@@ -4,6 +4,7 @@ from __future__ import annotations
 
 PROTECTED = [
     ("GET", "/activities"),
+    ("GET", "/api/feed"),
     ("POST", "/strava/sync"),
     ("GET", "/analytics/summary"),
     ("GET", "/analytics/weekly"),

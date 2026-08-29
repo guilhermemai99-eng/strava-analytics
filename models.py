@@ -6,6 +6,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
 )
 
 from database import Base
@@ -170,4 +171,23 @@ class Activity(Base):
 
     end_lng = Column(
         Float
+    )
+
+    # =========================================================
+    # FEED MEDIA (Strava-hosted; no local object storage)
+    # =========================================================
+
+    summary_polyline = Column(
+        Text,
+        nullable=True,
+    )
+
+    photo_url = Column(
+        Text,
+        nullable=True,
+    )
+
+    photo_count = Column(
+        Integer,
+        nullable=True,
     )
