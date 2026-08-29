@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 
 from dotenv import load_dotenv
 
-from database import engine, Base, SessionLocal
+from database import SessionLocal
 from models import Activity
 from strava_auth import StravaAuth
 
@@ -49,13 +49,8 @@ from weekly_training_plan import calculate_weekly_plan
 load_dotenv()
 
 
-# ============================================================
-# BASE DE DADOS
-# ============================================================
-
-Base.metadata.create_all(
-    bind=engine
-)
+# Schema is managed by Alembic (alembic upgrade head).
+# Do not call Base.metadata.create_all here.
 
 
 # ============================================================
