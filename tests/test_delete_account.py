@@ -52,6 +52,14 @@ def test_delete_account_removes_data_and_session(
     assert body["activities_deleted"] >= 1
     assert body["follows_deleted"] >= 1
 
+    # Session cookie must be cleared with matching attributes.
+    cleared = False
+    for cookie in resp.headers.get_list("set-cookie"):
+        if cookie.startswith("session_id="):
+            cleared = True
+            assert "Max-Age=0" in cookie or "max-age=0" in cookie.lower()
+    assert cleared, resp.headers.get_list("set-cookie")
+
     # Cookie cleared — authenticated routes fail.
     assert client.get("/api/me/profile").status_code == 401
 

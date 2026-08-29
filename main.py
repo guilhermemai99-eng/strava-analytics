@@ -931,6 +931,16 @@ def delete_my_avatar(request: Request):
 # LOGOUT
 # ============================================================
 
+def _clear_session_cookie(response) -> None:
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        path="/",
+        secure=_cookie_secure(),
+        httponly=True,
+        samesite="lax",
+    )
+
+
 @app.get("/auth/logout")
 def logout(request: Request):
 
@@ -952,9 +962,7 @@ def logout(request: Request):
         url="/"
     )
 
-    response.delete_cookie(
-        SESSION_COOKIE_NAME
-    )
+    _clear_session_cookie(response)
 
     return response
 
@@ -963,7 +971,6 @@ def logout(request: Request):
 def delete_my_account(request: Request):
     """Permanently delete the authenticated athlete and dependent data."""
     athlete_id = require_athlete_id(request)
-    raw_token = request.cookies.get(SESSION_COOKIE_NAME)
     db = SessionLocal()
     try:
         try:
@@ -980,9 +987,7 @@ def delete_my_account(request: Request):
             **result,
         }
     )
-    response.delete_cookie(SESSION_COOKIE_NAME)
-    # raw_token already revoked inside delete; cookie cleared for the browser.
-    _ = raw_token
+    _clear_session_cookie(response)
     return response
 
 
