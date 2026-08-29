@@ -40,6 +40,7 @@ from avatar_helpers import (
     validate_avatar_upload,
 )
 from feed_helpers import serialize_feed_item
+from media_helpers import fetch_remote_media, is_allowed_media_url
 from explore_helpers import (
     get_public_athlete,
     public_athlete_payload,
@@ -820,6 +821,32 @@ def _avatar_bytes_response(athlete: Athlete) -> Response:
         media_type=athlete.avatar_content_type,
         headers={
             "Cache-Control": "private, max-age=3600",
+        },
+    )
+
+
+@app.get("/api/media/proxy")
+def proxy_media(request: Request, url: str):
+    """Same-origin image proxy so Strava CDN avatars/photos reliably render."""
+    require_athlete_id(request)
+    raw = (url or "").strip()
+    if not raw or not is_allowed_media_url(raw):
+        raise HTTPException(status_code=400, detail="URL de media inválida.")
+    try:
+        data, content_type = fetch_remote_media(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except requests.RequestException as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Não foi possível carregar a imagem.",
+        ) from exc
+
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={
+            "Cache-Control": "private, max-age=86400",
         },
     )
 

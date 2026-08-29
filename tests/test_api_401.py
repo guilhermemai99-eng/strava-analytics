@@ -47,6 +47,7 @@ PROTECTED = [
     ("GET", "/analytics/ai-coach"),
     ("GET", "/analytics/weekly-training-plan"),
     ("GET", "/api/me/profile"),
+    ("GET", "/api/media/proxy?url=https://dgalywyr863hv.cloudfront.net/x.jpg"),
     ("PATCH", "/api/me/profile"),
     ("GET", "/api/me/avatar"),
     ("DELETE", "/api/me/avatar"),
