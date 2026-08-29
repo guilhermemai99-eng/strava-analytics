@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -180,7 +180,10 @@ def require_athlete_id(
 
     if not athlete_id:
 
-        return None
+        raise HTTPException(
+            status_code=401,
+            detail="Utilizador não autenticado."
+        )
 
     return athlete_id
 
@@ -584,17 +587,6 @@ def strava_sync(
         request
     )
 
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
-
     try:
 
         return sync_strava_activities(
@@ -639,17 +631,6 @@ def get_activities(
         request
     )
 
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
-
     db = SessionLocal()
 
     try:
@@ -691,17 +672,6 @@ def create_activity(
     athlete_id = require_athlete_id(
         request
     )
-
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
 
     db = SessionLocal()
 
@@ -759,17 +729,6 @@ def analytics_summary(
         request
     )
 
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
-
     return get_summary(
         athlete_id
     )
@@ -788,17 +747,6 @@ def analytics_weekly(
         request
     )
 
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
-
     return get_weekly(
         athlete_id
     )
@@ -816,17 +764,6 @@ def analytics_performance(
     athlete_id = require_athlete_id(
         request
     )
-
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
 
     return get_running_performance(
         athlete_id
@@ -848,17 +785,6 @@ def running_performance(
         request
     )
 
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
-
     return get_running_performance(
         athlete_id
     )
@@ -876,17 +802,6 @@ def analytics_insights(
     athlete_id = require_athlete_id(
         request
     )
-
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
 
     return get_insights(
         athlete_id
@@ -908,17 +823,6 @@ def analytics_training_load(
         request
     )
 
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
-
     return get_training_load(
         athlete_id
     )
@@ -938,17 +842,6 @@ def analytics_evolution(
     athlete_id = require_athlete_id(
         request
     )
-
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
 
     weekly_data = get_weekly(
         athlete_id
@@ -975,17 +868,6 @@ def analytics_performance_comparison(
         request
     )
 
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
-
     return calculate_performance_comparison(
         athlete_id
     )
@@ -1005,17 +887,6 @@ def analytics_ai_context(
     athlete_id = require_athlete_id(
         request
     )
-
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
 
     weekly_data = get_weekly(
         athlete_id
@@ -1088,17 +959,6 @@ def analytics_ai_insights(
     athlete_id = require_athlete_id(
         request
     )
-
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
 
     # --------------------------------------------------------
     # CACHE
@@ -1227,17 +1087,6 @@ def analytics_athlete_score(
         request
     )
 
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
-
     weekly_data = get_weekly(
         athlete_id
     )
@@ -1291,17 +1140,6 @@ def analytics_ai_coach(
     athlete_id = require_athlete_id(
         request
     )
-
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
 
     weekly_data = get_weekly(
         athlete_id
@@ -1378,17 +1216,6 @@ def analytics_weekly_training_plan(
     athlete_id = require_athlete_id(
         request
     )
-
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
 
     weekly_data = get_weekly(
         athlete_id
