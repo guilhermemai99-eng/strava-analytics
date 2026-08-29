@@ -643,6 +643,11 @@ body {
   font: inherit;
 }
 
+/* Keep Pulse’s dark chrome while OSM tiles stay readable */
+.route-map .leaflet-tile-pane {
+  filter: saturate(0.85) brightness(0.72) contrast(1.05);
+}
+
 .route-map-loading,
 .route-map-empty {
   position: absolute;
