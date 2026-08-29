@@ -643,66 +643,6 @@ def get_activities(
 
 
 # ============================================================
-<<<<<<< HEAD
-# CRIAR ATIVIDADE
-# ============================================================
-
-@app.post("/activities")
-def create_activity(
-    request: Request,
-    activity: ActivityCreate
-):
-
-    athlete_id = require_athlete_id(
-        request
-    )
-
-    db = SessionLocal()
-
-    try:
-
-        new_activity = Activity(
-
-            athlete_id=
-                athlete_id,
-
-            name=
-                activity.name,
-
-            distance_km=
-                activity.distance_km,
-
-            time_minutes=
-                activity.time_minutes,
-
-            average_heart_rate=
-                activity.average_heart_rate
-
-        )
-
-
-        db.add(
-            new_activity
-        )
-
-        db.commit()
-
-        db.refresh(
-            new_activity
-        )
-
-
-        return new_activity
-
-
-    finally:
-
-        db.close()
-
-
-# ============================================================
-=======
->>>>>>> origin/cursor/phase-g-legacy-cleanup-f8e7
 # ANALYTICS — SUMMARY
 # ============================================================
 
