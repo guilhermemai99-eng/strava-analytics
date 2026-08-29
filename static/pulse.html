@@ -103,6 +103,23 @@
         Bio
         <textarea id="settingsBio" maxlength="500" placeholder="Uma linha sobre ti como atleta"></textarea>
       </label>
+      <div class="form-row-2">
+        <label>
+          City
+          <input type="text" id="settingsCity" maxlength="80" autocomplete="address-level2" placeholder="ex: Porto">
+        </label>
+        <label>
+          Country
+          <input type="text" id="settingsCountry" maxlength="80" autocomplete="country-name" placeholder="ex: Portugal">
+        </label>
+      </div>
+      <label class="toggle-row">
+        <input type="checkbox" id="settingsPublicExplore">
+        <span>
+          <strong>Show me in Explore</strong>
+          <span class="form-hint" style="margin:4px 0 0;display:block;">Off by default. Flip this and other runners can find you — no creepy vibes, just miles.</span>
+        </span>
+      </label>
       <div class="profile-actions">
         <button type="button" class="btn btn-ghost" id="settingsAvatarPick">Upload photo</button>
         <button type="button" class="btn btn-ghost" id="settingsAvatarRemove">Remove photo</button>

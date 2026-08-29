@@ -35,6 +35,14 @@ from profile_helpers import (
 )
 from avatar_helpers import AvatarValidationError, validate_avatar_upload
 from feed_helpers import serialize_feed_item
+from explore_helpers import (
+    get_public_athlete,
+    public_athlete_payload,
+    search_public_athletes,
+    suggest_nearby,
+    suggest_new_faces,
+    suggest_recently_active,
+)
 from ai_coach_chat import (
     CoachChatError,
     build_coach_context,
@@ -668,6 +676,9 @@ class ProfileUpdate(BaseModel):
     display_name: Optional[str] = None
     handle: Optional[str] = None
     bio: Optional[str] = None
+    city: Optional[str] = None
+    country: Optional[str] = None
+    is_profile_public: Optional[bool] = None
 
 
 # ============================================================
@@ -725,6 +736,21 @@ def patch_my_profile(request: Request, body: ProfileUpdate):
         db.close()
 
 
+def _avatar_bytes_response(athlete: Athlete) -> Response:
+    if not athlete.avatar_data or not athlete.avatar_content_type:
+        raise HTTPException(
+            status_code=404,
+            detail="Sem foto de perfil personalizada.",
+        )
+    return Response(
+        content=bytes(athlete.avatar_data),
+        media_type=athlete.avatar_content_type,
+        headers={
+            "Cache-Control": "private, max-age=3600",
+        },
+    )
+
+
 @app.get("/api/me/avatar")
 def get_my_avatar(request: Request):
     athlete_id = require_athlete_id(request)
@@ -735,23 +761,46 @@ def get_my_avatar(request: Request):
             .filter(Athlete.id == athlete_id)
             .one_or_none()
         )
-        if (
-            athlete is None
-            or not athlete.avatar_data
-            or not athlete.avatar_content_type
-        ):
+        if athlete is None:
             raise HTTPException(
                 status_code=404,
                 detail="Sem foto de perfil personalizada.",
             )
+        return _avatar_bytes_response(athlete)
+    finally:
+        db.close()
 
-        return Response(
-            content=bytes(athlete.avatar_data),
-            media_type=athlete.avatar_content_type,
-            headers={
-                "Cache-Control": "private, max-age=3600",
-            },
+
+@app.get("/api/athletes/{athlete_id}/avatar")
+def get_athlete_avatar(athlete_id: int, request: Request):
+    """Custom avatar for Explore cards. Own always ok; others need public profile."""
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        target = (
+            db.query(Athlete)
+            .filter(Athlete.id == athlete_id)
+            .one_or_none()
         )
+        if target is None:
+            raise HTTPException(status_code=404, detail="Athlete not found")
+        if target.id != viewer_id and not bool(target.is_profile_public):
+            raise HTTPException(status_code=404, detail="Athlete not found")
+        return _avatar_bytes_response(target)
+    finally:
+        db.close()
+
+
+@app.get("/api/athletes/{athlete_id}/profile")
+def get_athlete_public_profile(athlete_id: int, request: Request):
+    """Public profile peek. Private profiles return 404 (no enumeration leak)."""
+    require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        target = get_public_athlete(db, athlete_id)
+        if target is None:
+            raise HTTPException(status_code=404, detail="Athlete not found")
+        return public_athlete_payload(db, target)
     finally:
         db.close()
 
@@ -903,6 +952,90 @@ def strava_sync(
                 "Tenta novamente dentro de momentos."
 
         }
+
+
+# ============================================================
+# EXPLORE — discovery of public runners
+# ============================================================
+
+@app.get("/api/explore")
+def get_explore(request: Request):
+    """Discovery feed: nearby, recently active, and new faces. Public only."""
+    athlete_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        athlete = (
+            db.query(Athlete)
+            .filter(Athlete.id == athlete_id)
+            .one_or_none()
+        )
+        if athlete is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Perfil não encontrado.",
+            )
+
+        nearby = suggest_nearby(db, viewer=athlete, limit=8)
+        recent = suggest_recently_active(db, viewer_id=athlete_id, limit=8)
+        new_faces = suggest_new_faces(db, viewer_id=athlete_id, limit=6)
+
+        return {
+            "me": {
+                "is_profile_public": bool(athlete.is_profile_public),
+                "city": athlete.city,
+                "country": athlete.country,
+            },
+            "sections": [
+                {
+                    "id": "nearby",
+                    "title": "Near you",
+                    "empty_hint": (
+                        "Add your city in Settings, or nobody nearby is public yet."
+                    ),
+                    "athletes": nearby,
+                },
+                {
+                    "id": "recent",
+                    "title": "Recently active",
+                    "empty_hint": (
+                        "Quiet out there. Public runners who synced lately show up here."
+                    ),
+                    "athletes": recent,
+                },
+                {
+                    "id": "new",
+                    "title": "New faces",
+                    "empty_hint": (
+                        "No fresh public profiles yet. Be the first — "
+                        "flip the toggle in Settings."
+                    ),
+                    "athletes": new_faces,
+                },
+            ],
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/explore/search")
+def get_explore_search(request: Request, q: str = ""):
+    """Search public athletes by name, handle, or city."""
+    athlete_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        results = search_public_athletes(
+            db,
+            query=q,
+            viewer_id=athlete_id,
+            limit=20,
+        )
+        return {
+            "q": (q or "").strip(),
+            "results": results,
+            "count": len(results),
+        }
+    finally:
+        db.close()
 
 
 # ============================================================

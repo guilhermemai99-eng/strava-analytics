@@ -5,6 +5,10 @@ from __future__ import annotations
 PROTECTED = [
     ("GET", "/activities"),
     ("GET", "/api/feed"),
+    ("GET", "/api/explore"),
+    ("GET", "/api/explore/search"),
+    ("GET", "/api/athletes/1/profile"),
+    ("GET", "/api/athletes/1/avatar"),
     ("GET", "/api/coach/messages"),
     ("POST", "/api/coach/chat"),
     ("DELETE", "/api/coach/messages"),

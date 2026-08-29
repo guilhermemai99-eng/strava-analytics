@@ -189,6 +189,36 @@ def apply_profile_patch(db: Session, athlete: Athlete, payload: dict) -> Athlete
                 raise ProfileValidationError("bio demasiado longa (máx. 500).")
             athlete.bio = bio
 
+    if "city" in payload:
+        raw = payload.get("city")
+        if raw is None or (isinstance(raw, str) and raw.strip() == ""):
+            athlete.city = None
+        elif not isinstance(raw, str):
+            raise ProfileValidationError("city inválida.")
+        else:
+            city = raw.strip()
+            if len(city) > 80:
+                raise ProfileValidationError("city demasiado longa (máx. 80).")
+            athlete.city = city
+
+    if "country" in payload:
+        raw = payload.get("country")
+        if raw is None or (isinstance(raw, str) and raw.strip() == ""):
+            athlete.country = None
+        elif not isinstance(raw, str):
+            raise ProfileValidationError("country inválido.")
+        else:
+            country = raw.strip()
+            if len(country) > 80:
+                raise ProfileValidationError("country demasiado longo (máx. 80).")
+            athlete.country = country
+
+    if "is_profile_public" in payload:
+        value = payload.get("is_profile_public")
+        if not isinstance(value, bool):
+            raise ProfileValidationError("is_profile_public inválido.")
+        athlete.is_profile_public = value
+
     athlete.updated_at = utcnow()
     db.commit()
     db.refresh(athlete)
