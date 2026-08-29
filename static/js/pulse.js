@@ -460,7 +460,7 @@
     return coordinates;
   }
 
-  function polylineToSvg(encoded) {
+  function polylineToSvg(encoded, gradientId = "routeGlow") {
     const points = decodePolyline(encoded);
     if (points.length < 2) return "";
 
@@ -490,9 +490,16 @@
       .join(" ");
 
     return `
-      <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-        <rect width="100%" height="100%" fill="#0c110e"/>
-        <path d="${path}" fill="none" stroke="#b8f25a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.92"/>
+      <svg class="feed-route-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+        <defs>
+          <linearGradient id="${escapeHtml(gradientId)}" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#d6ff7a"/>
+            <stop offset="100%" stop-color="#b8f25a"/>
+          </linearGradient>
+        </defs>
+        <rect width="100%" height="100%" fill="#0b100d"/>
+        <path d="${path}" fill="none" stroke="rgba(184,242,90,0.22)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="${path}" fill="none" stroke="url(#${escapeHtml(gradientId)})" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     `;
   }
@@ -521,17 +528,9 @@
   function renderFeedMedia(item) {
     const media = item.media || {};
     const activity = item.activity || {};
-    if (media.primary_image_url) {
-      return `
-        <div class="feed-media">
-          <img src="${escapeHtml(media.primary_image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">
-        </div>
-      `;
-    }
-    if (media.summary_polyline) {
-      const svg = polylineToSvg(media.summary_polyline);
-      if (svg) return `<div class="feed-media">${svg}</div>`;
-    }
+    const polyline = media.summary_polyline || "";
+    const gradientId = `routeGlow-${escapeHtml(activity.id || "x")}`;
+    const mapSvg = polyline ? polylineToSvg(polyline, gradientId) : "";
     const km =
       activity.distance_km != null
         ? Number(activity.distance_km).toFixed(
@@ -539,14 +538,37 @@
           )
         : "—";
     const bg = TILE_BACKGROUNDS[(Number(activity.id) || 0) % TILE_BACKGROUNDS.length];
-    return `
-      <div class="feed-media">
-        <div class="feed-media-fallback" style="background:${bg}">
-          <div class="tile-label">${escapeHtml((activity.type || "Run").toUpperCase())}</div>
-          <div class="tile-distance">${escapeHtml(km)} KM</div>
-        </div>
+    const fallback = `
+      <div class="feed-media-fallback" style="background:${bg}">
+        <div class="tile-label">${escapeHtml((activity.type || "Run").toUpperCase())}</div>
+        <div class="tile-distance">${escapeHtml(km)} KM</div>
       </div>
     `;
+    const mapBlock = mapSvg
+      ? `<div class="feed-media-map" data-feed-map>${mapSvg}</div>`
+      : "";
+
+    if (media.primary_image_url) {
+      // Photo first; if CDN fails or is tiny, reveal map underneath.
+      return `
+        <div class="feed-media has-photo${mapSvg ? " has-map" : ""}">
+          ${mapBlock || fallback}
+          <img
+            class="feed-media-photo"
+            src="${escapeHtml(media.primary_image_url)}"
+            alt=""
+            loading="lazy"
+            decoding="async"
+            referrerpolicy="no-referrer"
+            onerror="this.classList.add('is-broken'); this.parentElement.classList.add('photo-failed');"
+          >
+        </div>
+      `;
+    }
+    if (mapSvg) {
+      return `<div class="feed-media has-map">${mapBlock}</div>`;
+    }
+    return `<div class="feed-media">${fallback}</div>`;
   }
 
   function renderFeedPost(item) {
