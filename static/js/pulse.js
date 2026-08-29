@@ -564,11 +564,27 @@
       ? `<div class="feed-media-map" data-feed-map>${mapSvg}</div>`
       : "";
 
-    if (media.primary_image_url) {
-      // Photo first; if CDN fails or is tiny, reveal map underneath.
+    if (media.primary_image_url && mapSvg) {
+      // Photo + route both visible (map was previously buried under the photo).
       return `
-        <div class="feed-media has-photo${mapSvg ? " has-map" : ""}">
-          ${mapBlock || fallback}
+        <div class="feed-media has-photo has-map is-stacked">
+          <img
+            class="feed-media-photo"
+            src="${escapeHtml(media.primary_image_url)}"
+            alt=""
+            loading="lazy"
+            decoding="async"
+            referrerpolicy="no-referrer"
+            onerror="this.classList.add('is-broken'); this.parentElement.classList.add('photo-failed');"
+          >
+          ${mapBlock}
+        </div>
+      `;
+    }
+    if (media.primary_image_url) {
+      return `
+        <div class="feed-media has-photo">
+          ${fallback}
           <img
             class="feed-media-photo"
             src="${escapeHtml(media.primary_image_url)}"

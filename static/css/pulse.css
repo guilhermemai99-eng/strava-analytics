@@ -534,10 +534,43 @@ body {
   overflow: hidden;
 }
 
+.feed-media.is-stacked {
+  aspect-ratio: auto;
+  display: flex;
+  flex-direction: column;
+}
+
 .feed-media-map,
 .feed-media-fallback {
   position: absolute;
   inset: 0;
+}
+
+.feed-media.is-stacked .feed-media-photo,
+.feed-media.is-stacked .feed-media-map {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: auto;
+}
+
+.feed-media.is-stacked .feed-media-photo {
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  z-index: 1;
+}
+
+.feed-media.is-stacked .feed-media-map {
+  aspect-ratio: 16 / 7;
+  min-height: 140px;
+  border-top: 1px solid rgba(184, 242, 90, 0.12);
+  z-index: 1;
+}
+
+.feed-media.is-stacked.photo-failed .feed-media-map {
+  aspect-ratio: 16 / 10;
+  min-height: 180px;
+  border-top: 0;
 }
 
 .feed-media-photo {

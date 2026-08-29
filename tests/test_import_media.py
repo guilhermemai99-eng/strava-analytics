@@ -13,8 +13,31 @@ from import_strava import (
 def test_map_polyline_from_list_payload():
     assert _map_polyline({"map": {"summary_polyline": "abc"}}) == "abc"
     assert _map_polyline({"map": {"polyline": "fullroute"}}) == "fullroute"
+    # Prefer full polyline when both are present.
+    assert (
+        _map_polyline(
+            {"map": {"summary_polyline": "short", "polyline": "fullroute"}}
+        )
+        == "fullroute"
+    )
     assert _map_polyline({"map": {}}) is None
     assert _map_polyline({}) is None
+
+
+def test_encode_polyline_roundtrip_shape():
+    from import_strava import encode_polyline, _polyline_from_latlng_stream
+
+    coords = [(38.5, -120.2), (40.7, -120.95), (43.252, -126.453)]
+    encoded = encode_polyline(coords)
+    assert isinstance(encoded, str) and len(encoded) > 5
+
+    from_stream = _polyline_from_latlng_stream(
+        {"latlng": {"data": [[38.5, -120.2], [40.7, -120.95], [43.252, -126.453]]}}
+    )
+    assert from_stream == encoded
+
+    assert _polyline_from_latlng_stream({"latlng": {"data": []}}) is None
+    assert _polyline_from_latlng_stream(None) is None
 
 
 def test_extract_primary_photo_prefers_largest():

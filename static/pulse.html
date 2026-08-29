@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pulse</title>
-  <link rel="stylesheet" href="/static/css/pulse.css?v=dms-1">
+  <link rel="stylesheet" href="/static/css/pulse.css?v=dms-maps-1">
 </head>
 <body>
   <div class="sync-chip" id="syncChip" aria-live="polite">Syncing Strava…</div>
@@ -137,7 +137,7 @@
         <button type="button" class="btn btn-ghost" id="settingsAvatarRemove">Remove photo</button>
         <input type="file" id="settingsAvatarFile" accept="image/jpeg,image/png,image/webp" class="sr-only">
       </div>
-      <p class="form-hint">JPEG, PNG ou WebP · máx. 1 MB</p>
+      <p class="form-hint">JPEG, PNG ou WebP · máx. 8 MB · otimizado no servidor</p>
       <button type="submit" class="btn btn-primary">Save profile</button>
       <p class="form-msg" id="settingsMsg" aria-live="polite"></p>
     </form>
@@ -200,6 +200,10 @@
   <div class="toast" id="toast" role="status"></div>
 
   <script src="/static/js/microcopy.js?v=personality-2"></script>
+<<<<<<< HEAD
   <script src="/static/js/pulse.js?v=dms-1" defer></script>
+=======
+  <script src="/static/js/pulse.js?v=maps-photo-2" defer></script>
+>>>>>>> b2dcdc9 (Improve Feed maps visibility and profile photo quality)
 </body>
 </html>
