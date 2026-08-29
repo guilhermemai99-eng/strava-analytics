@@ -1,8 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-
 import os
 import secrets
 import requests
@@ -120,21 +118,6 @@ STRAVA_CLIENT_SECRET = os.getenv(
 STRAVA_REDIRECT_URI = os.getenv(
     "STRAVA_REDIRECT_URI"
 )
-
-
-# ============================================================
-# MODELO DE ATIVIDADE
-# ============================================================
-
-class ActivityCreate(BaseModel):
-
-    name: str
-
-    distance_km: float
-
-    time_minutes: float
-
-    average_heart_rate: int
 
 
 # ============================================================
@@ -671,74 +654,6 @@ def get_activities(
         )
 
         return activities
-
-
-    finally:
-
-        db.close()
-
-
-# ============================================================
-# CRIAR ATIVIDADE
-# ============================================================
-
-@app.post("/activities")
-def create_activity(
-    request: Request,
-    activity: ActivityCreate
-):
-
-    athlete_id = require_athlete_id(
-        request
-    )
-
-
-    if not athlete_id:
-
-        return {
-
-            "error":
-                "Utilizador não autenticado."
-
-        }
-
-
-    db = SessionLocal()
-
-    try:
-
-        new_activity = Activity(
-
-            athlete_id=
-                athlete_id,
-
-            name=
-                activity.name,
-
-            distance_km=
-                activity.distance_km,
-
-            time_minutes=
-                activity.time_minutes,
-
-            average_heart_rate=
-                activity.average_heart_rate
-
-        )
-
-
-        db.add(
-            new_activity
-        )
-
-        db.commit()
-
-        db.refresh(
-            new_activity
-        )
-
-
-        return new_activity
 
 
     finally:
