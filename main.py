@@ -56,7 +56,27 @@ load_dotenv()
 
 
 # Schema is managed by Alembic (alembic upgrade head).
-# Do not call Base.metadata.create_all here.
+# Also run migrations on app startup so Railway still migrates
+# even if the platform start command is overridden in the UI.
+
+
+def run_startup_migrations() -> None:
+    from alembic import command
+    from alembic.config import Config
+
+    print("[start] Running database migrations from app startup...")
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "head")
+    print("[start] Migrations complete.")
+
+
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    run_startup_migrations()
+    yield
 
 
 # ============================================================
@@ -64,7 +84,8 @@ load_dotenv()
 # ============================================================
 
 app = FastAPI(
-    title="Strava Analytics"
+    title="Strava Analytics",
+    lifespan=lifespan,
 )
 
 
