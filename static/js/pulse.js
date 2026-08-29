@@ -512,6 +512,14 @@
     }
 
     if (typeof L === "undefined") {
+      // Leaflet may still be downloading (defer / slow CDN). Retry a few times
+      // instead of permanently marking the map unavailable.
+      const attempts = Number(el.dataset.mapRetry || "0");
+      if (attempts < 40) {
+        el.dataset.mapRetry = String(attempts + 1);
+        window.setTimeout(() => mountLeafletMap(el), 100);
+        return;
+      }
       el.innerHTML =
         '<div class="route-map-empty">Map unavailable right now.</div>';
       el.dataset.mapReady = "1";

@@ -169,6 +169,44 @@ def ensure_handle(db: Session, athlete: Athlete) -> Athlete:
             return athlete
 
 
+def upgrade_strava_profile_url(url: str | None) -> str | None:
+    """Prefer the sharpest known Strava-hosted profile asset.
+
+    Official Athlete fields:
+      profile_medium → …/medium.jpg  (62×62)
+      profile        → …/large.jpg   (124×124)
+
+    There is no documented size above large.jpg; rewriting medium→large is
+    the only safe CDN upgrade. Query strings are preserved.
+    """
+    if not url or not isinstance(url, str):
+        return None
+    raw = url.strip()
+    if not raw:
+        return None
+
+    lower = raw.lower()
+    # Strava CloudFront / legacy pics host: …/medium.jpg → …/large.jpg
+    for needle in ("/medium.jpg", "/medium.jpeg", "/medium.png"):
+        idx = lower.rfind(needle)
+        if idx != -1:
+            return raw[:idx] + "/large.jpg" + raw[idx + len(needle) :]
+
+    return raw
+
+
+def best_strava_profile_url(
+    profile: str | None,
+    profile_medium: str | None,
+) -> str | None:
+    """Pick profile over profile_medium, then upgrade medium→large when needed."""
+    for candidate in (profile, profile_medium):
+        upgraded = upgrade_strava_profile_url(candidate)
+        if upgraded:
+            return upgraded
+    return None
+
+
 def avatar_url_for(athlete: Athlete) -> str | None:
     if athlete.avatar_data and athlete.avatar_content_type:
         # Cache-bust with updated_at so browsers refresh after upload.
@@ -180,14 +218,8 @@ def avatar_url_for(athlete: Athlete) -> str | None:
             stamp = f"?v={int(ts.timestamp())}"
         return f"/api/me/avatar{stamp}"
 
-    # Strava: profile (~124px) is sharper than profile_medium (~62px) on Retina.
-    if athlete.profile:
-        return athlete.profile
-
-    if athlete.profile_medium:
-        return athlete.profile_medium
-
-    return None
+    # Strava: profile (~124px / large.jpg) is sharper than profile_medium (~62px).
+    return best_strava_profile_url(athlete.profile, athlete.profile_medium)
 
 
 def public_avatar_url_for(athlete: Athlete) -> str | None:
@@ -200,11 +232,7 @@ def public_avatar_url_for(athlete: Athlete) -> str | None:
                 ts = ts.replace(tzinfo=timezone.utc)
             stamp = f"?v={int(ts.timestamp())}"
         return f"/api/athletes/{athlete.id}/avatar{stamp}"
-    if athlete.profile:
-        return athlete.profile
-    if athlete.profile_medium:
-        return athlete.profile_medium
-    return None
+    return best_strava_profile_url(athlete.profile, athlete.profile_medium)
 
 
 def serialize_profile(athlete: Athlete, *, include_stats: dict | None = None) -> dict:

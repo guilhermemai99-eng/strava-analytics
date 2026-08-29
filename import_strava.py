@@ -33,6 +33,28 @@ def _map_polyline(item: dict) -> str | None:
     return None
 
 
+def _photo_url_looks_small(url: str | None) -> bool:
+    """True when a stored photo URL is likely a low-res Strava size variant."""
+    if not url:
+        return True
+    lower = url.lower()
+    # Common Strava CDN patterns: …-600x600.jpg, urls keyed 100/600, etc.
+    small_markers = (
+        "-100x",
+        "-200x",
+        "-300x",
+        "-600x",
+        "/100.jpg",
+        "/200.jpg",
+        "/300.jpg",
+        "/600.jpg",
+        "_100x",
+        "_300x",
+        "_600x",
+    )
+    return any(marker in lower for marker in small_markers)
+
+
 def _extract_primary_photo_url(detail: dict) -> tuple[str | None, int]:
     photos = detail.get("photos") or {}
     count = photos.get("count")
@@ -101,9 +123,14 @@ def _maybe_enrich_photo(
 
     Mutates remaining_fetches[0] as a simple mutable counter.
     Never raises — activity stays valid without a photo.
+    Re-fetches when the stored URL looks like a small size variant so older
+    syncs that preferred 600px can upgrade to 1200/2048.
     """
 
-    if activity.photo_url:
+    upgrading_small = bool(activity.photo_url) and _photo_url_looks_small(
+        activity.photo_url
+    )
+    if activity.photo_url and not upgrading_small:
         return
     if remaining_fetches[0] <= 0:
         return
@@ -124,7 +151,7 @@ def _maybe_enrich_photo(
         except (TypeError, ValueError):
             hint_count = 0
 
-    if hint_count <= 0:
+    if hint_count <= 0 and not upgrading_small:
         return
 
     remaining_fetches[0] -= 1
@@ -133,9 +160,9 @@ def _maybe_enrich_photo(
         return
 
     url, count = _extract_primary_photo_url(detail)
-    if url:
+    if url and (not activity.photo_url or url != activity.photo_url):
         activity.photo_url = url
-    activity.photo_count = count or hint_count
+    activity.photo_count = count or hint_count or activity.photo_count
 
     # If detail includes a fuller polyline, prefer it over the list summary.
     detail_poly = _map_polyline(detail)
@@ -266,7 +293,9 @@ def sync_strava_activities(athlete_id):
                     if changed:
                         total_updated += 1
 
-                    if not existing.photo_url:
+                    if not existing.photo_url or _photo_url_looks_small(
+                        existing.photo_url
+                    ):
                         pending_photo_rows.append((existing, item))
                     continue
 

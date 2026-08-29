@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from import_strava import _extract_primary_photo_url, _map_polyline
+from import_strava import (
+    _extract_primary_photo_url,
+    _map_polyline,
+    _photo_url_looks_small,
+)
 
 
 def test_map_polyline_from_list_payload():
@@ -43,3 +47,11 @@ def test_extract_primary_photo_empty():
     url, count = _extract_primary_photo_url({"photos": {"count": 0}})
     assert url is None
     assert count == 0
+
+
+def test_photo_url_looks_small():
+    assert _photo_url_looks_small(None) is True
+    assert _photo_url_looks_small("https://cdn.example/photo-600x600.jpg") is True
+    assert _photo_url_looks_small("https://cdn.example/photo-1200x900.jpg") is False
+    assert _photo_url_looks_small("https://cdn.example/photos/600.jpg") is True
+    assert _photo_url_looks_small("https://cdn.example/photos/2048.jpg") is False

@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from athlete import Athlete, utcnow
+from profile_helpers import upgrade_strava_profile_url
 
 
 def upsert_athlete_from_strava(db, athlete_payload: dict) -> Athlete:
@@ -32,8 +33,15 @@ def upsert_athlete_from_strava(db, athlete_payload: dict) -> Athlete:
     existing.city = athlete_payload.get("city")
     existing.state = athlete_payload.get("state")
     existing.country = athlete_payload.get("country")
-    existing.profile = athlete_payload.get("profile")
-    existing.profile_medium = athlete_payload.get("profile_medium")
+    # Keep profile_medium as Strava sent it; promote profile to large.jpg when
+    # possible so reads always have the sharper asset even if OAuth only
+    # returned medium.
+    raw_profile = athlete_payload.get("profile")
+    raw_medium = athlete_payload.get("profile_medium")
+    existing.profile = upgrade_strava_profile_url(raw_profile) or upgrade_strava_profile_url(
+        raw_medium
+    )
+    existing.profile_medium = raw_medium
     existing.updated_at = now
     existing.last_login_at = now
 
