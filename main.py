@@ -626,6 +626,21 @@ def strava_sync(
 
         }
 
+    except Exception as error:
+
+        print(
+            "strava_sync unexpected error:",
+            repr(error)
+        )
+
+        return {
+
+            "error":
+                "Falha ao sincronizar atividades. "
+                "Tenta novamente dentro de momentos."
+
+        }
+
 
 # ============================================================
 # ACTIVITIES

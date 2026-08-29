@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     Float,
@@ -34,8 +35,9 @@ class Activity(Base):
         index=True
     )
 
+    # Strava activity IDs exceed 32-bit INTEGER range.
     strava_id = Column(
-        Integer,
+        BigInteger,
         unique=True,
         index=True,
         nullable=False
