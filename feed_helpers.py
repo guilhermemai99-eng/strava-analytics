@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from athlete import Athlete
 from feed_titles import pace_min_per_km, pulse_title_for_activity
+from media_helpers import proxied_media_url
 from models import Activity
 from profile_helpers import display_name_for, initials_for, public_avatar_url_for
 
@@ -90,7 +91,7 @@ def serialize_feed_item(activity: Activity, athlete: Athlete) -> dict:
         name=activity.name,
     )
     location = location_display_for(athlete)
-    photo = (activity.photo_url or "").strip() or None
+    photo = proxied_media_url((activity.photo_url or "").strip() or None)
     polyline = (activity.summary_polyline or "").strip() or None
 
     return {

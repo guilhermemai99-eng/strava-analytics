@@ -59,8 +59,13 @@ def test_avatar_upgrades_medium_only():
             "https://dgalywyr863hv.cloudfront.net/pictures/athletes/9/9/1/medium.jpg"
         ),
     )
-    expected = (
+    expected_src = (
         "https://dgalywyr863hv.cloudfront.net/pictures/athletes/9/9/1/large.jpg"
     )
-    assert avatar_url_for(athlete) == expected
-    assert public_avatar_url_for(athlete) == expected
+    for url in (avatar_url_for(athlete), public_avatar_url_for(athlete)):
+        assert url.startswith("/api/media/proxy?url=")
+        assert "large.jpg" in url
+        assert "medium.jpg" not in url
+        from urllib.parse import unquote
+
+        assert expected_src in unquote(url)

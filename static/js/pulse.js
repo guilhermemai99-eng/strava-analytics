@@ -131,6 +131,16 @@
       .replace(/'/g, "&#39;");
   }
 
+  /** Same-origin proxy for Strava CDN (and allowlisted) media URLs. */
+  function mediaSrc(url) {
+    if (!url) return "";
+    const raw = String(url).trim();
+    if (!raw) return "";
+    if (raw.startsWith("/") || raw.startsWith("data:")) return raw;
+    if (raw.includes("/api/media/proxy")) return raw;
+    return `/api/media/proxy?url=${encodeURIComponent(raw)}`;
+  }
+
   function formatKm(meters) {
     if (meters == null || Number.isNaN(Number(meters))) return "—";
     return (Number(meters) / 1000).toFixed(Number(meters) >= 10000 ? 1 : 2);
@@ -482,11 +492,68 @@
     });
   }
 
+  function polylineToSvg(encoded) {
+    const points = decodePolyline(encoded);
+    if (points.length < 2) return "";
+
+    let minLat = Infinity;
+    let maxLat = -Infinity;
+    let minLng = Infinity;
+    let maxLng = -Infinity;
+    points.forEach(([la, ln]) => {
+      minLat = Math.min(minLat, la);
+      maxLat = Math.max(maxLat, la);
+      minLng = Math.min(minLng, ln);
+      maxLng = Math.max(maxLng, ln);
+    });
+
+    const pad = 0.1;
+    const latSpan = Math.max(maxLat - minLat, 0.0001);
+    const lngSpan = Math.max(maxLng - minLng, 0.0001);
+    const width = 640;
+    const height = 400;
+    const path = points
+      .map(([la, ln], i) => {
+        const x = ((ln - minLng) / lngSpan) * (1 - pad * 2) * width + pad * width;
+        const y =
+          (1 - (la - minLat) / latSpan) * (1 - pad * 2) * height + pad * height;
+        return `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
+      })
+      .join(" ");
+
+    const start = points[0];
+    const end = points[points.length - 1];
+    const sx =
+      ((start[1] - minLng) / lngSpan) * (1 - pad * 2) * width + pad * width;
+    const sy =
+      (1 - (start[0] - minLat) / latSpan) * (1 - pad * 2) * height + pad * height;
+    const ex = ((end[1] - minLng) / lngSpan) * (1 - pad * 2) * width + pad * width;
+    const ey =
+      (1 - (end[0] - minLat) / latSpan) * (1 - pad * 2) * height + pad * height;
+
+    return `
+      <svg class="route-map-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+        <defs>
+          <linearGradient id="routeFade" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#152018"/>
+            <stop offset="100%" stop-color="#0c110e"/>
+          </linearGradient>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#routeFade)"/>
+        <path d="${path}" fill="none" stroke="rgba(184,242,90,0.25)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="${path}" fill="none" stroke="#b8f25a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="7" fill="#b8f25a" stroke="#fff" stroke-width="2"/>
+        <circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="7" fill="#0c110e" stroke="#b8f25a" stroke-width="2"/>
+      </svg>
+    `;
+  }
+
   function renderRouteMapMount(polyline, { size = "feed" } = {}) {
     if (!polyline || !String(polyline).trim()) return "";
     const interactive = size === "detail" ? "1" : "0";
     const cls =
       size === "detail" ? "route-map route-map--detail" : "route-map route-map--feed";
+    const svg = polylineToSvg(polyline);
     return `
       <div
         class="${cls}"
@@ -495,7 +562,8 @@
         role="img"
         aria-label="Activity route"
       >
-        <div class="route-map-loading">Loading map…</div>
+        ${svg || '<div class="route-map-loading">Loading map…</div>'}
+        <div class="route-map-leaflet"></div>
       </div>
     `;
   }
@@ -512,40 +580,42 @@
     }
 
     if (typeof L === "undefined") {
-      // Leaflet may still be downloading (defer / slow CDN). Retry a few times
-      // instead of permanently marking the map unavailable.
       const attempts = Number(el.dataset.mapRetry || "0");
-      if (attempts < 40) {
+      if (attempts < 50) {
         el.dataset.mapRetry = String(attempts + 1);
         window.setTimeout(() => mountLeafletMap(el), 100);
         return;
       }
-      el.innerHTML =
-        '<div class="route-map-empty">Map unavailable right now.</div>';
+      // Keep SVG underlay visible — route still shows without tiles.
       el.dataset.mapReady = "1";
       return;
     }
 
-    el.innerHTML = "";
+    let host = el.querySelector(".route-map-leaflet");
+    if (!host) {
+      host = document.createElement("div");
+      host.className = "route-map-leaflet";
+      el.appendChild(host);
+    }
+    host.innerHTML = "";
+
     const interactive = el.dataset.mapInteractive === "1";
-    const map = L.map(el, {
+    const map = L.map(host, {
       zoomControl: interactive,
       dragging: interactive,
-      scrollWheelZoom: interactive,
+      scrollWheelZoom: false,
       doubleClickZoom: interactive,
       boxZoom: interactive,
       keyboard: interactive,
-      tap: interactive,
       attributionControl: true,
     });
 
+    // Esri street basemap — works without API keys (OSM tiles are often blocked).
     L.tileLayer(
-      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
       {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        attribution: "Tiles &copy; Esri",
         maxZoom: 19,
-        subdomains: "abc",
       }
     ).addTo(map);
 
@@ -581,6 +651,7 @@
       try {
         map.invalidateSize();
         map.fitBounds(line.getBounds(), { padding: [28, 28], maxZoom: 15 });
+        el.classList.add("is-map-live");
       } catch (_err) {
         /* ignore */
       }
@@ -679,24 +750,25 @@
 
   function authorAvatarHtml(author) {
     const initials = escapeHtml(author?.initials || "P");
-    if (author?.avatar_url) {
-      return `<div class="pulse-avatar" data-initials="${initials}"><img data-avatar-img src="${escapeHtml(author.avatar_url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"></div>`;
+    const src = mediaSrc(author?.avatar_url);
+    if (src) {
+      return `<div class="pulse-avatar" data-initials="${initials}"><img data-avatar-img src="${escapeHtml(src)}" alt="" decoding="async"></div>`;
     }
     return `<div class="pulse-avatar">${initials}</div>`;
   }
 
   function renderPhotoBlock(url, { variant = "feed" } = {}) {
-    if (!url) return "";
+    const src = mediaSrc(url);
+    if (!src) return "";
     const cls = variant === "modal" ? "modal-media" : "feed-media feed-media-photo";
     return `
       <div class="${cls}">
         <div class="media-skeleton" aria-hidden="true"></div>
         <img
-          src="${escapeHtml(url)}"
+          src="${escapeHtml(src)}"
           alt=""
-          loading="lazy"
+          loading="${variant === "modal" ? "eager" : "lazy"}"
           decoding="async"
-          referrerpolicy="no-referrer"
         >
       </div>
     `;
@@ -1169,10 +1241,11 @@
   }
 
   function renderAvatarHtml(profile, extraClass = "") {
-    const url = profile?.avatar_url;
+    const src = mediaSrc(profile?.avatar_url);
     const initials = escapeHtml(profile?.initials || "P");
-    if (url) {
-      return `<div class="pulse-avatar ${extraClass}" data-initials="${initials}"><img data-avatar-img src="${escapeHtml(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"></div>`;
+    if (src) {
+      const eager = extraClass.includes("is-lg") ? "eager" : "lazy";
+      return `<div class="pulse-avatar ${extraClass}" data-initials="${initials}"><img data-avatar-img src="${escapeHtml(src)}" alt="" loading="${eager}" decoding="async"></div>`;
     }
     return `<div class="pulse-avatar ${extraClass}">${initials}</div>`;
   }
@@ -1182,7 +1255,7 @@
     const pace = formatPace(activity.distance_m, activity.moving_time_s);
     const name = (activity.name || "Run").toUpperCase();
     const bg = tileBackground(activity, index);
-    const photo = (activity.photo_url || "").trim();
+    const photo = mediaSrc((activity.photo_url || "").trim());
     const tileBg = photo
       ? `linear-gradient(180deg,rgba(8,12,10,0.2),rgba(8,12,10,0.82)),url("${escapeHtml(photo)}") center / cover no-repeat`
       : bg;
@@ -2276,9 +2349,11 @@
     }
 
     const photo =
-      (activity.photo_url || "").trim() ||
-      feedItem?.media?.primary_image_url ||
-      null;
+      mediaSrc(
+        (activity.photo_url || "").trim() ||
+          feedItem?.media?.primary_image_url ||
+          null
+      ) || null;
     const polyline =
       (activity.summary_polyline || "").trim() ||
       feedItem?.media?.summary_polyline ||
@@ -2346,11 +2421,9 @@
       const initials = profile.initials || "P";
       els.sidebarAvatar.setAttribute("data-initials", initials);
       const img = document.createElement("img");
-      img.src = profile.avatar_url;
+      img.src = mediaSrc(profile.avatar_url);
       img.alt = "";
-      img.loading = "lazy";
       img.decoding = "async";
-      img.referrerPolicy = "no-referrer";
       img.setAttribute("data-avatar-img", "");
       img.addEventListener(
         "error",

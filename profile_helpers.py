@@ -6,6 +6,7 @@ import re
 from datetime import datetime, timezone
 
 from athlete import Athlete, utcnow
+from media_helpers import proxied_media_url
 from sqlalchemy.orm import Session
 
 
@@ -219,7 +220,10 @@ def avatar_url_for(athlete: Athlete) -> str | None:
         return f"/api/me/avatar{stamp}"
 
     # Strava: profile (~124px / large.jpg) is sharper than profile_medium (~62px).
-    return best_strava_profile_url(athlete.profile, athlete.profile_medium)
+    # Proxy through our API so CloudFront hotlink rules cannot blank the avatar.
+    return proxied_media_url(
+        best_strava_profile_url(athlete.profile, athlete.profile_medium)
+    )
 
 
 def public_avatar_url_for(athlete: Athlete) -> str | None:
@@ -232,7 +236,9 @@ def public_avatar_url_for(athlete: Athlete) -> str | None:
                 ts = ts.replace(tzinfo=timezone.utc)
             stamp = f"?v={int(ts.timestamp())}"
         return f"/api/athletes/{athlete.id}/avatar{stamp}"
-    return best_strava_profile_url(athlete.profile, athlete.profile_medium)
+    return proxied_media_url(
+        best_strava_profile_url(athlete.profile, athlete.profile_medium)
+    )
 
 
 def serialize_profile(athlete: Athlete, *, include_stats: dict | None = None) -> dict:

@@ -211,14 +211,16 @@ body {
 }
 
 .pulse-avatar.is-lg {
-  width: 96px;
-  height: 96px;
-  font-size: 28px;
+  width: 112px;
+  height: 112px;
+  font-size: 32px;
 }
 
 .pulse-avatar.is-lg img {
-  /* Prefer crisp Strava/custom photos on Retina profile header */
   image-rendering: auto;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
 }
 
 .pulse-user-meta {
@@ -623,17 +625,43 @@ body {
 }
 
 .route-map--feed {
-  height: min(42vw, 220px);
-  min-height: 180px;
-  max-height: 240px;
+  height: 220px;
+  min-height: 200px;
 }
 
 .route-map--detail {
-  height: min(56vw, 320px);
-  min-height: 240px;
-  max-height: 360px;
+  height: 300px;
+  min-height: 260px;
   border-radius: 16px;
   margin-bottom: 16px;
+}
+
+.route-map-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+  transition: opacity 0.35s var(--ease);
+}
+
+.route-map-leaflet {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.4s var(--ease);
+  background: #0c110e;
+}
+
+.route-map.is-map-live .route-map-leaflet {
+  opacity: 1;
+}
+
+.route-map.is-map-live .route-map-svg {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .route-map .leaflet-container {
@@ -641,11 +669,6 @@ body {
   height: 100%;
   background: #0c110e;
   font: inherit;
-}
-
-/* Keep Pulse’s dark chrome while OSM tiles stay readable */
-.route-map .leaflet-tile-pane {
-  filter: saturate(0.85) brightness(0.72) contrast(1.05);
 }
 
 .route-map-loading,

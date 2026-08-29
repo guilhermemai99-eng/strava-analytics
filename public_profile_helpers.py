@@ -10,6 +10,7 @@ from follow_helpers import (
     get_athlete_by_handle,
     relationship_payload,
 )
+from media_helpers import proxied_media_url
 from models import Activity
 from profile_helpers import display_name_for, ensure_handle, initials_for, public_avatar_url_for
 from sqlalchemy import func
@@ -64,7 +65,7 @@ def serialize_profile_activity(activity: Activity) -> dict:
         "elevation_gain_m": activity.elevation_gain_m,
         "start_date_local": activity.start_date_local,
         "start_date": activity.start_date,
-        "photo_url": (activity.photo_url or "").strip() or None,
+        "photo_url": proxied_media_url((activity.photo_url or "").strip() or None),
         # Deliberately omit polyline / GPS.
     }
 

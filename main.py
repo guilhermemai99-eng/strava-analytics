@@ -34,6 +34,7 @@ from profile_helpers import (
     ensure_handle,
     serialize_profile,
 )
+from media_helpers import fetch_remote_media, is_allowed_media_url, proxied_media_url
 from avatar_helpers import AvatarValidationError, validate_avatar_upload
 from feed_helpers import serialize_feed_item
 from explore_helpers import (
@@ -174,7 +175,12 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    run_startup_migrations()
+    # Allow Cloud Agents / local smoke tests to skip when DB is already migrated
+    # and a previous crash left alembic advisory locks in a bad state.
+    if os.getenv("SKIP_STARTUP_MIGRATIONS") != "1":
+        run_startup_migrations()
+    else:
+        print("[start] Skipping startup migrations (SKIP_STARTUP_MIGRATIONS=1).")
     run_startup_token_encryption()
     yield
 
@@ -818,6 +824,32 @@ def get_my_avatar(request: Request):
         return _avatar_bytes_response(athlete)
     finally:
         db.close()
+
+
+@app.get("/api/media/proxy")
+def proxy_media(request: Request, url: str):
+    """Same-origin image proxy so Strava CDN avatars/photos reliably render."""
+    require_athlete_id(request)
+    raw = (url or "").strip()
+    if not raw or not is_allowed_media_url(raw):
+        raise HTTPException(status_code=400, detail="URL de media inválida.")
+    try:
+        data, content_type = fetch_remote_media(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except requests.RequestException as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Não foi possível carregar a imagem.",
+        ) from exc
+
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={
+            "Cache-Control": "private, max-age=86400",
+        },
+    )
 
 
 @app.get("/api/athletes/{athlete_id}/avatar")
