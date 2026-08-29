@@ -6,9 +6,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 
-load_dotenv()
-
-
 DEFAULT_DATABASE_URL = (
     "postgresql+psycopg://strava:strava@localhost:5432/strava_analytics"
 )
@@ -20,7 +17,7 @@ def normalize_database_url(url: str) -> str:
     SQLAlchemy 2 + psycopg3 expect postgresql+psycopg://.
     """
 
-    url = (url or "").strip()
+    url = (url or "").strip().strip('"').strip("'")
 
     if url.startswith("postgres://"):
         return "postgresql+psycopg://" + url[len("postgres://"):]
@@ -44,24 +41,35 @@ def _is_localhost_url(url: str) -> bool:
     return host in {"localhost", "127.0.0.1", "::1"}
 
 
-raw_database_url = os.getenv("DATABASE_URL", "").strip()
+def _safe_db_host(url: str) -> str:
+    return urlparse(url).hostname or "(none)"
+
+
+# On Railway, trust only process env vars from the platform.
+# Locally, allow .env for convenience.
+if not _running_on_railway():
+    load_dotenv()
+
+raw_database_url = os.getenv("DATABASE_URL", "").strip().strip('"').strip("'")
 
 if _running_on_railway():
     if not raw_database_url:
         raise RuntimeError(
             "DATABASE_URL is missing on Railway. "
-            "On the WEB app service Variables, set DATABASE_URL to a "
-            "reference like ${{Postgres.DATABASE_PRIVATE_URL}} "
-            "(use your exact Postgres service name), then redeploy."
+            "Set it on the WEB app Variables, then redeploy."
         )
 
     DATABASE_URL = normalize_database_url(raw_database_url)
+    db_host = _safe_db_host(DATABASE_URL)
+    print(f"[database] Railway DATABASE_URL host={db_host}")
 
     if _is_localhost_url(DATABASE_URL):
         raise RuntimeError(
-            "DATABASE_URL points to localhost on Railway. "
-            "Set DATABASE_URL on the WEB app (not the Postgres service) "
-            "to ${{YourPostgresService.DATABASE_PRIVATE_URL}} and redeploy."
+            "DATABASE_URL points to localhost on Railway "
+            f"(host={db_host}). "
+            "Open the WEB app Variables and set DATABASE_URL to the "
+            "Postgres DATABASE_PRIVATE_URL "
+            "(must contain postgres.railway.internal), then redeploy."
         )
 else:
     DATABASE_URL = normalize_database_url(
