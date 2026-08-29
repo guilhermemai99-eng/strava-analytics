@@ -90,12 +90,20 @@ def run_startup_migrations() -> None:
 def run_startup_token_encryption() -> None:
     """Encrypt any leftover plaintext tokens before serving traffic."""
 
-    from token_crypto import TokenEncryptionError
+    from token_crypto import TokenEncryptionError, encryption_key_status
     from strava_tokens import upgrade_plaintext_tokens
 
-    if not (os.getenv("TOKEN_ENCRYPTION_KEY") or "").strip():
+    status = encryption_key_status()
+    print(
+        "[start] Token encryption status: "
+        f"key_set={status['token_encryption_key_set']} "
+        f"key_valid={status['token_encryption_key_valid']} "
+        f"source={status['encrypt_source']}"
+    )
+
+    if not status["can_encrypt"]:
         print(
-            "[start] TOKEN_ENCRYPTION_KEY missing; "
+            "[start] No usable encryption key; "
             "skipping plaintext token upgrade."
         )
         return
@@ -115,8 +123,8 @@ def run_startup_token_encryption() -> None:
                 "those athletes must re-OAuth or be fixed manually."
             )
     except (TokenEncryptionError, StravaTokenError) as exc:
+        # Never block boot on upgrade — login fallback still works.
         print(f"[start] Token encryption upgrade failed: {exc}")
-        raise
     finally:
         db.close()
 
@@ -248,6 +256,15 @@ def home(
 @app.get("/auth/strava")
 def strava_login():
 
+    if not STRAVA_CLIENT_ID or not STRAVA_CLIENT_SECRET:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Strava OAuth não está configurado. "
+                "Define STRAVA_CLIENT_ID e STRAVA_CLIENT_SECRET."
+            ),
+        )
+
     # Gerar estado único
     state = secrets.token_urlsafe(
         32
@@ -259,6 +276,17 @@ def strava_login():
 
         cleanup_expired_oauth_states(db)
         create_oauth_state(db, state)
+
+    except Exception as error:
+        db.rollback()
+        print("strava_login db error:", repr(error))
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Não foi possível iniciar o login Strava. "
+                "Tenta novamente dentro de momentos."
+            ),
+        ) from error
 
     finally:
 
@@ -355,46 +383,67 @@ def strava_callback(
     # TROCAR CODE POR TOKENS
     # ========================================================
 
-    token_response = requests.post(
+    try:
 
-        "https://www.strava.com/oauth/token",
+        token_response = requests.post(
 
-        params={
+            "https://www.strava.com/oauth/token",
 
-            "client_id":
-                STRAVA_CLIENT_ID,
+            params={
 
-            "client_secret":
-                STRAVA_CLIENT_SECRET,
+                "client_id":
+                    STRAVA_CLIENT_ID,
 
-            "code":
-                code,
+                "client_secret":
+                    STRAVA_CLIENT_SECRET,
 
-            "grant_type":
-                "authorization_code"
+                "code":
+                    code,
 
-        },
+                "grant_type":
+                    "authorization_code"
 
-        timeout=15
-    )
+            },
+
+            timeout=15
+        )
+
+    except requests.RequestException as error:
+
+        print("strava_callback token exchange network error:", repr(error))
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Não foi possível contactar o Strava. "
+                "Tenta novamente dentro de momentos."
+            ),
+        ) from error
 
 
     if token_response.status_code != 200:
 
-        return {
+        print(
+            "strava_callback token exchange failed:",
+            token_response.status_code,
+            token_response.text[:500],
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Erro ao obter tokens do Strava. Tenta fazer login outra vez.",
+        )
 
-            "error":
-                "Erro ao obter tokens do Strava.",
 
-            "details":
-                token_response.text
+    try:
 
-        }
+        token_data = token_response.json()
 
+    except ValueError as error:
 
-    token_data = (
-        token_response.json()
-    )
+        print("strava_callback invalid token JSON:", repr(error))
+        raise HTTPException(
+            status_code=502,
+            detail="Resposta inválida do Strava ao trocar o código OAuth.",
+        ) from error
 
 
     athlete = token_data.get(
