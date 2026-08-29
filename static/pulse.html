@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pulse</title>
+  <link rel="stylesheet" href="/static/css/pulse.css">
+</head>
+<body>
+  <div class="sync-chip" id="syncChip" aria-live="polite">A sincronizar Strava…</div>
+
+  <div class="pulse-app">
+    <aside class="pulse-sidebar" aria-label="Navegação principal">
+      <div class="pulse-brand">Pulse<span>.</span></div>
+      <nav class="pulse-nav">
+        <button type="button" class="pulse-nav-link is-active" data-nav="feed">
+          <span class="pulse-nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+          </span>
+          Feed
+        </button>
+        <button type="button" class="pulse-nav-link" data-nav="explore">
+          <span class="pulse-nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          </span>
+          Explore
+        </button>
+        <button type="button" class="pulse-nav-link" data-nav="coach">
+          <span class="pulse-nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 3l2.2 4.5L19 9l-3.5 3.4.8 4.8L12 15.2 7.7 17.2l.8-4.8L5 9l4.8-1.5L12 3z"/></svg>
+          </span>
+          AI Coach
+        </button>
+        <button type="button" class="pulse-nav-link" data-nav="profile">
+          <span class="pulse-nav-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 19c1.8-3.2 4-4.8 7-4.8s5.2 1.6 7 4.8"/></svg>
+          </span>
+          Profile
+        </button>
+      </nav>
+
+      <div class="pulse-sidebar-foot">
+        <button type="button" class="pulse-user-chip" id="openSettingsSidebar" aria-label="Abrir settings">
+          <div class="pulse-avatar" id="sidebarAvatar">P</div>
+          <div class="pulse-user-meta">
+            <strong id="sidebarName">Runner</strong>
+            <span id="sidebarHandle">@pulse</span>
+          </div>
+        </button>
+      </div>
+    </aside>
+
+    <main class="pulse-main">
+      <div class="pulse-center" id="viewRoot" aria-live="polite"></div>
+    </main>
+
+    <aside class="pulse-coach" aria-label="AI Coach">
+      <div class="coach-top">
+        <h2>AI Coach</h2>
+        <p class="coach-tagline" id="coachTagline">Your legs don’t lie.</p>
+      </div>
+      <div class="coach-panel" id="coachSidebarPanel"></div>
+    </aside>
+  </div>
+
+  <nav class="pulse-bottom-nav" aria-label="Navegação móvel">
+    <button type="button" data-nav="feed" class="is-active">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+      Feed
+    </button>
+    <button type="button" data-nav="explore">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      Explore
+    </button>
+    <button type="button" data-nav="coach">
+      <svg viewBox="0 0 24 24"><path d="M12 3l2.2 4.5L19 9l-3.5 3.4.8 4.8L12 15.2 7.7 17.2l.8-4.8L5 9l4.8-1.5L12 3z"/></svg>
+      Coach
+    </button>
+    <button type="button" data-nav="profile">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 19c1.8-3.2 4-4.8 7-4.8s5.2 1.6 7 4.8"/></svg>
+      Profile
+    </button>
+  </nav>
+
+  <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
+  <aside class="drawer" id="settingsDrawer" aria-hidden="true" aria-label="Settings">
+    <div class="drawer-head">
+      <h2>Settings</h2>
+      <button type="button" class="icon-btn" id="closeSettings" aria-label="Fechar">✕</button>
+    </div>
+
+    <form class="form-stack" id="profileForm">
+      <label>
+        Display name
+        <input type="text" id="settingsDisplayName" maxlength="120" autocomplete="nickname">
+      </label>
+      <label>
+        Handle
+        <input type="text" id="settingsHandle" maxlength="30" autocomplete="username" placeholder="ex: guilherme_run">
+      </label>
+      <p class="form-hint">3–30 chars: a-z, 0-9, underscore. Prepara URLs futuras /u/handle.</p>
+      <label>
+        Bio
+        <textarea id="settingsBio" maxlength="500" placeholder="Uma linha sobre ti como atleta"></textarea>
+      </label>
+      <div class="profile-actions">
+        <button type="button" class="btn btn-ghost" id="settingsAvatarPick">Upload photo</button>
+        <button type="button" class="btn btn-ghost" id="settingsAvatarRemove">Remove photo</button>
+        <input type="file" id="settingsAvatarFile" accept="image/jpeg,image/png,image/webp" class="sr-only">
+      </div>
+      <p class="form-hint">JPEG, PNG ou WebP · máx. 1 MB</p>
+      <button type="submit" class="btn btn-primary">Save profile</button>
+      <p class="form-msg" id="settingsMsg" aria-live="polite"></p>
+    </form>
+
+    <div class="drawer-section">
+      <h3>Strava</h3>
+      <p class="form-hint" id="settingsStravaMeta">Conta ligada. Tokens ficam no servidor, encriptados.</p>
+      <button type="button" class="btn btn-ghost" id="syncNowBtn" style="margin-top:12px;">Sync Strava now</button>
+    </div>
+
+    <div class="drawer-section">
+      <h3>Pulse Lab</h3>
+      <p class="form-hint">O dashboard de analytics antigo continua aqui — scores, planos, evolução.</p>
+      <a class="btn btn-ghost" href="/lab" style="margin-top:12px;display:inline-flex;">Open analytics lab</a>
+    </div>
+
+    <div class="drawer-section">
+      <h3>Session</h3>
+      <a class="btn btn-primary" href="/auth/logout">Log out</a>
+    </div>
+  </aside>
+
+  <div class="modal-backdrop" id="activityModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="activityModalTitle">
+      <div class="drawer-head">
+        <h2 id="activityModalTitle">Activity</h2>
+        <button type="button" class="icon-btn" id="closeActivityModal" aria-label="Fechar">✕</button>
+      </div>
+      <div id="activityModalBody"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="/static/js/pulse.js" defer></script>
+</body>
+</html>
