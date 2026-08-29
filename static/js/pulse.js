@@ -1710,12 +1710,22 @@
     }, 250);
   }
 
+  let confirmCloseTimer = null;
+
   function closeConfirmModal() {
     if (!els.confirmModal) return;
     els.confirmModal.classList.remove("is-open");
-    setTimeout(() => {
-      els.confirmModal.hidden = true;
-      if (els.confirmModalActions) els.confirmModalActions.innerHTML = "";
+    if (confirmCloseTimer) {
+      clearTimeout(confirmCloseTimer);
+      confirmCloseTimer = null;
+    }
+    confirmCloseTimer = setTimeout(() => {
+      confirmCloseTimer = null;
+      // Only finalize hide if nothing re-opened the modal.
+      if (!els.confirmModal.classList.contains("is-open")) {
+        els.confirmModal.hidden = true;
+        if (els.confirmModalActions) els.confirmModalActions.innerHTML = "";
+      }
     }, 250);
   }
 
@@ -1734,6 +1744,12 @@
         resolve(result);
       };
 
+      // Cancel a pending hide from a previous step (e.g. delete step 1 → 2).
+      if (confirmCloseTimer) {
+        clearTimeout(confirmCloseTimer);
+        confirmCloseTimer = null;
+      }
+
       els.confirmModalTitle.textContent = title || "Confirm";
       els.confirmModalBody.textContent = body || "";
       els.confirmModalActions.innerHTML = "";
@@ -1748,7 +1764,9 @@
             : "btn btn-ghost";
         btn.textContent = action.label;
         btn.dataset.confirmRole = action.role || "cancel";
-        btn.addEventListener("click", () => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
           if (action.role === "confirm") {
             finish({ confirmed: true, button: btn });
           } else {
