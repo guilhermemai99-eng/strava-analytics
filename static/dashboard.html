@@ -114,6 +114,37 @@ a { color: inherit; text-decoration: none; }
     transform: translateX(2px);
 }
 
+.nav-back-pulse {
+    margin-bottom: 8px;
+    border: 1px solid rgba(184, 242, 90, 0.28);
+    color: var(--text);
+    text-decoration: none;
+    display: block;
+    box-sizing: border-box;
+}
+
+.back-to-pulse {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(184, 242, 90, 0.35);
+    background: rgba(184, 242, 90, 0.08);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    font-family: var(--font-body);
+}
+
+.back-to-pulse:hover {
+    border-color: var(--accent);
+    background: rgba(184, 242, 90, 0.14);
+}
+
 .nav-spacer { flex: 1; }
 .nav-logout { color: #b7b1a8; }
 
@@ -1141,6 +1172,16 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
         padding: 0 12px;
         font-size: 11px;
     }
+    .back-to-pulse {
+        min-height: 34px;
+        padding: 0 12px;
+        font-size: 11px;
+        order: -1;
+        width: 100%;
+    }
+    .sync-bar {
+        align-items: stretch;
+    }
     .sync-meta, .sync-message { font-size: 10px; max-width: 42vw; }
     .page { padding: 12px 14px 18px; gap: 10px; }
     .overview-grid {
@@ -1251,7 +1292,7 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
 <div class="app">
     <aside class="sidebar">
         <div class="brand">Pul<span>se</span></div>
-        <a class="nav-link" href="/dashboard" style="margin-bottom:8px;border:1px solid rgba(184,242,90,0.28);">← Pulse home</a>
+        <a class="nav-link nav-back-pulse" href="/dashboard">← Back to Pulse</a>
         <button type="button" class="nav-link active" data-nav="overview">Overview</button>
         <button type="button" class="nav-link" data-nav="performance">Performance</button>
         <button type="button" class="nav-link" data-nav="training">Training</button>
@@ -1265,11 +1306,12 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
     <div class="main">
         <header class="topbar">
             <div>
-                <div class="eyebrow">Pulse Performance</div>
+                <div class="eyebrow">Pulse Lab</div>
                 <h1 id="pageTitle">Overview</h1>
                 <div class="athlete-chip" id="athleteLabel">Atleta —</div>
             </div>
             <div class="sync-bar">
+                <a class="back-to-pulse" href="/dashboard">← Back to Pulse</a>
                 <button type="button" class="sync-button" id="syncStravaButton">Sincronizar Strava</button>
                 <div class="sync-meta" id="lastSyncLabel">Última sincronização: —</div>
                 <div class="sync-message" id="syncMessage"></div>
