@@ -204,9 +204,12 @@ a { color: inherit; text-decoration: none; }
     padding: 22px 28px 24px;
     display: none;
     flex-direction: column;
-    gap: 14px;
+    gap: 12px;
     min-height: 0;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
 }
 
 .page.is-active {
@@ -239,8 +242,54 @@ a { color: inherit; text-decoration: none; }
 
 .section-meta { color: var(--muted); font-size: 12px; }
 
+.subtabs {
+    display: flex;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.subtab {
+    appearance: none;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--muted);
+    border-radius: 999px;
+    min-height: 34px;
+    padding: 0 14px;
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 650;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.subtab.active {
+    background: var(--accent-dim);
+    border-color: rgba(184,242,90,0.35);
+    color: var(--text);
+}
+
+.page-body {
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+}
+
+.subpanel {
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+}
+
+.subpanel.is-active {
+    display: flex;
+}
+
 .page-grid {
-    flex: 1;
+    flex: 1 0 auto;
     min-height: 0;
     display: grid;
     gap: 12px;
@@ -502,7 +551,7 @@ a { color: inherit; text-decoration: none; }
     gap: 6px;
     padding: 10px;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .weekly-session {
@@ -523,7 +572,7 @@ a { color: inherit; text-decoration: none; }
 .weekly-session-focus { color: var(--muted); }
 
 .coach-grid {
-    grid-template-rows: 1.1fr 0.9fr;
+    grid-template-rows: auto;
     min-height: 0;
 }
 
@@ -532,7 +581,7 @@ a { color: inherit; text-decoration: none; }
     grid-template-columns: 1.1fr 1fr;
     gap: 18px;
     padding: 20px;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .coach-type {
@@ -583,8 +632,8 @@ a { color: inherit; text-decoration: none; }
     display: grid;
     gap: 8px;
     min-height: 0;
-    overflow: hidden;
-    padding: 4px;
+    overflow: visible;
+    padding: 0;
 }
 
 .insight {
@@ -616,7 +665,7 @@ a { color: inherit; text-decoration: none; }
     display: grid;
     gap: 6px;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
     align-content: start;
 }
 
@@ -756,6 +805,32 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
     .page.is-enter, .boot-orb, .boot-progress > span { animation: none !important; }
 }
 
+@media (min-width: 981px) {
+    .page[data-page="coach"] .subtabs,
+    .page[data-page="training"] .subtabs,
+    .page[data-page="activities"] .subtabs {
+        display: none;
+    }
+
+    .page[data-page="coach"] .page-body,
+    .page[data-page="training"] .page-body,
+    .page[data-page="activities"] .page-body {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        align-items: start;
+    }
+
+    .page[data-page="coach"] .subpanel,
+    .page[data-page="training"] .subpanel,
+    .page[data-page="activities"] .subpanel {
+        display: flex !important;
+    }
+
+    .page[data-page="activities"] .chart-card {
+        min-height: 360px;
+    }
+}
+
 @media (max-width: 980px) {
     .app { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
     .sidebar { display: none; }
@@ -772,7 +847,7 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
         font-size: 11px;
     }
     .sync-meta, .sync-message { font-size: 10px; max-width: 42vw; }
-    .page { padding: 12px 14px 10px; gap: 10px; }
+    .page { padding: 12px 14px 18px; gap: 10px; }
     .overview-grid {
         grid-template-columns: 1fr;
         grid-template-rows: auto minmax(0, 1fr) auto;
@@ -814,6 +889,9 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
     .score-category-value { font-size: 22px; }
     .score-confidence { font-size: 10px; }
     .perf-top, .coach-card, .activities-grid {
+        grid-template-columns: 1fr;
+    }
+    .coach-card {
         grid-template-columns: 1fr;
     }
     .metrics, #performance, .load-stats { grid-template-columns: repeat(2, 1fr); }
@@ -954,22 +1032,30 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
                     <div class="section-title">Training</div>
                     <div class="section-meta" id="weeklyPlanFocus">—</div>
                 </div>
-                <div class="page-grid training-grid">
-                    <div class="card">
-                        <div class="load-stats">
-                            <div><div class="metric-value" id="trainingLoadCurrent">—</div><div class="metric-label">Current load</div></div>
-                            <div><div class="metric-value" id="trainingLoadBaseline">—</div><div class="metric-label">Baseline</div></div>
-                            <div><div class="metric-value" id="trainingLoadChange">—</div><div class="metric-label">Change %</div></div>
-                            <div><div class="metric-value" id="trainingLoadStatus">—</div><div class="metric-label">Status</div></div>
+                <div class="subtabs" data-subtabs="training">
+                    <button type="button" class="subtab active" data-subtab="training-load">Carga</button>
+                    <button type="button" class="subtab" data-subtab="training-plan">Plano</button>
+                </div>
+                <div class="page-body">
+                    <div class="subpanel is-active" data-subpanel="training-load">
+                        <div class="card">
+                            <div class="load-stats">
+                                <div><div class="metric-value" id="trainingLoadCurrent">—</div><div class="metric-label">Current load</div></div>
+                                <div><div class="metric-value" id="trainingLoadBaseline">—</div><div class="metric-label">Baseline</div></div>
+                                <div><div class="metric-value" id="trainingLoadChange">—</div><div class="metric-label">Change %</div></div>
+                                <div><div class="metric-value" id="trainingLoadStatus">—</div><div class="metric-label">Status</div></div>
+                            </div>
+                            <div id="trainingLoadChart" class="bars"></div>
                         </div>
-                        <div id="trainingLoadChart" class="bars"></div>
                     </div>
-                    <div class="card" style="display:flex;flex-direction:column;min-height:0;">
-                        <div class="weekly-plan-summary">
-                            <div><strong id="weeklyPlanDistance">—</strong> km this week</div>
-                            <div>Target <strong id="weeklyPlanTarget">—</strong> km</div>
+                    <div class="subpanel" data-subpanel="training-plan">
+                        <div class="card" style="display:flex;flex-direction:column;min-height:0;">
+                            <div class="weekly-plan-summary">
+                                <div><strong id="weeklyPlanDistance">—</strong> km this week</div>
+                                <div>Target <strong id="weeklyPlanTarget">—</strong> km</div>
+                            </div>
+                            <div class="weekly-sessions" id="weeklySessions"></div>
                         </div>
-                        <div class="weekly-sessions" id="weeklySessions"></div>
                     </div>
                 </div>
             </section>
@@ -979,26 +1065,35 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
                     <div class="section-title">AI Coach</div>
                     <div class="section-meta" id="aiTimestamp">AI analysis</div>
                 </div>
-                <div class="page-grid coach-grid">
-                    <div class="card coach-card" id="aiCoachCard">
-                        <div>
-                            <div class="eyebrow">Insight principal</div>
-                            <div class="coach-type" id="coachType">—</div>
-                            <div class="coach-session-meta" id="coachSessionMeta">—</div>
-                            <div class="coach-details">
-                                <div><div class="coach-detail-label">Distance</div><div class="coach-detail-value" id="coachDistance">—</div></div>
-                                <div><div class="coach-detail-label">RPE</div><div class="coach-detail-value" id="coachRpe">—</div></div>
-                                <div><div class="coach-detail-label">Duration</div><div class="coach-detail-value" id="coachDuration">—</div></div>
+                <div class="subtabs" data-subtabs="coach">
+                    <button type="button" class="subtab active" data-subtab="coach-session">Sessão</button>
+                    <button type="button" class="subtab" data-subtab="coach-analysis">Análise</button>
+                </div>
+                <div class="page-body">
+                    <div class="subpanel is-active" data-subpanel="coach-session">
+                        <div class="card coach-card" id="aiCoachCard">
+                            <div>
+                                <div class="eyebrow">Insight principal</div>
+                                <div class="coach-type" id="coachType">—</div>
+                                <div class="coach-session-meta" id="coachSessionMeta">—</div>
+                                <div class="coach-details">
+                                    <div><div class="coach-detail-label">Distance</div><div class="coach-detail-value" id="coachDistance">—</div></div>
+                                    <div><div class="coach-detail-label">RPE</div><div class="coach-detail-value" id="coachRpe">—</div></div>
+                                    <div><div class="coach-detail-label">Duration</div><div class="coach-detail-value" id="coachDuration">—</div></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="eyebrow">Recomendação</div>
+                                <div id="coachObjective">—</div>
+                                <div class="coach-reason" id="coachReason" style="margin-top:8px;">—</div>
+                                <div class="coach-priority" id="coachPriority" style="margin-top:8px;">—</div>
+                                <button type="button" class="cta" data-subtab="coach-analysis" data-subtabs-target="coach">Ver análise completa</button>
                             </div>
                         </div>
-                        <div>
-                            <div class="eyebrow">Recomendação</div>
-                            <div id="coachObjective">—</div>
-                            <div class="coach-reason" id="coachReason" style="margin-top:8px;">—</div>
-                            <div class="coach-priority" id="coachPriority" style="margin-top:8px;">—</div>
-                        </div>
                     </div>
-                    <div class="insights" id="insights"><div class="loading">A carregar...</div></div>
+                    <div class="subpanel" data-subpanel="coach-analysis">
+                        <div class="insights" id="insights"><div class="loading">A carregar...</div></div>
+                    </div>
                 </div>
             </section>
 
@@ -1007,11 +1102,19 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
                     <div class="section-title">Activities</div>
                     <div class="section-meta">Treinos e volume</div>
                 </div>
-                <div class="page-grid activities-grid">
-                    <div class="activity-list" id="recentActivities"><div class="loading">A carregar...</div></div>
-                    <div class="card chart-card">
-                        <div class="section-title" style="margin-bottom:8px;">Weekly Volume</div>
-                        <div id="weeklyChart"><div class="loading">A carregar...</div></div>
+                <div class="subtabs" data-subtabs="activities">
+                    <button type="button" class="subtab active" data-subtab="activities-list">Lista</button>
+                    <button type="button" class="subtab" data-subtab="activities-volume">Volume</button>
+                </div>
+                <div class="page-body">
+                    <div class="subpanel is-active" data-subpanel="activities-list">
+                        <div class="activity-list" id="recentActivities"><div class="loading">A carregar...</div></div>
+                    </div>
+                    <div class="subpanel" data-subpanel="activities-volume">
+                        <div class="card chart-card" style="min-height:280px;">
+                            <div class="section-title" style="margin-bottom:8px;">Weekly Volume</div>
+                            <div id="weeklyChart"><div class="loading">A carregar...</div></div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -2659,7 +2762,7 @@ async function loadInsights() {
         container.innerHTML = "";
 
 
-        data.insights.slice(0, 3).forEach(
+        data.insights.forEach(
             insight => {
 
                 const element =
@@ -3248,7 +3351,7 @@ async function loadRecentActivities() {
         );
 
         const recent =
-            list.slice(0, 6);
+            list.slice(0, 20);
 
         if (recent.length === 0) {
 
@@ -3616,6 +3719,9 @@ function showPulsePage(pageId, options) {
         const active = page.dataset.page === id;
         page.classList.toggle("is-active", active);
         page.setAttribute("aria-hidden", active ? "false" : "true");
+        if (active) {
+            page.scrollTop = 0;
+        }
     });
 
     document.querySelectorAll("[data-nav]").forEach((link) => {
@@ -3642,13 +3748,48 @@ function showPulsePage(pageId, options) {
         } catch (e) {}
     }
 
-    // animate in
     const activePage = document.querySelector('.page.is-active');
     if (activePage) {
         activePage.classList.remove("is-enter");
         void activePage.offsetWidth;
         activePage.classList.add("is-enter");
     }
+}
+
+function showSubtab(subtabId) {
+    if (!subtabId) {
+        return;
+    }
+
+    const groupEl = document.querySelector(
+        '[data-subpanel="' + subtabId + '"]'
+    );
+
+    if (!groupEl) {
+        return;
+    }
+
+    const page = groupEl.closest(".page");
+
+    if (!page) {
+        return;
+    }
+
+    page.querySelectorAll(".subpanel").forEach((panel) => {
+        panel.classList.toggle(
+            "is-active",
+            panel.dataset.subpanel === subtabId
+        );
+    });
+
+    page.querySelectorAll(".subtab").forEach((tab) => {
+        tab.classList.toggle(
+            "active",
+            tab.dataset.subtab === subtabId
+        );
+    });
+
+    page.scrollTop = 0;
 }
 
 function initPulsePaging() {
@@ -3663,6 +3804,17 @@ function initPulsePaging() {
         link.addEventListener("click", (event) => {
             event.preventDefault();
             showPulsePage(link.dataset.goto);
+        });
+    });
+
+    document.querySelectorAll("[data-subtab]").forEach((tab) => {
+        tab.addEventListener("click", (event) => {
+            event.preventDefault();
+            const targetPage = tab.getAttribute("data-subtabs-target");
+            if (targetPage) {
+                showPulsePage(targetPage);
+            }
+            showSubtab(tab.dataset.subtab);
         });
     });
 
