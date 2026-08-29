@@ -1,5 +1,5 @@
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import RedirectResponse, FileResponse, Response
+from fastapi.responses import RedirectResponse, FileResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
@@ -58,6 +58,7 @@ from follow_helpers import (
     relationship_payload,
     suggest_people,
 )
+from account_helpers import AccountDeleteError, delete_athlete_account
 from public_profile_helpers import can_view_profile, serialize_public_profile
 from ai_coach_chat import (
     CoachChatError,
@@ -955,6 +956,33 @@ def logout(request: Request):
         SESSION_COOKIE_NAME
     )
 
+    return response
+
+
+@app.delete("/api/me/account")
+def delete_my_account(request: Request):
+    """Permanently delete the authenticated athlete and dependent data."""
+    athlete_id = require_athlete_id(request)
+    raw_token = request.cookies.get(SESSION_COOKIE_NAME)
+    db = SessionLocal()
+    try:
+        try:
+            result = delete_athlete_account(db, athlete_id)
+        except AccountDeleteError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+    finally:
+        db.close()
+
+    response = JSONResponse(
+        content={
+            "ok": True,
+            "message": "Your account has officially vanished into the void.",
+            **result,
+        }
+    )
+    response.delete_cookie(SESSION_COOKIE_NAME)
+    # raw_token already revoked inside delete; cookie cleared for the browser.
+    _ = raw_token
     return response
 
 

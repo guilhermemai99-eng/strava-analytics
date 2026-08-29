@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="pt">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pulse — Entra</title>
+    <title>Pulse — Sign in</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
@@ -114,7 +114,7 @@
 
         h1 {
             margin: 0;
-            max-width: 12ch;
+            max-width: 14ch;
             font-family: var(--font-display);
             font-size: clamp(28px, 5.4vw, 48px);
             line-height: 1.02;
@@ -123,17 +123,20 @@
             opacity: 0;
             transform: translateY(24px);
             animation: rise 0.9s ease 0.12s forwards;
+            /* Reserve space so random secondary can't shift the CTA */
+            min-height: 2.1em;
         }
 
         .subtitle {
             margin: 18px 0 0;
-            max-width: 34ch;
+            max-width: 36ch;
             color: var(--muted);
             font-size: clamp(15px, 2.2vw, 18px);
             line-height: 1.55;
             opacity: 0;
             transform: translateY(24px);
             animation: rise 0.9s ease 0.22s forwards;
+            min-height: 3.2em;
         }
 
         .cta {
@@ -195,13 +198,25 @@
         <div class="hero-media" aria-hidden="true"></div>
         <div class="hero-content">
             <p class="brand">Pul<span>se</span></p>
-            <h1>O teu treino, com clareza.</h1>
-            <p class="subtitle">
-                Score, ritmo, carga e o plano da semana — num só lugar, a partir da tua conta Strava.
+            <h1 id="landingHeadline">Your training has stories.</h1>
+            <p class="subtitle" id="landingSecondary">
+                The numbers know what you did last weekend.
             </p>
-            <a class="cta" href="/auth/strava">Entrar com Strava</a>
+            <a class="cta" href="/auth/strava">Continue with Strava</a>
         </div>
     </main>
+    <script src="/static/js/microcopy.js?v=personality-1"></script>
+    <script>
+      (function () {
+        if (!window.PulseCopy) return;
+        var h = PulseCopy.pick("landing.headlines", "landing.headline");
+        var s = PulseCopy.pick("landing.secondary", "landing.secondary");
+        var headline = document.getElementById("landingHeadline");
+        var secondary = document.getElementById("landingSecondary");
+        if (headline && h) headline.textContent = h;
+        if (secondary && s) secondary.textContent = s;
+      })();
+    </script>
 </body>
 
 </html>

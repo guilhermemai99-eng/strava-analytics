@@ -1504,6 +1504,94 @@ body {
   color: var(--muted);
 }
 
+.danger-zone {
+  border-top-color: rgba(224, 139, 122, 0.35);
+}
+
+.danger-zone h3 {
+  color: var(--warn);
+}
+
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 14px;
+  background: rgba(224, 139, 122, 0.14);
+  color: #f2b4b4;
+  border: 1px solid rgba(224, 139, 122, 0.45);
+  transition: background 0.2s var(--ease), border-color 0.2s var(--ease), transform 0.2s var(--ease);
+  touch-action: manipulation;
+}
+
+.btn-danger:hover {
+  background: rgba(224, 139, 122, 0.22);
+  border-color: rgba(224, 139, 122, 0.7);
+  transform: translateY(-1px);
+}
+
+.btn-danger:disabled {
+  opacity: 0.55;
+  cursor: wait;
+  transform: none;
+}
+
+.confirm-modal {
+  width: min(420px, 100%);
+}
+
+.confirm-body {
+  margin: 0 0 22px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.confirm-actions .btn {
+  min-height: 44px;
+  flex: 1 1 auto;
+}
+
+.profile-insight,
+.feed-insight {
+  margin: 10px 0 0;
+  color: var(--faint);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.4;
+  max-width: 42ch;
+}
+
+.feed-post .feed-insight {
+  margin: 0 16px 14px;
+}
+
+.empty-state-block h2 {
+  font-family: var(--font-display);
+  font-size: clamp(26px, 4vw, 36px);
+  letter-spacing: -0.04em;
+  margin: 0 0 10px;
+}
+
+.empty-state-block p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.5;
+  max-width: 36ch;
+}
+
 /* ——— Activity detail modal ——— */
 
 .modal-backdrop {
