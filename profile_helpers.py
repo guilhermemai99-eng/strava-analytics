@@ -180,11 +180,12 @@ def avatar_url_for(athlete: Athlete) -> str | None:
             stamp = f"?v={int(ts.timestamp())}"
         return f"/api/me/avatar{stamp}"
 
-    if athlete.profile_medium:
-        return athlete.profile_medium
-
+    # Strava: profile (~124px) is sharper than profile_medium (~62px) on Retina.
     if athlete.profile:
         return athlete.profile
+
+    if athlete.profile_medium:
+        return athlete.profile_medium
 
     return None
 
@@ -199,10 +200,10 @@ def public_avatar_url_for(athlete: Athlete) -> str | None:
                 ts = ts.replace(tzinfo=timezone.utc)
             stamp = f"?v={int(ts.timestamp())}"
         return f"/api/athletes/{athlete.id}/avatar{stamp}"
-    if athlete.profile_medium:
-        return athlete.profile_medium
     if athlete.profile:
         return athlete.profile
+    if athlete.profile_medium:
+        return athlete.profile_medium
     return None
 
 

@@ -460,41 +460,199 @@
     return coordinates;
   }
 
-  function polylineToSvg(encoded) {
-    const points = decodePolyline(encoded);
-    if (points.length < 2) return "";
+  function destroyRouteMaps(root) {
+    if (!root) return;
+    root.querySelectorAll("[data-route-map]").forEach((el) => {
+      if (el._pulseMap) {
+        try {
+          el._pulseMap.remove();
+        } catch (_err) {
+          /* ignore */
+        }
+        el._pulseMap = null;
+      }
+      if (el._pulseMapObserver) {
+        try {
+          el._pulseMapObserver.disconnect();
+        } catch (_err) {
+          /* ignore */
+        }
+        el._pulseMapObserver = null;
+      }
+    });
+  }
 
-    let minLat = Infinity;
-    let maxLat = -Infinity;
-    let minLng = Infinity;
-    let maxLng = -Infinity;
-    points.forEach(([la, ln]) => {
-      minLat = Math.min(minLat, la);
-      maxLat = Math.max(maxLat, la);
-      minLng = Math.min(minLng, ln);
-      maxLng = Math.max(maxLng, ln);
+  function renderRouteMapMount(polyline, { size = "feed" } = {}) {
+    if (!polyline || !String(polyline).trim()) return "";
+    const interactive = size === "detail" ? "1" : "0";
+    const cls =
+      size === "detail" ? "route-map route-map--detail" : "route-map route-map--feed";
+    return `
+      <div
+        class="${cls}"
+        data-route-map="${escapeHtml(polyline)}"
+        data-map-interactive="${interactive}"
+        role="img"
+        aria-label="Activity route"
+      >
+        <div class="route-map-loading">Loading map…</div>
+      </div>
+    `;
+  }
+
+  function mountLeafletMap(el) {
+    if (!el || el.dataset.mapReady === "1") return;
+    const encoded = el.getAttribute("data-route-map") || "";
+    const points = decodePolyline(encoded);
+    if (points.length < 2) {
+      el.innerHTML =
+        '<div class="route-map-empty">No route data for this activity.</div>';
+      el.dataset.mapReady = "1";
+      return;
+    }
+
+    if (typeof L === "undefined") {
+      el.innerHTML =
+        '<div class="route-map-empty">Map unavailable right now.</div>';
+      el.dataset.mapReady = "1";
+      return;
+    }
+
+    el.innerHTML = "";
+    const interactive = el.dataset.mapInteractive === "1";
+    const map = L.map(el, {
+      zoomControl: interactive,
+      dragging: interactive,
+      scrollWheelZoom: interactive,
+      doubleClickZoom: interactive,
+      boxZoom: interactive,
+      keyboard: interactive,
+      tap: interactive,
+      attributionControl: true,
     });
 
-    const pad = 0.08;
-    const latSpan = Math.max(maxLat - minLat, 0.0001);
-    const lngSpan = Math.max(maxLng - minLng, 0.0001);
-    const width = 640;
-    const height = 400;
-    const path = points
-      .map(([la, ln], i) => {
-        const x = ((ln - minLng) / lngSpan) * (1 - pad * 2) * width + pad * width;
-        const y =
-          (1 - (la - minLat) / latSpan) * (1 - pad * 2) * height + pad * height;
-        return `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
-      })
-      .join(" ");
+    L.tileLayer(
+      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+      {
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        maxZoom: 19,
+        subdomains: "abcd",
+      }
+    ).addTo(map);
 
-    return `
-      <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-        <rect width="100%" height="100%" fill="#0c110e"/>
-        <path d="${path}" fill="none" stroke="#b8f25a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.92"/>
-      </svg>
-    `;
+    const line = L.polyline(points, {
+      color: "#b8f25a",
+      weight: interactive ? 5 : 4,
+      opacity: 0.95,
+      lineJoin: "round",
+      lineCap: "round",
+    }).addTo(map);
+
+    const start = points[0];
+    const end = points[points.length - 1];
+    L.circleMarker(start, {
+      radius: interactive ? 7 : 6,
+      color: "#ffffff",
+      weight: 2,
+      fillColor: "#b8f25a",
+      fillOpacity: 1,
+    }).addTo(map);
+    if (start[0] !== end[0] || start[1] !== end[1]) {
+      L.circleMarker(end, {
+        radius: interactive ? 7 : 6,
+        color: "#b8f25a",
+        weight: 2,
+        fillColor: "#0c110e",
+        fillOpacity: 1,
+      }).addTo(map);
+    }
+
+    map.fitBounds(line.getBounds(), { padding: [28, 28], maxZoom: 15 });
+    requestAnimationFrame(() => {
+      try {
+        map.invalidateSize();
+        map.fitBounds(line.getBounds(), { padding: [28, 28], maxZoom: 15 });
+      } catch (_err) {
+        /* ignore */
+      }
+    });
+
+    el._pulseMap = map;
+    el.dataset.mapReady = "1";
+  }
+
+  function initRouteMaps(root) {
+    if (!root) return;
+    root.querySelectorAll("[data-route-map]").forEach((el) => {
+      if (el.dataset.mapReady === "1" || el._pulseMapObserver) return;
+      if (typeof IntersectionObserver === "undefined") {
+        mountLeafletMap(el);
+        return;
+      }
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            observer.disconnect();
+            el._pulseMapObserver = null;
+            mountLeafletMap(el);
+          });
+        },
+        { rootMargin: "160px 0px", threshold: 0.01 }
+      );
+      el._pulseMapObserver = observer;
+      observer.observe(el);
+    });
+  }
+
+  function bindMediaImages(root) {
+    if (!root) return;
+    root.querySelectorAll(".feed-media img, .modal-media img").forEach((img) => {
+      const wrap = img.closest(".feed-media, .modal-media");
+      const finish = () => {
+        img.classList.add("is-loaded");
+        wrap?.querySelector(".media-skeleton")?.remove();
+      };
+      const fail = () => {
+        wrap?.classList.add("is-error");
+        img.remove();
+        const sk = wrap?.querySelector(".media-skeleton");
+        if (sk) {
+          sk.outerHTML =
+            '<div class="media-fallback-msg">Photo unavailable</div>';
+        } else if (wrap && !wrap.querySelector(".media-fallback-msg")) {
+          wrap.insertAdjacentHTML(
+            "beforeend",
+            '<div class="media-fallback-msg">Photo unavailable</div>'
+          );
+        }
+      };
+      if (img.complete) {
+        if (img.naturalWidth > 0) finish();
+        else fail();
+        return;
+      }
+      img.addEventListener("load", finish, { once: true });
+      img.addEventListener("error", fail, { once: true });
+    });
+  }
+
+  function bindAvatarFallbacks(root) {
+    if (!root) return;
+    root.querySelectorAll("img[data-avatar-img]").forEach((img) => {
+      img.addEventListener(
+        "error",
+        () => {
+          const wrap = img.parentElement;
+          if (!wrap) return;
+          const initials = wrap.getAttribute("data-initials") || "P";
+          img.remove();
+          wrap.textContent = initials;
+        },
+        { once: true }
+      );
+    });
   }
 
   function relativeWhen(iso) {
@@ -512,26 +670,46 @@
   }
 
   function authorAvatarHtml(author) {
+    const initials = escapeHtml(author?.initials || "P");
     if (author?.avatar_url) {
-      return `<div class="pulse-avatar"><img src="${escapeHtml(author.avatar_url)}" alt=""></div>`;
+      return `<div class="pulse-avatar" data-initials="${initials}"><img data-avatar-img src="${escapeHtml(author.avatar_url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"></div>`;
     }
-    return `<div class="pulse-avatar">${escapeHtml(author?.initials || "P")}</div>`;
+    return `<div class="pulse-avatar">${initials}</div>`;
+  }
+
+  function renderPhotoBlock(url, { variant = "feed" } = {}) {
+    if (!url) return "";
+    const cls = variant === "modal" ? "modal-media" : "feed-media feed-media-photo";
+    return `
+      <div class="${cls}">
+        <div class="media-skeleton" aria-hidden="true"></div>
+        <img
+          src="${escapeHtml(url)}"
+          alt=""
+          loading="lazy"
+          decoding="async"
+          referrerpolicy="no-referrer"
+        >
+      </div>
+    `;
   }
 
   function renderFeedMedia(item) {
     const media = item.media || {};
     const activity = item.activity || {};
+    const parts = [];
+
     if (media.primary_image_url) {
-      return `
-        <div class="feed-media">
-          <img src="${escapeHtml(media.primary_image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">
-        </div>
-      `;
+      parts.push(renderPhotoBlock(media.primary_image_url));
     }
     if (media.summary_polyline) {
-      const svg = polylineToSvg(media.summary_polyline);
-      if (svg) return `<div class="feed-media">${svg}</div>`;
+      parts.push(renderRouteMapMount(media.summary_polyline, { size: "feed" }));
     }
+
+    if (parts.length) {
+      return `<div class="feed-visuals">${parts.join("")}</div>`;
+    }
+
     const km =
       activity.distance_km != null
         ? Number(activity.distance_km).toFixed(
@@ -986,7 +1164,7 @@
     const url = profile?.avatar_url;
     const initials = escapeHtml(profile?.initials || "P");
     if (url) {
-      return `<div class="pulse-avatar ${extraClass}"><img src="${escapeHtml(url)}" alt=""></div>`;
+      return `<div class="pulse-avatar ${extraClass}" data-initials="${initials}"><img data-avatar-img src="${escapeHtml(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"></div>`;
     }
     return `<div class="pulse-avatar ${extraClass}">${initials}</div>`;
   }
@@ -996,8 +1174,12 @@
     const pace = formatPace(activity.distance_m, activity.moving_time_s);
     const name = (activity.name || "Run").toUpperCase();
     const bg = tileBackground(activity, index);
+    const photo = (activity.photo_url || "").trim();
+    const tileBg = photo
+      ? `linear-gradient(180deg,rgba(8,12,10,0.2),rgba(8,12,10,0.82)),url("${escapeHtml(photo)}") center / cover no-repeat`
+      : bg;
     return `
-      <button type="button" class="activity-tile" data-activity-id="${escapeHtml(activity.id)}" style="--tile-bg:${bg}">
+      <button type="button" class="activity-tile" data-activity-id="${escapeHtml(activity.id)}" style="--tile-bg:${tileBg}">
         <span class="tile-label">${escapeHtml(name)}</span>
         <div>
           <div class="tile-distance">${escapeHtml(km)} KM</div>
@@ -1927,6 +2109,8 @@
     const selStart = wasExploreSearch ? active.selectionStart : null;
     const selEnd = wasExploreSearch ? active.selectionEnd : null;
 
+    destroyRouteMaps(els.viewRoot);
+
     let html = "";
     if (state.page === "feed") html = renderFeed();
     else if (state.page === "explore") html = renderExplore();
@@ -1937,6 +2121,10 @@
     els.viewRoot.innerHTML = html;
     els.coachSidebarPanel.innerHTML = renderCoachChat({ compact: true });
     bindViewInteractions();
+    bindMediaImages(els.viewRoot);
+    bindAvatarFallbacks(els.viewRoot);
+    bindAvatarFallbacks(document.querySelector(".pulse-sidebar"));
+    initRouteMaps(els.viewRoot);
     wireCoachDom(els.viewRoot);
     wireCoachDom(els.coachSidebarPanel);
     scrollCoachThreads();
@@ -1968,7 +2156,9 @@
 
     els.viewRoot.querySelectorAll("[data-feed-activity-id]").forEach((post) => {
       post.addEventListener("click", (event) => {
-        if (event.target.closest("a,button")) return;
+        if (event.target.closest("a,button,[data-route-map],.leaflet-container")) {
+          return;
+        }
         openActivity(post.dataset.feedActivityId);
       });
     });
@@ -2046,9 +2236,10 @@
     let activity = state.activities.find(
       (a) => String(a.id) === String(activityId)
     );
+    let feedItem = null;
 
     if (!activity) {
-      const feedItem = state.feed.items.find(
+      feedItem = state.feed.items.find(
         (item) => String(item.activity?.id) === String(activityId)
       );
       if (feedItem) {
@@ -2061,8 +2252,14 @@
           elevation_gain_m: feedItem.activity.elevation_gain_m,
           start_date_local: feedItem.activity.start_date_local,
           start_date: feedItem.activity.start_date,
+          photo_url: feedItem.media?.primary_image_url || null,
+          summary_polyline: feedItem.media?.summary_polyline || null,
         };
       }
+    } else {
+      feedItem = state.feed.items.find(
+        (item) => String(item.activity?.id) === String(activityId)
+      );
     }
 
     if (!activity) {
@@ -2070,15 +2267,37 @@
       return;
     }
 
+    const photo =
+      (activity.photo_url || "").trim() ||
+      feedItem?.media?.primary_image_url ||
+      null;
+    const polyline =
+      (activity.summary_polyline || "").trim() ||
+      feedItem?.media?.summary_polyline ||
+      null;
+
+    destroyRouteMaps(els.activityModalBody);
+
     els.activityModalTitle.textContent = activity.name || "Run";
     const bg = tileBackground(activity, 0);
-    els.activityModalBody.innerHTML = `
+    const photoHtml = photo ? renderPhotoBlock(photo, { variant: "modal" }) : "";
+    const mapHtml = polyline
+      ? renderRouteMapMount(polyline, { size: "detail" })
+      : "";
+    const heroHtml =
+      photoHtml || mapHtml
+        ? `${photoHtml}${mapHtml}`
+        : `
       <div class="modal-hero" style="background:${bg}">
         <div>
           <div class="tile-label">${escapeHtml((activity.sport_type || "Run").toUpperCase())}</div>
           <div class="tile-distance" style="margin-top:8px">${escapeHtml(formatKm(activity.distance_m))} KM</div>
         </div>
       </div>
+    `;
+
+    els.activityModalBody.innerHTML = `
+      ${heroHtml}
       <p class="form-hint">${escapeHtml(formatDate(activity.start_date_local || activity.start_date))}</p>
       <div class="modal-metrics">
         <div class="stat-pill"><span>Pace</span><strong>${escapeHtml(formatPace(activity.distance_m, activity.moving_time_s))}</strong></div>
@@ -2089,17 +2308,22 @@
             : "—"
         )}</strong></div>
       </div>
-      <p class="form-hint" style="margin-top:18px;">
-        Maps, AI notes, and photos land later. For now: the miles you actually ran.
-      </p>
+      ${
+        !polyline
+          ? `<p class="form-hint" style="margin-top:18px;">No route data for this activity.</p>`
+          : ""
+      }
     `;
 
     els.activityModal.hidden = false;
     void els.activityModal.offsetWidth;
     els.activityModal.classList.add("is-open");
+    bindMediaImages(els.activityModalBody);
+    initRouteMaps(els.activityModalBody);
   }
 
   function closeActivity() {
+    destroyRouteMaps(els.activityModalBody);
     els.activityModal.classList.remove("is-open");
     setTimeout(() => {
       els.activityModal.hidden = true;
@@ -2111,11 +2335,25 @@
     els.sidebarHandle.textContent = handleLabel(profile);
     els.sidebarAvatar.innerHTML = "";
     if (profile.avatar_url) {
+      const initials = profile.initials || "P";
+      els.sidebarAvatar.setAttribute("data-initials", initials);
       const img = document.createElement("img");
       img.src = profile.avatar_url;
       img.alt = "";
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.referrerPolicy = "no-referrer";
+      img.setAttribute("data-avatar-img", "");
+      img.addEventListener(
+        "error",
+        () => {
+          els.sidebarAvatar.textContent = initials;
+        },
+        { once: true }
+      );
       els.sidebarAvatar.appendChild(img);
     } else {
+      els.sidebarAvatar.removeAttribute("data-initials");
       els.sidebarAvatar.textContent = profile.initials || "P";
     }
 

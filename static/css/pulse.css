@@ -207,12 +207,18 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .pulse-avatar.is-lg {
   width: 96px;
   height: 96px;
   font-size: 28px;
+}
+
+.pulse-avatar.is-lg img {
+  /* Prefer crisp Strava/custom photos on Retina profile header */
+  image-rendering: auto;
 }
 
 .pulse-user-meta {
@@ -526,6 +532,12 @@ body {
   color: var(--faint);
 }
 
+.feed-visuals {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
 .feed-media {
   position: relative;
   width: 100%;
@@ -538,12 +550,52 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.35s var(--ease);
+  display: block;
 }
 
-.feed-media svg {
-  width: 100%;
-  height: 100%;
-  display: block;
+.feed-media img.is-loaded {
+  opacity: 1;
+}
+
+.feed-media.is-error {
+  min-height: 120px;
+  aspect-ratio: auto;
+}
+
+.media-skeleton {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      110deg,
+      rgba(255, 255, 255, 0.03) 25%,
+      rgba(255, 255, 255, 0.08) 37%,
+      rgba(255, 255, 255, 0.03) 63%
+    );
+  background-size: 200% 100%;
+  animation: media-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes media-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.media-fallback-msg {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  color: var(--faint);
+  padding: 16px;
+  text-align: center;
 }
 
 .feed-media-fallback {
@@ -560,6 +612,85 @@ body {
 
 .feed-media-fallback .tile-distance {
   color: var(--text);
+}
+
+.route-map {
+  position: relative;
+  width: 100%;
+  background: #0c110e;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.route-map--feed {
+  height: min(42vw, 220px);
+  min-height: 180px;
+  max-height: 240px;
+}
+
+.route-map--detail {
+  height: min(56vw, 320px);
+  min-height: 240px;
+  max-height: 360px;
+  border-radius: 16px;
+  margin-bottom: 16px;
+}
+
+.route-map .leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: #0c110e;
+  font: inherit;
+}
+
+.route-map-loading,
+.route-map-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  color: var(--faint);
+  padding: 16px;
+  text-align: center;
+  background:
+    linear-gradient(160deg, rgba(184, 242, 90, 0.06), transparent 50%),
+    #0c110e;
+}
+
+.route-map .leaflet-control-attribution {
+  background: rgba(12, 17, 14, 0.72);
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 10px;
+  max-width: 70%;
+}
+
+.route-map .leaflet-control-attribution a {
+  color: rgba(184, 242, 90, 0.7);
+}
+
+.modal-media {
+  position: relative;
+  width: 100%;
+  max-height: 360px;
+  aspect-ratio: 16 / 10;
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  background: #0c110e;
+}
+
+.modal-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.35s var(--ease);
+  display: block;
+}
+
+.modal-media img.is-loaded {
+  opacity: 1;
 }
 
 .feed-metrics {

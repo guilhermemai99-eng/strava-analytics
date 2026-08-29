@@ -22,9 +22,14 @@ MAX_PHOTO_DETAIL_FETCHES = 15
 
 
 def _map_polyline(item: dict) -> str | None:
-    raw = (item.get("map") or {}).get("summary_polyline")
-    if isinstance(raw, str) and raw.strip():
-        return raw.strip()
+    """Prefer detailed polyline when Strava provides it, else summary."""
+    raw_map = item.get("map") or {}
+    if not isinstance(raw_map, dict):
+        return None
+    for key in ("polyline", "summary_polyline"):
+        raw = raw_map.get(key)
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
     return None
 
 
@@ -43,13 +48,19 @@ def _extract_primary_photo_url(detail: dict) -> tuple[str | None, int]:
     if not isinstance(urls, dict) or not urls:
         return None, count
 
-    # Prefer larger sizes for feed cards.
-    preferred = ["600", "1200", "1000", "800", "300", "100"]
-    for key in preferred:
-        if key in urls and urls[key]:
-            return str(urls[key]), count
+    # Prefer the largest numeric size Strava exposes (e.g. 2048 > 1200 > 600).
+    sized: list[tuple[int, str]] = []
+    for key, value in urls.items():
+        if not value:
+            continue
+        try:
+            sized.append((int(key), str(value)))
+        except (TypeError, ValueError):
+            continue
+    if sized:
+        sized.sort(key=lambda pair: pair[0], reverse=True)
+        return sized[0][1], count
 
-    # Fallback: first non-empty URL value.
     for value in urls.values():
         if value:
             return str(value), count
@@ -125,6 +136,15 @@ def _maybe_enrich_photo(
     if url:
         activity.photo_url = url
     activity.photo_count = count or hint_count
+
+    # If detail includes a fuller polyline, prefer it over the list summary.
+    detail_poly = _map_polyline(detail)
+    if detail_poly and (
+        not activity.summary_polyline
+        or len(detail_poly) > len(activity.summary_polyline or "")
+    ):
+        activity.summary_polyline = detail_poly
+
     # Be polite to Strava when enriching multiple activities.
     time.sleep(0.15)
 
@@ -236,7 +256,10 @@ def sync_strava_activities(athlete_id):
                         changed = True
 
                     polyline = _map_polyline(item)
-                    if polyline and not existing.summary_polyline:
+                    if polyline and (
+                        not existing.summary_polyline
+                        or len(polyline) > len(existing.summary_polyline or "")
+                    ):
                         existing.summary_polyline = polyline
                         changed = True
 

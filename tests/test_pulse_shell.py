@@ -13,6 +13,7 @@ def test_dashboard_serves_pulse_shell(client, make_session, make_athlete):
     assert "Pulse" in body
     assert "/static/js/pulse.js" in body
     assert "/static/css/pulse.css" in body
+    assert "leaflet" in body.lower()
     assert 'data-nav="feed"' in body
     assert 'data-nav="explore"' in body
 
