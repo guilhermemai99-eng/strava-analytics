@@ -1,8 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-
 import os
 import secrets
 import requests
@@ -120,21 +118,6 @@ STRAVA_CLIENT_SECRET = os.getenv(
 STRAVA_REDIRECT_URI = os.getenv(
     "STRAVA_REDIRECT_URI"
 )
-
-
-# ============================================================
-# MODELO DE ATIVIDADE
-# ============================================================
-
-class ActivityCreate(BaseModel):
-
-    name: str
-
-    distance_km: float
-
-    time_minutes: float
-
-    average_heart_rate: int
 
 
 # ============================================================
@@ -660,6 +643,7 @@ def get_activities(
 
 
 # ============================================================
+<<<<<<< HEAD
 # CRIAR ATIVIDADE
 # ============================================================
 
@@ -717,6 +701,8 @@ def create_activity(
 
 
 # ============================================================
+=======
+>>>>>>> origin/cursor/phase-g-legacy-cleanup-f8e7
 # ANALYTICS — SUMMARY
 # ============================================================
 
