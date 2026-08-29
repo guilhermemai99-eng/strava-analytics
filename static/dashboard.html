@@ -719,8 +719,303 @@ a { color: inherit; text-decoration: none; }
 }
 
 .profile-card {
-    padding: 24px;
-    max-width: 520px;
+    padding: 0;
+    max-width: none;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+
+.profile-hero {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 20px;
+    align-items: center;
+    padding: 8px 0 20px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 22px;
+}
+
+.profile-avatar-wrap {
+    position: relative;
+    width: 96px;
+    height: 96px;
+    flex-shrink: 0;
+}
+
+.profile-avatar,
+.profile-avatar-fallback {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    display: block;
+    object-fit: cover;
+    border: 2px solid rgba(184, 242, 90, 0.35);
+    background: rgba(184, 242, 90, 0.08);
+}
+
+.profile-avatar-fallback {
+    display: grid;
+    place-items: center;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 28px;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+}
+
+.profile-avatar.is-hidden,
+.profile-avatar-fallback.is-hidden {
+    display: none;
+}
+
+.profile-identity h2 {
+    margin: 0 0 6px;
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+}
+
+.profile-handle {
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 14px;
+    margin: 0 0 8px;
+}
+
+.profile-meta {
+    color: var(--muted);
+    font-size: 13px;
+    margin: 0 0 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+}
+
+.profile-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.profile-actions .cta,
+.profile-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0 16px;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    background: transparent;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.profile-actions .cta-primary,
+.profile-actions button.cta-primary {
+    background: var(--accent);
+    color: #0b120c;
+    border-color: transparent;
+}
+
+.profile-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 22px;
+}
+
+.profile-stat {
+    padding: 14px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    min-width: 0;
+}
+
+.profile-stat-label {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.profile-stat-value {
+    font-family: var(--font-score);
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.profile-section-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 16px;
+    margin: 0 0 12px;
+}
+
+.profile-activity-list {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 24px;
+}
+
+.profile-activity-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface);
+}
+
+.profile-activity-name {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.profile-activity-meta {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.profile-activity-pace {
+    font-family: var(--font-score);
+    font-size: 16px;
+    align-self: center;
+}
+
+.profile-empty {
+    color: var(--muted);
+    font-size: 13px;
+    padding: 16px 0;
+}
+
+.profile-settings {
+    border-top: 1px solid var(--line);
+    padding-top: 20px;
+}
+
+.profile-settings[hidden] {
+    display: none !important;
+}
+
+.profile-settings-tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.profile-settings-tabs button {
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--font-body);
+    cursor: pointer;
+}
+
+.profile-settings-tabs button.active {
+    color: #0b120c;
+    background: var(--accent);
+    border-color: transparent;
+}
+
+.profile-settings-panel[hidden] {
+    display: none !important;
+}
+
+.profile-form {
+    display: grid;
+    gap: 12px;
+    max-width: 420px;
+}
+
+.profile-form label {
+    display: grid;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.profile-form input,
+.profile-form textarea {
+    width: 100%;
+    border: 1px solid var(--line-strong);
+    background: rgba(0,0,0,0.25);
+    color: var(--text);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-family: var(--font-body);
+    font-size: 14px;
+}
+
+.profile-form textarea {
+    min-height: 88px;
+    resize: vertical;
+}
+
+.profile-form-hint {
+    color: var(--muted);
+    font-size: 12px;
+    margin: 0;
+}
+
+.profile-form-msg {
+    font-size: 13px;
+    margin: 0;
+    min-height: 1.2em;
+}
+
+.profile-form-msg.is-error { color: var(--down); }
+.profile-form-msg.is-ok { color: var(--up); }
+
+.profile-avatar-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.profile-avatar-tools input[type="file"] {
+    display: none;
+}
+
+.profile-strava-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface);
+    max-width: 420px;
+}
+
+.profile-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--up);
+    flex-shrink: 0;
 }
 
 .bottom-nav {
@@ -899,22 +1194,35 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
     .metric-value { font-size: 22px; }
     .bottom-nav {
         display: grid;
-        grid-template-columns: repeat(5, 1fr);
+        grid-template-columns: repeat(6, 1fr);
         border-top: 1px solid var(--line);
         background: rgba(6,8,7,0.94);
-        padding: 8px 4px calc(8px + env(safe-area-inset-bottom));
+        padding: 8px 2px calc(8px + env(safe-area-inset-bottom));
     }
     .bottom-nav button {
         border: 0;
         background: transparent;
         color: var(--muted);
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 600;
         font-family: var(--font-body);
-        padding: 8px 2px;
+        padding: 8px 1px;
         cursor: pointer;
     }
     .bottom-nav button.active { color: var(--accent); }
+    .profile-hero {
+        grid-template-columns: 1fr;
+        justify-items: center;
+        text-align: center;
+    }
+    .profile-identity h2 { font-size: 24px; }
+    .profile-meta,
+    .profile-actions {
+        justify-content: center;
+    }
+    .profile-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 640px) {
@@ -1121,13 +1429,96 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
 
             <section class="page" data-page="profile" id="profile" aria-hidden="true">
                 <div class="page-header">
-                    <div class="section-title">Profile</div>
-                    <div class="section-meta">Conta</div>
+                    <div class="section-title">Perfil</div>
+                    <div class="section-meta">A tua identidade no Pulse</div>
                 </div>
-                <div class="card profile-card">
-                    <div class="athlete-chip" id="profileAthlete">Sessão autenticada</div>
-                    <p class="future-note">Espaço reservado para Race preparation, Performance improvement e Workout export.</p>
-                    <a class="cta" href="/auth/logout">Terminar sessão</a>
+
+                <div class="profile-card">
+                    <div class="profile-hero">
+                        <div class="profile-avatar-wrap">
+                            <img id="profileAvatarImg" class="profile-avatar is-hidden" alt="Foto de perfil">
+                            <div id="profileAvatarFallback" class="profile-avatar-fallback">P</div>
+                        </div>
+                        <div class="profile-identity">
+                            <h2 id="profileDisplayName">A carregar…</h2>
+                            <p class="profile-handle" id="profileHandle" hidden></p>
+                            <div class="profile-meta" id="profileMeta"></div>
+                            <div class="profile-actions">
+                                <button type="button" class="cta-primary" id="profileEditBtn">Editar perfil</button>
+                                <a class="cta" id="profileStravaLink" href="https://www.strava.com" target="_blank" rel="noopener noreferrer">Strava</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="profile-stats" id="profileStats" aria-label="Estatísticas">
+                        <div class="profile-stat"><div class="profile-stat-label">Distância</div><div class="profile-stat-value" id="profileStatDistance">—</div></div>
+                        <div class="profile-stat"><div class="profile-stat-label">Corridas</div><div class="profile-stat-value" id="profileStatRuns">—</div></div>
+                        <div class="profile-stat"><div class="profile-stat-label">Tempo</div><div class="profile-stat-value" id="profileStatHours">—</div></div>
+                        <div class="profile-stat"><div class="profile-stat-label">Mais longa</div><div class="profile-stat-value" id="profileStatLongest">—</div></div>
+                    </div>
+
+                    <div class="profile-section-title">A minha atividade</div>
+                    <div class="profile-activity-list" id="profileRecentActivity">
+                        <div class="profile-empty">A carregar atividade…</div>
+                    </div>
+
+                    <div class="profile-settings" id="profileSettings" hidden>
+                        <div class="profile-section-title">Definições</div>
+                        <div class="profile-settings-tabs" role="tablist">
+                            <button type="button" class="active" data-settings-tab="account">Conta</button>
+                            <button type="button" data-settings-tab="strava">Strava</button>
+                            <button type="button" data-settings-tab="prefs">Preferências</button>
+                            <button type="button" data-settings-tab="session">Sessão</button>
+                        </div>
+
+                        <div class="profile-settings-panel" data-settings-panel="account">
+                            <form class="profile-form" id="profileAccountForm">
+                                <label>
+                                    Nome
+                                    <input type="text" id="settingsDisplayName" maxlength="120" autocomplete="nickname">
+                                </label>
+                                <label>
+                                    Handle
+                                    <input type="text" id="settingsHandle" maxlength="30" autocomplete="username" placeholder="ex: guilherme_run">
+                                </label>
+                                <p class="profile-form-hint">O handle prepara URLs futuras como /u/handle. 3–30 caracteres: a-z, 0-9, _</p>
+                                <label>
+                                    Bio
+                                    <textarea id="settingsBio" maxlength="500" placeholder="Uma linha sobre ti como atleta"></textarea>
+                                </label>
+                                <div class="profile-avatar-tools">
+                                    <button type="button" class="cta-primary" id="settingsAvatarPick">Carregar foto</button>
+                                    <button type="button" id="settingsAvatarRemove">Remover foto</button>
+                                    <input type="file" id="settingsAvatarFile" accept="image/jpeg,image/png,image/webp">
+                                </div>
+                                <p class="profile-form-hint">JPEG, PNG ou WebP · máx. 1 MB</p>
+                                <button type="submit" class="cta-primary">Guardar alterações</button>
+                                <p class="profile-form-msg" id="settingsAccountMsg" aria-live="polite"></p>
+                            </form>
+                        </div>
+
+                        <div class="profile-settings-panel" data-settings-panel="strava" hidden>
+                            <div class="profile-strava-status">
+                                <span class="profile-dot" aria-hidden="true"></span>
+                                <div>
+                                    <strong id="settingsStravaStatus">Conta Strava ligada</strong>
+                                    <p class="profile-form-hint" id="settingsStravaMeta">Os tokens OAuth ficam só no servidor, encriptados.</p>
+                                </div>
+                            </div>
+                            <p class="profile-form-hint" style="margin-top:12px;">Desligar / revogar a ligação chega numa próxima iteração — com confirmação explícita.</p>
+                        </div>
+
+                        <div class="profile-settings-panel" data-settings-panel="prefs" hidden>
+                            <p class="profile-form-hint">Estrutura pronta para preferências (unidades, formato). Nesta versão mantemos o padrão métrico (km) já usado no Pulse.</p>
+                        </div>
+
+                        <div class="profile-settings-panel" data-settings-panel="session" hidden>
+                            <div class="profile-form">
+                                <p class="profile-form-hint" id="settingsSessionInfo">Sessão autenticada via cookie seguro.</p>
+                                <a class="cta" href="/auth/logout">Terminar sessão</a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
         </div>
@@ -1139,6 +1530,7 @@ body.is-booting .app { filter: blur(3px); pointer-events: none; }
         <button type="button" data-nav="training">Treino</button>
         <button type="button" data-nav="coach">Coach</button>
         <button type="button" data-nav="activities">Ativ.</button>
+        <button type="button" data-nav="profile">Eu</button>
     </nav>
 </div>
 
@@ -2138,6 +2530,364 @@ async function bootDashboard() {
 }
 
 
+let PROFILE_CACHE = null;
+
+function formatKm(value) {
+    const n = Number(value) || 0;
+    if (n >= 100) {
+        return Math.round(n) + " km";
+    }
+    return n.toFixed(1).replace(/\.0$/, "") + " km";
+}
+
+function formatHours(value) {
+    const n = Number(value) || 0;
+    if (n < 1) {
+        return Math.round(n * 60) + " min";
+    }
+    return n.toFixed(1).replace(/\.0$/, "") + " h";
+}
+
+function formatPace(distanceM, movingS) {
+    const d = Number(distanceM) || 0;
+    const t = Number(movingS) || 0;
+    if (d <= 0 || t <= 0) {
+        return "—";
+    }
+    const secPerKm = t / (d / 1000);
+    const m = Math.floor(secPerKm / 60);
+    const s = Math.round(secPerKm % 60);
+    return m + ":" + String(s).padStart(2, "0") + " /km";
+}
+
+function formatActivityDate(raw) {
+    if (!raw) {
+        return "";
+    }
+    const day = String(raw).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+        return "";
+    }
+    const [y, mo, d] = day.split("-");
+    return d + "/" + mo + "/" + y;
+}
+
+function setProfileMessage(text, kind) {
+    const el = document.getElementById("settingsAccountMsg");
+    if (!el) {
+        return;
+    }
+    el.textContent = text || "";
+    el.classList.remove("is-error", "is-ok");
+    if (kind) {
+        el.classList.add(kind);
+    }
+}
+
+function renderProfileAvatar(profile) {
+    const img = document.getElementById("profileAvatarImg");
+    const fallback = document.getElementById("profileAvatarFallback");
+    if (!img || !fallback) {
+        return;
+    }
+
+    const initials = (profile && profile.initials) || "P";
+    fallback.textContent = initials;
+
+    const url = profile && profile.avatar_url;
+    if (url) {
+        img.onload = function () {
+            img.classList.remove("is-hidden");
+            fallback.classList.add("is-hidden");
+        };
+        img.onerror = function () {
+            img.classList.add("is-hidden");
+            fallback.classList.remove("is-hidden");
+        };
+        img.src = url;
+    } else {
+        img.removeAttribute("src");
+        img.classList.add("is-hidden");
+        fallback.classList.remove("is-hidden");
+    }
+}
+
+function renderProfileHero(profile) {
+    const nameEl = document.getElementById("profileDisplayName");
+    const handleEl = document.getElementById("profileHandle");
+    const metaEl = document.getElementById("profileMeta");
+    const stravaLink = document.getElementById("profileStravaLink");
+    const label = document.getElementById("athleteLabel");
+
+    if (nameEl) {
+        nameEl.textContent = profile.display_name || "Atleta";
+    }
+
+    if (handleEl) {
+        if (profile.handle) {
+            handleEl.hidden = false;
+            handleEl.textContent = "@" + profile.handle;
+        } else {
+            handleEl.hidden = true;
+            handleEl.textContent = "";
+        }
+    }
+
+    if (metaEl) {
+        const bits = [];
+        if (profile.strava && profile.strava.username) {
+            bits.push("Strava · " + profile.strava.username);
+        } else {
+            bits.push("Strava ligado");
+        }
+        if (profile.location && (profile.location.city || profile.location.country)) {
+            bits.push(
+                [profile.location.city, profile.location.country]
+                    .filter(Boolean)
+                    .join(", ")
+            );
+        }
+        if (profile.member_since) {
+            bits.push("No Pulse desde " + formatActivityDate(profile.member_since));
+        }
+        metaEl.innerHTML = bits
+            .map(function (b) { return "<span>" + b + "</span>"; })
+            .join("");
+    }
+
+    if (stravaLink && profile.strava && profile.strava.username) {
+        stravaLink.href = "https://www.strava.com/athletes/" + profile.athlete_id;
+    }
+
+    if (label) {
+        label.textContent = profile.display_name || ("Atleta " + profile.athlete_id);
+    }
+
+    renderProfileAvatar(profile);
+
+    const stats = profile.stats || {};
+    const setStat = function (id, value) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.textContent = value;
+        }
+    };
+    setStat("profileStatDistance", formatKm(stats.total_running_km));
+    setStat("profileStatRuns", String(stats.running_activities ?? "—"));
+    setStat("profileStatHours", formatHours(stats.total_training_hours));
+    setStat("profileStatLongest", formatKm(stats.longest_run_km));
+
+    const nameInput = document.getElementById("settingsDisplayName");
+    const handleInput = document.getElementById("settingsHandle");
+    const bioInput = document.getElementById("settingsBio");
+    if (nameInput) {
+        nameInput.value = profile.display_name_custom || "";
+    }
+    if (handleInput) {
+        handleInput.value = profile.handle || "";
+    }
+    if (bioInput) {
+        bioInput.value = profile.bio || "";
+    }
+
+    const stravaStatus = document.getElementById("settingsStravaStatus");
+    const stravaMeta = document.getElementById("settingsStravaMeta");
+    if (stravaStatus) {
+        stravaStatus.textContent = "Conta Strava ligada";
+    }
+    if (stravaMeta) {
+        const uname = profile.strava && profile.strava.username;
+        stravaMeta.textContent = uname
+            ? ("@" + uname + " · tokens OAuth só no servidor, encriptados.")
+            : "Tokens OAuth só no servidor, encriptados.";
+    }
+
+    const sessionInfo = document.getElementById("settingsSessionInfo");
+    if (sessionInfo) {
+        sessionInfo.textContent =
+            "Sessão ativa para o atleta #" +
+            profile.athlete_id +
+            ". Cookie httponly · sem tokens no browser.";
+    }
+}
+
+function renderProfileRecent(activities) {
+    const root = document.getElementById("profileRecentActivity");
+    if (!root) {
+        return;
+    }
+
+    if (!activities || !activities.length) {
+        root.innerHTML =
+            '<div class="profile-empty">Ainda sem corridas sincronizadas. Faz sync no Overview.</div>';
+        return;
+    }
+
+    root.innerHTML = activities
+        .slice(0, 5)
+        .map(function (a) {
+            const km = ((Number(a.distance_m) || 0) / 1000).toFixed(1);
+            const pace = formatPace(a.distance_m, a.moving_time_s);
+            const when = formatActivityDate(a.start_date_local || a.start_date);
+            return (
+                '<div class="profile-activity-row">' +
+                '<div><div class="profile-activity-name">' +
+                (a.name || "Corrida") +
+                '</div><div class="profile-activity-meta">' +
+                km +
+                " km" +
+                (when ? " · " + when : "") +
+                "</div></div>" +
+                '<div class="profile-activity-pace">' +
+                pace +
+                "</div></div>"
+            );
+        })
+        .join("");
+}
+
+async function loadProfilePage(force) {
+    if (PROFILE_CACHE && !force) {
+        renderProfileHero(PROFILE_CACHE);
+        return PROFILE_CACHE;
+    }
+
+    const response = await apiFetch("/api/me/profile");
+    if (!response.ok) {
+        throw new Error("Não foi possível carregar o perfil.");
+    }
+    const profile = await response.json();
+    PROFILE_CACHE = profile;
+    renderProfileHero(profile);
+
+    try {
+        const actResp = await apiFetch("/activities?limit=5");
+        if (actResp.ok) {
+            renderProfileRecent(await actResp.json());
+        }
+    } catch (e) {
+        const root = document.getElementById("profileRecentActivity");
+        if (root) {
+            root.innerHTML =
+                '<div class="profile-empty">Não foi possível carregar a atividade recente.</div>';
+        }
+    }
+
+    return profile;
+}
+
+function openProfileSettings() {
+    const panel = document.getElementById("profileSettings");
+    if (panel) {
+        panel.hidden = false;
+        panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+}
+
+function initProfileSettingsUi() {
+    const editBtn = document.getElementById("profileEditBtn");
+    if (editBtn) {
+        editBtn.addEventListener("click", openProfileSettings);
+    }
+
+    document.querySelectorAll("[data-settings-tab]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            const tab = btn.getAttribute("data-settings-tab");
+            document.querySelectorAll("[data-settings-tab]").forEach(function (b) {
+                b.classList.toggle("active", b === btn);
+            });
+            document.querySelectorAll("[data-settings-panel]").forEach(function (panel) {
+                panel.hidden = panel.getAttribute("data-settings-panel") !== tab;
+            });
+        });
+    });
+
+    const form = document.getElementById("profileAccountForm");
+    if (form) {
+        form.addEventListener("submit", async function (event) {
+            event.preventDefault();
+            setProfileMessage("A guardar…", null);
+            try {
+                const payload = {
+                    display_name: document.getElementById("settingsDisplayName").value,
+                    handle: document.getElementById("settingsHandle").value,
+                    bio: document.getElementById("settingsBio").value
+                };
+                const response = await apiFetch("/api/me/profile", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json().catch(function () { return {}; });
+                if (!response.ok) {
+                    throw new Error(data.detail || "Falha ao guardar.");
+                }
+                PROFILE_CACHE = data;
+                renderProfileHero(data);
+                setProfileMessage("Perfil atualizado.", "is-ok");
+            } catch (err) {
+                setProfileMessage(err.message || "Erro ao guardar.", "is-error");
+            }
+        });
+    }
+
+    const pick = document.getElementById("settingsAvatarPick");
+    const fileInput = document.getElementById("settingsAvatarFile");
+    const removeBtn = document.getElementById("settingsAvatarRemove");
+
+    if (pick && fileInput) {
+        pick.addEventListener("click", function () {
+            fileInput.click();
+        });
+        fileInput.addEventListener("change", async function () {
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) {
+                return;
+            }
+            setProfileMessage("A carregar foto…", null);
+            try {
+                const body = new FormData();
+                body.append("file", file);
+                const response = await apiFetch("/api/me/avatar", {
+                    method: "POST",
+                    body: body
+                });
+                const data = await response.json().catch(function () { return {}; });
+                if (!response.ok) {
+                    throw new Error(data.detail || "Upload falhou.");
+                }
+                PROFILE_CACHE = data;
+                renderProfileHero(data);
+                setProfileMessage("Foto atualizada.", "is-ok");
+            } catch (err) {
+                setProfileMessage(err.message || "Erro no upload.", "is-error");
+            } finally {
+                fileInput.value = "";
+            }
+        });
+    }
+
+    if (removeBtn) {
+        removeBtn.addEventListener("click", async function () {
+            setProfileMessage("A remover foto…", null);
+            try {
+                const response = await apiFetch("/api/me/avatar", {
+                    method: "DELETE"
+                });
+                const data = await response.json().catch(function () { return {}; });
+                if (!response.ok) {
+                    throw new Error(data.detail || "Não foi possível remover.");
+                }
+                PROFILE_CACHE = data;
+                renderProfileHero(data);
+                setProfileMessage("Foto removida. A usar fallback.", "is-ok");
+            } catch (err) {
+                setProfileMessage(err.message || "Erro ao remover.", "is-error");
+            }
+        });
+    }
+}
+
 async function loadCurrentAthlete() {
     const response = await fetch("/auth/me");
 
@@ -2154,25 +2904,14 @@ async function loadCurrentAthlete() {
 
     ATHLETE_ID = data.athlete_id;
 
-    const athleteText =
-        "Atleta " + ATHLETE_ID;
-
-    const label =
-        document.getElementById(
-            "athleteLabel"
-        );
-
-    const profile =
-        document.getElementById(
-            "profileAthlete"
-        );
-
-    if (label) {
-        label.textContent = athleteText;
-    }
-
-    if (profile) {
-        profile.textContent = athleteText;
+    try {
+        await loadProfilePage(true);
+    } catch (err) {
+        const label = document.getElementById("athleteLabel");
+        if (label) {
+            label.textContent = "Atleta " + ATHLETE_ID;
+        }
+        console.error(err);
     }
 
     showLastSync();
@@ -3745,7 +4484,7 @@ function showPulsePage(pageId, options) {
         training: "Training",
         coach: "AI Coach",
         activities: "Activities",
-        profile: "Profile"
+        profile: "Perfil"
     };
 
     const pageTitle = document.getElementById("pageTitle");
@@ -3764,6 +4503,12 @@ function showPulsePage(pageId, options) {
         activePage.classList.remove("is-enter");
         void activePage.offsetWidth;
         activePage.classList.add("is-enter");
+    }
+
+    if (id === "profile") {
+        loadProfilePage(false).catch(function (err) {
+            console.error(err);
+        });
     }
 }
 
@@ -3854,6 +4599,7 @@ hideBootOverlay = function () {
 
 document.addEventListener("DOMContentLoaded", () => {
     initPulsePaging();
+    initProfileSettingsUi();
 });
 
 </script>

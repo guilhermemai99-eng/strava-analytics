@@ -1,6 +1,8 @@
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import RedirectResponse, FileResponse
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import RedirectResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from typing import Optional
 import os
 import secrets
 import requests
@@ -12,6 +14,7 @@ from dotenv import load_dotenv
 from database import SessionLocal
 from models import Activity
 from strava_auth import StravaAuth
+from athlete import Athlete
 from oauth_helpers import (
     cleanup_expired_oauth_states,
     consume_oauth_state,
@@ -25,6 +28,12 @@ from session_helpers import (
     resolve_athlete_id,
     revoke_session,
 )
+from profile_helpers import (
+    ProfileValidationError,
+    apply_profile_patch,
+    serialize_profile,
+)
+from avatar_helpers import AvatarValidationError, validate_avatar_upload
 
 from import_strava import sync_strava_activities
 from strava_tokens import StravaTokenError, store_strava_tokens
@@ -51,6 +60,9 @@ from athlete_score import calculate_athlete_score
 from ai_coach import get_recommendation
 
 from weekly_training_plan import calculate_weekly_plan
+
+
+# pydantic models for request bodies live near their routes
 
 
 # ============================================================
@@ -560,6 +572,171 @@ def get_current_athlete(
     }
 
 
+class ProfileUpdate(BaseModel):
+    display_name: Optional[str] = None
+    handle: Optional[str] = None
+    bio: Optional[str] = None
+
+
+# ============================================================
+# PROFILE — /api/me/*
+# ============================================================
+
+@app.get("/api/me/profile")
+def get_my_profile(request: Request):
+    athlete_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        athlete = (
+            db.query(Athlete)
+            .filter(Athlete.id == athlete_id)
+            .one_or_none()
+        )
+        if athlete is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Perfil não encontrado.",
+            )
+
+        stats = get_summary(athlete_id)
+        return serialize_profile(athlete, include_stats=stats)
+    finally:
+        db.close()
+
+
+@app.patch("/api/me/profile")
+def patch_my_profile(request: Request, body: ProfileUpdate):
+    athlete_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        athlete = (
+            db.query(Athlete)
+            .filter(Athlete.id == athlete_id)
+            .one_or_none()
+        )
+        if athlete is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Perfil não encontrado.",
+            )
+
+        # Only apply fields explicitly sent by the client.
+        payload = body.model_dump(exclude_unset=True)
+        try:
+            athlete = apply_profile_patch(db, athlete, payload)
+        except ProfileValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        stats = get_summary(athlete_id)
+        return serialize_profile(athlete, include_stats=stats)
+    finally:
+        db.close()
+
+
+@app.get("/api/me/avatar")
+def get_my_avatar(request: Request):
+    athlete_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        athlete = (
+            db.query(Athlete)
+            .filter(Athlete.id == athlete_id)
+            .one_or_none()
+        )
+        if (
+            athlete is None
+            or not athlete.avatar_data
+            or not athlete.avatar_content_type
+        ):
+            raise HTTPException(
+                status_code=404,
+                detail="Sem foto de perfil personalizada.",
+            )
+
+        return Response(
+            content=bytes(athlete.avatar_data),
+            media_type=athlete.avatar_content_type,
+            headers={
+                "Cache-Control": "private, max-age=3600",
+            },
+        )
+    finally:
+        db.close()
+
+
+@app.post("/api/me/avatar")
+async def upload_my_avatar(
+    request: Request,
+    file: UploadFile = File(...),
+):
+    athlete_id = require_athlete_id(request)
+    data = await file.read()
+
+    try:
+        content_type = validate_avatar_upload(
+            data,
+            declared_type=file.content_type,
+        )
+    except AvatarValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    db = SessionLocal()
+    try:
+        athlete = (
+            db.query(Athlete)
+            .filter(Athlete.id == athlete_id)
+            .one_or_none()
+        )
+        if athlete is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Perfil não encontrado.",
+            )
+
+        athlete.avatar_data = data
+        athlete.avatar_content_type = content_type
+        from athlete import utcnow as athlete_utcnow
+
+        athlete.updated_at = athlete_utcnow()
+        db.commit()
+        db.refresh(athlete)
+
+        stats = get_summary(athlete_id)
+        return serialize_profile(athlete, include_stats=stats)
+    finally:
+        db.close()
+
+
+@app.delete("/api/me/avatar")
+def delete_my_avatar(request: Request):
+    athlete_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        athlete = (
+            db.query(Athlete)
+            .filter(Athlete.id == athlete_id)
+            .one_or_none()
+        )
+        if athlete is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Perfil não encontrado.",
+            )
+
+        athlete.avatar_data = None
+        athlete.avatar_content_type = None
+        from athlete import utcnow as athlete_utcnow
+
+        athlete.updated_at = athlete_utcnow()
+        db.commit()
+        db.refresh(athlete)
+
+        stats = get_summary(athlete_id)
+        return serialize_profile(athlete, include_stats=stats)
+    finally:
+        db.close()
+
+
 # ============================================================
 # LOGOUT
 # ============================================================
@@ -642,7 +819,8 @@ def strava_sync(
 
 @app.get("/activities")
 def get_activities(
-    request: Request
+    request: Request,
+    limit: int | None = None,
 ):
 
     athlete_id = require_athlete_id(
@@ -653,7 +831,7 @@ def get_activities(
 
     try:
 
-        activities = (
+        query = (
 
             db.query(
                 Activity
@@ -665,9 +843,17 @@ def get_activities(
                 athlete_id
             )
 
-            .all()
+            .order_by(
+                Activity.start_date_local.desc()
+            )
 
         )
+
+        if limit is not None:
+            safe_limit = max(1, min(int(limit), 50))
+            query = query.limit(safe_limit)
+
+        activities = query.all()
 
         return activities
 
