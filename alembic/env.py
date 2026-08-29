@@ -4,8 +4,11 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from database import DATABASE_URL, Base
+import athlete  # noqa: F401
 import models  # noqa: F401
+import oauth_state  # noqa: F401
 import strava_auth  # noqa: F401
+import user_session  # noqa: F401
 
 
 config = context.config

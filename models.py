@@ -1,4 +1,11 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+)
 
 from database import Base
 
@@ -12,8 +19,9 @@ class Activity(Base):
 
     athlete_id = Column(
         Integer,
+        ForeignKey("athletes.id"),
         index=True,
-        nullable=True
+        nullable=False,
     )
 
     # =========================================================
