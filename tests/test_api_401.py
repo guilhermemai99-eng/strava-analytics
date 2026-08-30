@@ -155,15 +155,13 @@ def test_protected_apis_return_401_without_session(client):
                 path,
                 json={"name": "Test Club", "visibility": "public"},
             )
-<<<<<<< HEAD
         elif method == "POST" and path.endswith("/invites"):
             resp = client.post(path, json={"handle": "someone"})
         elif method == "POST" and path == "/api/club-invites/redeem":
             resp = client.post(path, json={"token": "x"})
         elif method == "POST" and path.endswith("/transfer"):
-=======
+            resp = client.post(path, json={"athlete_id": 1})
         elif method == "POST" and path.endswith("/invite"):
->>>>>>> origin/cursor/run-invite-only-b3a3
             resp = client.post(path, json={"athlete_id": 1})
         elif method == "POST" and path.endswith("/follow"):
             resp = client.post(path)
