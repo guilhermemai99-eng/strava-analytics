@@ -3,7 +3,7 @@
   "use strict";
 
   const PAGES = ["feed", "explore", "messages", "activity", "profile", "coach"];
-  const PROFILE_TABS = ["activities", "media", "stats", "lab"];
+  const PROFILE_TABS = ["activities", "media"];
   const Copy = window.PulseCopy || null;
 
   const TILE_BACKGROUNDS = [
@@ -104,6 +104,7 @@
     },
     profileTab: "activities",
     viewedProfileTab: "activities",
+    navHighlight: null,
     notifications: {
       status: "idle",
       items: [],
@@ -118,6 +119,11 @@
     mobileHeaderTitle: document.getElementById("mobileHeaderTitle"),
     mobileHeaderStart: document.getElementById("mobileHeaderStart"),
     mobileHeaderEnd: document.getElementById("mobileHeaderEnd"),
+    rightRail: document.getElementById("rightRail"),
+    rightRailBody: document.getElementById("rightRailBody"),
+    moreDrawer: document.getElementById("moreDrawer"),
+    navProfileAvatar: document.getElementById("navProfileAvatar"),
+    bottomProfileAvatar: document.getElementById("bottomProfileAvatar"),
     coachTagline: null,
     coachSidebarPanel: null,
     sidebarAvatar: null,
@@ -242,8 +248,9 @@
 
   function setNavActive(page) {
     const navPage = page === "dm" ? "messages" : page === "create" ? null : page;
-    document.querySelectorAll("[data-nav]").forEach((btn) => {
-      btn.classList.toggle("is-active", navPage && btn.dataset.nav === navPage);
+    const highlight = state.navHighlight || navPage;
+    document.querySelectorAll(".ig-nav-item[data-nav], .ig-bottom-nav [data-nav]").forEach((btn) => {
+      btn.classList.toggle("is-active", highlight && btn.dataset.nav === highlight);
     });
   }
 
@@ -284,9 +291,12 @@
     if (page === "feed" || page === "explore") {
       if (els.mobileHeaderEnd) {
         els.mobileHeaderEnd.innerHTML = `
-          <button type="button" class="ig-header-bell" data-nav="activity" aria-label="Notifications">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2 2 0 002-2H10a2 2 0 002 2zm6-6V11a6 6 0 00-5-5.91V4a1 1 0 00-2 0v1.09A6 6 0 006 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+          <button type="button" class="ig-header-icon" data-nav="activity" aria-label="Notifications">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-4.35-7-10a4 4 0 017-2.6A4 4 0 0119 11c0 5.65-7 10-7 10z"/></svg>
             <span class="nav-badge nav-badge--float" id="mobileNotifBadge" hidden>0</span>
+          </button>
+          <button type="button" class="ig-header-icon" data-nav="messages" aria-label="Messages">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v10H8l-4 3V6z"/></svg>
           </button>`;
         updateNotificationBadges(state.notifications.unread_total);
       }
@@ -809,6 +819,90 @@
     }
 
     if (state.page === "feed") render();
+    if (state.page === "feed" && isDesktop()) loadSuggestions(false);
+  }
+
+  async function loadSuggestions(force = false) {
+    if (state.explore.suggestions.length && !force) {
+      updateRightRail();
+      return;
+    }
+    try {
+      const res = await apiFetch("/api/profiles/suggestions?limit=5");
+      if (!res.ok) return;
+      const sug = await res.json();
+      state.explore.suggestions = Array.isArray(sug.people) ? sug.people : [];
+    } catch (_err) {
+      state.explore.suggestions = [];
+    }
+    updateRightRail();
+  }
+
+  function renderRightRailSuggestion(athlete) {
+    const athleteId = athleteIdOf(athlete);
+    const handle = athlete.handle || "";
+    const idAttr = athleteId ? `data-athlete-id="${escapeHtml(athleteId)}"` : "";
+    const followBtn = !athleteId
+      ? ""
+      : athlete.is_following
+        ? `<button type="button" class="btn btn-ghost btn-sm" data-action="confirm-unfollow" ${idAttr} data-handle="${escapeHtml(handle)}">Following</button>`
+        : `<button type="button" class="btn btn-primary btn-sm" data-action="follow-user" ${idAttr} data-handle="${escapeHtml(handle)}">Follow</button>`;
+    return `
+      <div class="ig-rail-suggestion">
+        <button type="button" data-action="open-user" ${idAttr} data-handle="${escapeHtml(handle)}" aria-label="${escapeHtml(displayNameOf(athlete))}">
+          ${renderAvatarHtml({ avatar_url: athlete.avatar_url, initials: athlete.initials || "P" })}
+        </button>
+        <div class="ig-rail-suggestion-meta">
+          <button type="button" data-action="open-user" ${idAttr} data-handle="${escapeHtml(handle)}" style="text-align:left">
+            <strong>${escapeHtml(displayNameOf(athlete))}</strong>
+            <span>${escapeHtml(publicHandleLabel(athlete))}</span>
+          </button>
+        </div>
+        ${followBtn}
+      </div>`;
+  }
+
+  function updateRightRail() {
+    if (!els.rightRail || !els.rightRailBody) return;
+    const show = isDesktop() && state.page === "feed";
+    els.rightRail.hidden = !show;
+    if (!show) return;
+
+    const me = state.profile;
+    const suggestions = Array.isArray(state.explore.suggestions)
+      ? state.explore.suggestions.slice(0, 5)
+      : [];
+
+    const userBlock = me
+      ? `
+        <div class="ig-rail-user">
+          <button type="button" data-nav="profile" aria-label="Your profile">
+            ${renderAvatarHtml(me)}
+          </button>
+          <div class="ig-rail-user-meta">
+            <strong>${escapeHtml(displayNameOf(me))}</strong>
+            <span>${escapeHtml(handleLabel(me))}</span>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" data-action="edit-profile">Switch</button>
+        </div>`
+      : "";
+
+    const suggestedBlock =
+      suggestions.length === 0
+        ? ""
+        : `
+        <div class="ig-rail-block">
+          <div class="ig-rail-block-head">
+            <strong>Suggested for you</strong>
+            <button type="button" data-nav="explore">See all</button>
+          </div>
+          ${suggestions.map(renderRightRailSuggestion).join("")}
+        </div>`;
+
+    els.rightRailBody.innerHTML = `
+      ${userBlock}
+      ${suggestedBlock}
+      <p class="ig-rail-foot">© ${new Date().getFullYear()} Pulse · Built for runners</p>`;
   }
 
   function renderRunnerCard(athlete) {
@@ -1178,10 +1272,8 @@
 
   function renderProfileTabs(activeTab) {
     const tabs = [
-      { id: "activities", label: "Activities", icon: '<svg viewBox="0 0 24 24"><path d="M4 6h7v7H4zM13 6h7v7h-7zM4 15h7v7H4zM13 15h7v7h-7z"/></svg>' },
-      { id: "media", label: "Media", icon: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M4 16l5-5 4 4 3-3 4 4"/></svg>' },
-      { id: "stats", label: "Stats", icon: '<svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 17V11M12 17V7M16 17v-4"/></svg>' },
-      { id: "lab", label: "Lab", icon: '<svg viewBox="0 0 24 24"><path d="M12 3l2.2 4.5L19 9l-3.5 3.4.8 4.8L12 15.2 7.7 17.2l.8-4.8L5 9l4.8-1.5L12 3z"/></svg>' },
+      { id: "activities", label: "Posts", icon: '<svg viewBox="0 0 24 24"><path d="M4 6h7v7H4zM13 6h7v7h-7zM4 15h7v7H4zM13 15h7v7h-7z"/></svg>' },
+      { id: "media", label: "Tagged", icon: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M4 16l5-5 4 4 3-3 4 4"/></svg>' },
     ];
     return `
       <div class="ig-profile-tabs" role="tablist">
@@ -1198,43 +1290,6 @@
   }
 
   function renderProfileTabContent(tab, profile, activities, summary) {
-    const stats = profile.stats || summary || {};
-    const distance =
-      stats.total_running_km != null
-        ? Number(stats.total_running_km).toFixed(1)
-        : stats.total_distance_km != null
-          ? Number(stats.total_distance_km).toFixed(1)
-          : deriveDistanceKm(activities);
-    const runs =
-      stats.running_activities ?? stats.total_activities ?? activities.length;
-    let timeLabel;
-    if (stats.total_training_hours != null) {
-      const hours = Number(stats.total_training_hours);
-      timeLabel = hours >= 10 ? `${hours.toFixed(0)}h` : `${hours.toFixed(1)}h`;
-    } else {
-      timeLabel = formatDuration(deriveMovingTime(activities));
-    }
-
-    if (tab === "stats") {
-      return `
-        <div class="ig-tab-panel ig-stats-grid">
-          <div class="stat-pill"><span>Distance</span><strong>${escapeHtml(distance)} km</strong></div>
-          <div class="stat-pill"><span>Runs</span><strong>${escapeHtml(runs)}</strong></div>
-          <div class="stat-pill"><span>Time</span><strong>${escapeHtml(timeLabel)}</strong></div>
-          <div class="stat-pill"><span>Followers</span><strong>${escapeHtml(Number(profile.follower_count || 0))}</strong></div>
-        </div>`;
-    }
-    if (tab === "lab") {
-      return `
-        <div class="ig-tab-panel ig-lab-panel">
-          <p>Deep analytics live in Pulse Lab — scores, training load, and AI insights without cluttering your social feed.</p>
-          <div class="profile-actions" style="margin-top:16px">
-            <a class="btn btn-primary" href="/lab">Open Pulse Lab</a>
-            <button type="button" class="btn btn-ghost" data-nav="coach">AI Coach</button>
-          </div>
-          ${renderCoachChat({ compact: false })}
-        </div>`;
-    }
     if (tab === "media") {
       const withPhoto = activities.filter((a) => a.photo_url || a.primary_photo_url);
       const grid =
@@ -1423,7 +1478,7 @@
 
   function updateNotificationBadges(count) {
     const n = Number(count || 0);
-    ["sidebarNotifBadge", "mobileNotifBadge"].forEach((id) => {
+    ["sidebarNotifBadge", "mobileNotifBadge", "bottomNotifBadge"].forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
       if (n > 0) {
@@ -1940,8 +1995,31 @@
       return;
     }
 
+    if (page === "search") {
+      closeMoreMenu();
+      state.page = "explore";
+      state.navHighlight = "search";
+      state.viewed.handle = null;
+      state.viewed.athleteId = null;
+      setNavActive("search");
+      const hash = "#explore";
+      if (replace) {
+        history.replaceState({ page: "explore", navHighlight: "search" }, "", hash);
+      } else if (location.hash !== hash) {
+        history.pushState({ page: "explore", navHighlight: "search" }, "", hash);
+      }
+      render();
+      loadExplore(false);
+      requestAnimationFrame(() => {
+        const input = document.getElementById("exploreSearch");
+        if (input) input.focus();
+      });
+      return;
+    }
+
     const next = PAGES.includes(page) ? page : "feed";
     state.page = next;
+    state.navHighlight = next === "explore" ? "explore" : null;
     state.viewed.handle = null;
     state.viewed.athleteId = null;
     if (next !== "dm" && next !== "messages") {
@@ -1957,8 +2035,12 @@
     } else if (location.hash !== hash && !location.hash.startsWith(`#${next}/`)) {
       history.pushState({ page: next }, "", hash);
     }
+    closeMoreMenu();
     render();
-    if (next === "feed") loadFeed(false);
+    if (next === "feed") {
+      loadFeed(false);
+      loadSuggestions(false);
+    }
     if (next === "explore") loadExplore(false);
     if (next === "messages") loadInbox(true);
     if (next === "coach") loadCoachMessages(false);
@@ -2693,6 +2775,7 @@
     wireDmComposer();
     scrollCoachThreads();
     updateMobileHeader();
+    updateRightRail();
 
     if (state.page === "dm" || (state.page === "messages" && state.thread.conversationId)) {
       requestAnimationFrame(() => {
@@ -2746,7 +2829,10 @@
         return;
       }
     }
-    if (action === "edit-profile" || action === "open-settings") openSettings();
+    if (action === "edit-profile" || action === "open-settings") {
+      closeMoreMenu();
+      openSettings();
+    }
     if (action === "retry-feed") loadFeed(true);
     if (action === "retry-explore") loadExplore(true);
     if (action === "retry-explore-search") runExploreSearch(state.explore.searchQ || "");
@@ -2812,7 +2898,31 @@
     if (action === "people-load-more") fetchPeoplePage({ reset: false });
   }
 
+  function openMoreMenu() {
+    if (!els.moreDrawer) return;
+    els.drawerBackdrop.hidden = false;
+    void els.drawerBackdrop.offsetWidth;
+    els.drawerBackdrop.classList.add("is-open");
+    els.moreDrawer.classList.add("is-open");
+    els.moreDrawer.setAttribute("aria-hidden", "false");
+  }
+
+  function closeMoreMenu() {
+    if (!els.moreDrawer) return;
+    els.moreDrawer.classList.remove("is-open");
+    els.moreDrawer.setAttribute("aria-hidden", "true");
+    if (!els.settingsDrawer.classList.contains("is-open")) {
+      els.drawerBackdrop.classList.remove("is-open");
+      setTimeout(() => {
+        if (!els.settingsDrawer.classList.contains("is-open")) {
+          els.drawerBackdrop.hidden = true;
+        }
+      }, 250);
+    }
+  }
+
   function openSettings() {
+    closeMoreMenu();
     els.drawerBackdrop.hidden = false;
     els.settingsDrawer.hidden = false;
     // Force reflow so transitions apply after un-hiding.
@@ -2828,7 +2938,13 @@
     els.settingsDrawer.setAttribute("aria-hidden", "true");
     setTimeout(() => {
       els.drawerBackdrop.hidden = true;
+      els.settingsDrawer.hidden = true;
     }, 250);
+  }
+
+  function closeAnyDrawer() {
+    closeMoreMenu();
+    closeSettings();
   }
 
   function openActivity(activityId) {
@@ -2896,6 +3012,22 @@
   }
 
   function applyProfileChrome(profile) {
+    const setAvatar = (el) => {
+      if (!el) return;
+      el.innerHTML = "";
+      if (profile.avatar_url) {
+        const img = document.createElement("img");
+        img.src = proxiedMediaUrl(profile.avatar_url);
+        img.alt = "";
+        el.appendChild(img);
+      } else {
+        el.textContent = profile.initials || "P";
+      }
+    };
+
+    setAvatar(els.navProfileAvatar);
+    setAvatar(els.bottomProfileAvatar);
+
     if (els.sidebarName) els.sidebarName.textContent = displayNameOf(profile);
     if (els.sidebarHandle) els.sidebarHandle.textContent = handleLabel(profile);
     if (els.sidebarAvatar) {
@@ -2909,6 +3041,8 @@
         els.sidebarAvatar.textContent = profile.initials || "P";
       }
     }
+
+    updateRightRail();
 
     document.getElementById("settingsDisplayName").value =
       profile.display_name_custom || profile.display_name || "";
@@ -3007,9 +3141,12 @@
   }
 
   function wireSettingsForm() {
-    document.getElementById("openSettingsSidebar").addEventListener("click", openSettings);
+    const openMoreBtn = document.getElementById("openMoreMenu");
+    if (openMoreBtn) openMoreBtn.addEventListener("click", openMoreMenu);
+    const closeMoreBtn = document.getElementById("closeMoreMenu");
+    if (closeMoreBtn) closeMoreBtn.addEventListener("click", closeMoreMenu);
     document.getElementById("closeSettings").addEventListener("click", closeSettings);
-    els.drawerBackdrop.addEventListener("click", closeSettings);
+    els.drawerBackdrop.addEventListener("click", closeAnyDrawer);
     document.getElementById("closeActivityModal").addEventListener("click", closeActivity);
     els.activityModal.addEventListener("click", (e) => {
       if (e.target === els.activityModal) closeActivity();
@@ -3057,6 +3194,13 @@
     });
 
     document.getElementById("syncNowBtn").addEventListener("click", () => syncStrava(false));
+    const syncMoreBtn = document.getElementById("syncNowBtnMore");
+    if (syncMoreBtn) {
+      syncMoreBtn.addEventListener("click", () => {
+        closeMoreMenu();
+        syncStrava(false);
+      });
+    }
 
     const fileInput = document.getElementById("settingsAvatarFile");
     document.getElementById("settingsAvatarPick").addEventListener("click", () => fileInput.click());
@@ -3166,6 +3310,7 @@
     await ensureAuth();
     await loadProfileBundle(true);
     loadCoachMessages(false);
+    loadSuggestions(false);
     refreshUnreadBadge();
     refreshNotificationBadge();
 

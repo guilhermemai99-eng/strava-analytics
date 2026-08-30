@@ -13,13 +13,22 @@ def test_dashboard_serves_pulse_shell(client, make_session, make_athlete):
     assert "Pulse" in body
     assert "/static/js/pulse.js" in body
     assert "/static/css/pulse.css" in body
+    assert 'class="ig-shell"' in body
+    assert 'class="ig-nav"' in body
     assert 'data-nav="feed"' in body
+    assert 'data-nav="search"' in body
     assert 'data-nav="explore"' in body
     assert 'data-nav="messages"' in body
     assert 'data-nav="activity"' in body
+    assert 'id="openMoreMenu"' in body
+    assert 'id="moreDrawer"' in body
+    assert 'id="rightRail"' in body
     assert 'sidebarNotifBadge' in body
+    assert 'bottomNotifBadge' in body
     assert 'Notifications' in body
-    assert 'pulse-mobile-header' in body
+    assert 'ig-mobile-header' in body
+    assert 'ig-bottom-nav' in body
+    assert "Pulse Lab" in body
 
 
 def test_lab_keeps_legacy_analytics(client, make_session, make_athlete):
