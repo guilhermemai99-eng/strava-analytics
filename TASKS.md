@@ -48,12 +48,13 @@ Strava remains the activity data source. The product centre is real runs and peo
 ### People matching (Phase 2)
 - Discover → People, match score, **Run together** prefill
 
-### Run Clubs (Phase 3) — current branch `cursor/run-clubs-b3a3`
+### Run Clubs (Phase 3) — `cursor/run-clubs-b3a3` / PR #30
 - Models + APIs: create, join, leave, discover, members, club runs
 - Public listable/joinable; private 404 for non-members; owner cannot leave
 - UI: Discover → Clubs, `#club/{id}` (Upcoming / Feed / Members), Create Club
 - Host a run as a club (owner/admin)
 - Run cards: “Hosted by {club}”
+- Verified: pytest + mobile Playwright (discover, club page, create club, create club run)
 
 ## In progress / next (product roadmap)
 
@@ -61,7 +62,7 @@ Priority: finish Clubs, then social feed, then remaining gaps.
 
 | # | Phase | Status |
 |---|--------|--------|
-| 0 | Finish Run Clubs (UI + tests + PR) | This PR |
+| 0 | Finish Run Clubs (UI + tests + PR) | Done — PR #30 |
 | 1 | Audit / stabilize | After Clubs lands |
 | 2 | Feed: photo-first overlay, likes, comments, share, hide, privacy, working menu | Next |
 | 3 | Follow requests for private accounts; profile social/running/lab split | After feed |
