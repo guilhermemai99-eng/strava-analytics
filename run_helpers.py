@@ -377,10 +377,31 @@ def update_run(
 def cancel_run(db: Session, *, run: Run, editor_id: int) -> Run:
     if run.creator_id != editor_id:
         raise RunError("Only the host can cancel this run.", status_code=403)
+    going_ids = [
+        int(r[0])
+        for r in (
+            db.query(RunParticipant.athlete_id)
+            .filter(
+                RunParticipant.run_id == run.id,
+                RunParticipant.status == "going",
+            )
+            .all()
+        )
+    ]
     run.status = "cancelled"
     run.updated_at = _utcnow()
     db.commit()
     db.refresh(run)
+
+    from notification_helpers import notify_run_cancelled
+
+    notify_run_cancelled(
+        db,
+        run_id=run.id,
+        host_id=editor_id,
+        run_title=run.title or "a run",
+        participant_ids=going_ids,
+    )
     return run
 
 
