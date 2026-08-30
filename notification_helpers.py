@@ -17,6 +17,7 @@ KIND_COMMENT = "comment"
 KIND_FOLLOW_REQUEST = "follow_request"
 KIND_FOLLOW_ACCEPTED = "follow_accepted"
 KIND_RUN_JOIN = "run_join"
+KIND_RUN_CANCELLED = "run_cancelled"
 KIND_CLUB_JOIN = "club_join"
 KIND_CLUB_RUN = "club_run"
 
@@ -137,6 +138,40 @@ def notify_run_join(db: Session, *, run_id: int, joiner_id: int, host_id: int, r
         target_id=run_id,
     )
     db.commit()
+
+
+def notify_run_cancelled(
+    db: Session,
+    *,
+    run_id: int,
+    host_id: int,
+    run_title: str,
+    participant_ids: list[int],
+) -> None:
+    """Tell goers (except the host) that a run was cancelled."""
+    host = db.query(Athlete).filter(Athlete.id == host_id).one_or_none()
+    if host is None:
+        return
+    name = display_name_for(host)
+    title = (run_title or "a run").strip() or "a run"
+    if len(title) > 60:
+        title = title[:57] + "…"
+    wrote = False
+    for athlete_id in participant_ids:
+        if athlete_id == host_id:
+            continue
+        create_notification(
+            db,
+            recipient_id=athlete_id,
+            actor_id=host_id,
+            kind=KIND_RUN_CANCELLED,
+            body=f"{name} cancelled {title}.",
+            target_type="run",
+            target_id=run_id,
+        )
+        wrote = True
+    if wrote:
+        db.commit()
 
 
 def notify_follow_accepted(db: Session, *, target_id: int, requester_id: int) -> None:

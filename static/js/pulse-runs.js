@@ -114,16 +114,19 @@
 
   function renderRunCard(run, { compact = false } = {}) {
     const compat = run.compatibility || {};
-    const joinBtn = run.is_going
-      ? `<span class="run-card-going">Going</span>`
-      : run.can_join
-        ? `<button type="button" class="btn btn-primary btn-sm" data-action="open-run" data-run-id="${h(run.id)}">Join</button>`
-        : `<span class="run-card-full">Full</span>`;
+    const cancelled = run.status === "cancelled";
+    const joinBtn = cancelled
+      ? `<span class="run-card-going">Cancelled</span>`
+      : run.is_going
+        ? `<span class="run-card-going">Going</span>`
+        : run.can_join
+          ? `<button type="button" class="btn btn-primary btn-sm" data-action="open-run" data-run-id="${h(run.id)}">Join</button>`
+          : `<span class="run-card-full">Full</span>`;
     return `
-      <article class="run-card ${compact ? "is-compact" : ""}" data-action="open-run" data-run-id="${h(run.id)}">
+      <article class="run-card ${compact ? "is-compact" : ""} ${cancelled ? "is-cancelled" : ""}" data-action="open-run" data-run-id="${h(run.id)}">
         <div class="run-card-top">
           <h3>${h(run.title)}</h3>
-          <span class="run-card-type">${h(runTypeLabel(run.run_type))}</span>
+          <span class="run-card-type">${cancelled ? "Cancelled" : h(runTypeLabel(run.run_type))}</span>
         </div>
         <p class="run-card-when">📅 ${h(formatRunWhen(run.meeting_time))}</p>
         <p class="run-card-loc">📍 ${h(run.location_name)}</p>
@@ -499,9 +502,22 @@
     const compat = run.compatibility || {};
     const participants = Array.isArray(run.participants) ? run.participants : [];
     const host = run.host || {};
-    const joinCta = run.is_going
-      ? `<button type="button" class="btn btn-ghost run-detail-cta" data-action="leave-run" data-run-id="${h(run.id)}">Leave Run</button>`
-      : `<button type="button" class="btn btn-primary run-detail-cta" data-action="join-run" data-run-id="${h(run.id)}" ${run.can_join ? "" : "disabled"}>Join Run</button>`;
+    const cancelled = run.status === "cancelled";
+    let joinCta = "";
+    if (cancelled) {
+      joinCta = `<span class="run-card-going">This run was cancelled</span>`;
+    } else if (run.is_host) {
+      joinCta = `<button type="button" class="btn btn-ghost run-detail-cta" data-action="cancel-run" data-run-id="${h(run.id)}">Cancel run</button>`;
+    } else if (run.is_going) {
+      joinCta = `<button type="button" class="btn btn-ghost run-detail-cta" data-action="leave-run" data-run-id="${h(run.id)}">Leave Run</button>`;
+    } else {
+      joinCta = `<button type="button" class="btn btn-primary run-detail-cta" data-action="join-run" data-run-id="${h(run.id)}" ${run.can_join ? "" : "disabled"}>Join Run</button>`;
+    }
+    const goingNote = cancelled
+      ? ""
+      : run.is_going
+        ? `<p class="run-going-note">✓ You're going${run.is_host ? " · You're the host" : ""}</p>`
+        : "";
 
     return `
       <section class="pulse-page run-detail-page" data-page="run">
@@ -516,13 +532,17 @@
           <div class="run-detail-metrics">
             <span>${h(String(run.distance_km))} km</span>
             ${run.pace_range ? `<span>${h(run.pace_range)}</span>` : ""}
-            <span>${h(runTypeLabel(run.run_type))}</span>
+            <span>${cancelled ? "Cancelled" : h(runTypeLabel(run.run_type))}</span>
           </div>
         </div>
-        <div class="run-compat-block ${compatClass(compat.level)}">
+        ${
+          cancelled
+            ? ""
+            : `<div class="run-compat-block ${compatClass(compat.level)}">
           <strong>${h(compat.emoji || "")} ${h(compat.label || "Compatibility")}</strong>
           <p>${h(compat.message || "")}</p>
-        </div>
+        </div>`
+        }
         <section class="run-detail-block">
           <h2>${h(run.participant_count || 0)} going</h2>
           <div class="run-participant-avatars">
@@ -551,7 +571,7 @@
           </button>
         </section>
         ${run.description ? `<section class="run-detail-block"><h2>About</h2><p>${h(run.description)}</p></section>` : ""}
-        <div class="run-detail-actions">${joinCta}${run.is_going ? `<p class="run-going-note">✓ You're going</p>` : ""}</div>
+        <div class="run-detail-actions">${joinCta}${goingNote}</div>
       </section>`;
   }
 
@@ -1036,6 +1056,35 @@
     hooks.render();
   }
 
+  async function cancelRun(runId) {
+    if (hooks.openConfirmModal) {
+      const result = await hooks.openConfirmModal({
+        title: "Cancel this run?",
+        body: "Everyone going will be notified. You can’t undo this.",
+        actions: [
+          { label: "Keep run", role: "cancel" },
+          { label: "Cancel run", role: "confirm", primary: true },
+        ],
+      });
+      if (!result?.confirmed) return;
+    } else if (!window.confirm("Cancel this run? Everyone going will be notified.")) {
+      return;
+    }
+    const res = await hooks.apiFetch(`/api/runs/${runId}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      hooks.showToast(data.detail || "Could not cancel.");
+      return;
+    }
+    runsState.detail.run = data;
+    runsState.detail.status = "ready";
+    runsState.nearby.status = "idle";
+    runsState.discover.status = "idle";
+    runsState.myRuns.status = "idle";
+    hooks.showToast("Run cancelled.");
+    hooks.render();
+  }
+
   async function startRunTogether(athleteId) {
     if (!athleteId) return;
     try {
@@ -1212,6 +1261,10 @@
     }
     if (action === "leave-run") {
       leaveRun(el?.dataset?.runId);
+      return true;
+    }
+    if (action === "cancel-run") {
+      cancelRun(el?.dataset?.runId);
       return true;
     }
     return false;
