@@ -117,3 +117,28 @@ def test_club_run_hosted_by_admin(client, make_session, make_athlete):
     _login(client, make_session, 940031)
     forbidden = client.post("/api/runs", json=_run_payload(club_id=club_id, title="Nope"))
     assert forbidden.status_code == 403
+
+
+def test_list_mine_and_admin_clubs(client, make_session, make_athlete):
+    make_athlete(940040, firstname="Admin", lastname="List")
+    make_athlete(940041, firstname="Joiner", lastname="List")
+    _login(client, make_session, 940040)
+    club_id = client.post(
+        "/api/clubs",
+        json={"name": "Foz Crew", "location_name": "Porto", "visibility": "public"},
+    ).json()["id"]
+
+    mine = client.get("/api/clubs?tab=mine")
+    assert mine.status_code == 200
+    assert any(item["id"] == club_id for item in mine.json()["items"])
+
+    admin = client.get("/api/clubs?tab=admin")
+    assert admin.status_code == 200
+    assert any(item["id"] == club_id and item["can_manage"] for item in admin.json()["items"])
+
+    _login(client, make_session, 940041)
+    assert client.post(f"/api/clubs/{club_id}/join").status_code == 200
+    mine_joiner = client.get("/api/clubs?tab=mine")
+    assert any(item["id"] == club_id for item in mine_joiner.json()["items"])
+    admin_joiner = client.get("/api/clubs?tab=admin")
+    assert all(item["id"] != club_id for item in admin_joiner.json()["items"])
