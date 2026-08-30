@@ -138,6 +138,7 @@ def serialize_run(
         "visibility": run.visibility,
         "status": run.status,
         "club_id": run.club_id,
+        "club": _serialize_club_ref(db, run.club_id),
         "participant_count": going_count,
         "is_host": run.creator_id == viewer_id,
         "is_going": _viewer_is_going(db, run.id, viewer_id),
@@ -209,6 +210,14 @@ def parse_meeting_time(value: str) -> datetime:
     return dt
 
 
+def _serialize_club_ref(db: Session, club_id: int | None) -> dict | None:
+    if not club_id:
+        return None
+    from club_helpers import serialize_club_ref
+
+    return serialize_club_ref(db, club_id)
+
+
 def create_run(
     db: Session,
     *,
@@ -226,6 +235,7 @@ def create_run(
     max_participants: int | None,
     visibility: str,
     route_data: dict | str | None,
+    club_id: int | None = None,
 ) -> Run:
     title_clean = (title or "").strip()
     location_clean = (location_name or "").strip()
@@ -251,8 +261,20 @@ def create_run(
             else json.dumps(route_data)
         )
 
+    resolved_club_id = None
+    if club_id:
+        from club_helpers import can_manage_club, get_club
+
+        club = get_club(db, int(club_id))
+        if not club:
+            raise RunError("Club not found.", status_code=404)
+        if not can_manage_club(db, club_id=club.id, athlete_id=creator_id):
+            raise RunError("Only club admins can host a club run.", status_code=403)
+        resolved_club_id = club.id
+
     run = Run(
         creator_id=creator_id,
+        club_id=resolved_club_id,
         title=title_clean,
         description=(description or "").strip() or None,
         location_name=location_clean,

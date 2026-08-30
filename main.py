@@ -108,6 +108,20 @@ from people_match_helpers import (
     list_people_matches,
     run_together_suggestion,
 )
+from club_helpers import (
+    ClubError,
+    can_view_club,
+    create_club,
+    get_club,
+    join_club,
+    leave_club,
+    list_admin_clubs,
+    list_club_runs,
+    list_discover_clubs,
+    list_members,
+    list_my_clubs,
+    serialize_club,
+)
 from ai_coach_chat import (
     CoachChatError,
     build_coach_context,
@@ -2271,6 +2285,7 @@ class RunCreateRequest(BaseModel):
     max_participants: Optional[int] = None
     visibility: str = "everyone"
     route_data: Optional[dict] = None
+    club_id: Optional[int] = None
 
 
 class RunUpdateRequest(BaseModel):
@@ -2387,6 +2402,7 @@ def api_create_run(body: RunCreateRequest, request: Request):
             max_participants=body.max_participants,
             visibility=body.visibility,
             route_data=body.route_data,
+            club_id=body.club_id,
         )
         return serialize_run(
             db, run, viewer_id=viewer_id, include_participants=True
@@ -2545,6 +2561,155 @@ def api_run_together(athlete_id: int, request: Request):
         if not suggestion:
             raise HTTPException(status_code=404, detail="Suggestion unavailable.")
         return suggestion
+    finally:
+        db.close()
+
+
+# ============================================================
+# RUN CLUBS — community groups that host runs (Phase 3)
+# ============================================================
+
+
+class ClubCreateRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    location_name: Optional[str] = None
+    visibility: str = "public"
+    cover_url: Optional[str] = None
+
+
+def _club_http(exc: ClubError) -> HTTPException:
+    return HTTPException(status_code=exc.status_code, detail=str(exc))
+
+
+@app.get("/api/clubs")
+def api_list_clubs(
+    request: Request,
+    tab: str = "discover",
+    limit: int = 30,
+    location: Optional[str] = None,
+):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        tab_norm = (tab or "discover").lower()
+        if tab_norm == "mine":
+            clubs = list_my_clubs(db, viewer_id=viewer_id, limit=limit)
+        elif tab_norm == "admin":
+            clubs = list_admin_clubs(db, viewer_id=viewer_id)
+        else:
+            clubs = list_discover_clubs(
+                db, viewer_id=viewer_id, limit=limit, location_q=location
+            )
+        return {
+            "items": [serialize_club(db, club, viewer_id=viewer_id) for club in clubs],
+            "tab": tab_norm,
+        }
+    finally:
+        db.close()
+
+
+@app.post("/api/clubs")
+def api_create_club(body: ClubCreateRequest, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        club = create_club(
+            db,
+            creator_id=viewer_id,
+            name=body.name,
+            description=body.description,
+            location_name=body.location_name,
+            visibility=body.visibility,
+            cover_url=body.cover_url,
+        )
+        return serialize_club(db, club, viewer_id=viewer_id, include_members=True)
+    except ClubError as exc:
+        raise _club_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.get("/api/clubs/{club_id}")
+def api_get_club(club_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        club = get_club(db, club_id)
+        if not club or not can_view_club(db, club, viewer_id):
+            raise HTTPException(status_code=404, detail="Club not found.")
+        return serialize_club(db, club, viewer_id=viewer_id, include_members=True)
+    finally:
+        db.close()
+
+
+@app.post("/api/clubs/{club_id}/join")
+def api_join_club(club_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        club = get_club(db, club_id)
+        if not club:
+            raise HTTPException(status_code=404, detail="Club not found.")
+        join_club(db, club=club, athlete_id=viewer_id)
+        db.refresh(club)
+        return serialize_club(db, club, viewer_id=viewer_id, include_members=True)
+    except ClubError as exc:
+        raise _club_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.post("/api/clubs/{club_id}/leave")
+def api_leave_club(club_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        club = get_club(db, club_id)
+        if not club:
+            raise HTTPException(status_code=404, detail="Club not found.")
+        leave_club(db, club=club, athlete_id=viewer_id)
+        db.refresh(club)
+        return serialize_club(db, club, viewer_id=viewer_id)
+    except ClubError as exc:
+        raise _club_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.get("/api/clubs/{club_id}/runs")
+def api_club_runs(
+    club_id: int,
+    request: Request,
+    tab: str = "upcoming",
+    limit: int = 30,
+):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        club = get_club(db, club_id)
+        if not club or not can_view_club(db, club, viewer_id):
+            raise HTTPException(status_code=404, detail="Club not found.")
+        runs = list_club_runs(db, club_id=club_id, tab=tab, limit=limit)
+        return {
+            "items": [
+                serialize_run_card(db, run, viewer_id=viewer_id) for run in runs
+            ],
+            "tab": tab,
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/clubs/{club_id}/members")
+def api_club_members(club_id: int, request: Request, limit: int = 50):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        club = get_club(db, club_id)
+        if not club or not can_view_club(db, club, viewer_id):
+            raise HTTPException(status_code=404, detail="Club not found.")
+        return {"items": list_members(db, club_id=club_id, limit=limit)}
     finally:
         db.close()
 

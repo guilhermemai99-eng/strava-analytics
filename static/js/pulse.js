@@ -2,7 +2,20 @@
 (() => {
   "use strict";
 
-  const PAGES = ["feed", "discover", "my-runs", "create-run", "run", "explore", "messages", "activity", "profile", "coach"];
+  const PAGES = [
+    "feed",
+    "discover",
+    "my-runs",
+    "create-run",
+    "run",
+    "club",
+    "create-club",
+    "explore",
+    "messages",
+    "activity",
+    "profile",
+    "coach",
+  ];
   const PROFILE_TABS = ["activities", "media", "stats", "lab"];
   const Copy = window.PulseCopy || null;
 
@@ -105,6 +118,7 @@
     profileTab: "activities",
     viewedProfileTab: "activities",
     runId: null,
+    clubId: null,
     notifications: {
       status: "idle",
       items: [],
@@ -258,6 +272,8 @@
     "my-runs": "My Runs",
     "create-run": "Create Run",
     run: "Run",
+    club: "Club",
+    "create-club": "Create Club",
     explore: "Explore",
     messages: "Messages",
     activity: "Notifications",
@@ -1936,6 +1952,18 @@
         athleteId: null,
         conversationId: null,
         runId: runId || null,
+        clubId: null,
+      };
+    }
+    if (raw.startsWith("club/")) {
+      const clubId = decodeURIComponent(raw.slice(5)).trim();
+      return {
+        page: "club",
+        handle: null,
+        athleteId: null,
+        conversationId: null,
+        runId: null,
+        clubId: clubId || null,
       };
     }
     if (raw.startsWith("dm/") || raw.startsWith("messages/")) {
@@ -1950,10 +1978,10 @@
       };
     }
     const page = PAGES.includes(raw) ? raw : "feed";
-    return { page, handle: null, athleteId: null, conversationId: null, runId: null };
+    return { page, handle: null, athleteId: null, conversationId: null, runId: null, clubId: null };
   }
 
-  function navigate(page, { replace = false, runId = null } = {}) {
+  function navigate(page, { replace = false, runId = null, clubId = null } = {}) {
     if (page === "create") {
       navigate("create-run", { replace });
       return;
@@ -1962,6 +1990,7 @@
     const next = PAGES.includes(page) ? page : "feed";
     state.page = next;
     state.runId = next === "run" ? runId || state.runId : null;
+    state.clubId = next === "club" ? clubId || state.clubId : null;
     state.viewed.handle = null;
     state.viewed.athleteId = null;
     if (next !== "dm" && next !== "messages") {
@@ -1970,15 +1999,24 @@
     } else if (next === "messages" && !isDesktop()) {
       state.thread.conversationId = null;
     }
-    setNavActive(next === "dm" ? "messages" : next === "run" ? "discover" : next);
+    setNavActive(
+      next === "dm"
+        ? "messages"
+        : ["run", "club", "create-club"].includes(next)
+          ? "discover"
+          : next
+    );
     let hash = `#${next}`;
     if (next === "run" && state.runId) {
       hash = `#run/${encodeURIComponent(String(state.runId))}`;
     }
+    if (next === "club" && state.clubId) {
+      hash = `#club/${encodeURIComponent(String(state.clubId))}`;
+    }
     if (replace) {
-      history.replaceState({ page: next, runId: state.runId }, "", hash);
+      history.replaceState({ page: next, runId: state.runId, clubId: state.clubId }, "", hash);
     } else if (location.hash !== hash) {
-      history.pushState({ page: next, runId: state.runId }, "", hash);
+      history.pushState({ page: next, runId: state.runId, clubId: state.clubId }, "", hash);
     }
     render();
     if (next === "feed") {
@@ -1986,9 +2024,9 @@
       if (window.PulseRuns) PulseRuns.onPageEnter("feed");
     }
     if (next === "explore") loadExplore(false);
-    if (next === "discover" || next === "my-runs" || next === "create-run" || next === "run") {
+    if (["discover", "my-runs", "create-run", "run", "club", "create-club"].includes(next)) {
       if (window.PulseRuns) {
-        PulseRuns.onPageEnter(next, { runId: state.runId });
+        PulseRuns.onPageEnter(next, { runId: state.runId, clubId: state.clubId });
       }
     }
     if (next === "messages") loadInbox(true);
@@ -2710,7 +2748,10 @@
 
     let html = "";
     if (state.page === "feed") html = renderFeed();
-    else if (window.PulseRuns && ["discover", "my-runs", "create-run", "run"].includes(state.page)) {
+    else if (
+      window.PulseRuns &&
+      ["discover", "my-runs", "create-run", "run", "club", "create-club"].includes(state.page)
+    ) {
       html = PulseRuns.renderPage(state.page) || "";
     }
     else if (state.page === "explore") html = renderExplore();
@@ -3207,6 +3248,8 @@
         navigateDm(loc.conversationId, { replace: true });
       } else if (loc.page === "run" && loc.runId) {
         navigate("run", { replace: true, runId: loc.runId });
+      } else if (loc.page === "club" && loc.clubId) {
+        navigate("club", { replace: true, clubId: loc.clubId });
       } else {
         navigate(loc.page, { replace: true });
       }
@@ -3239,6 +3282,8 @@
       navigateDm(initial.conversationId, { replace: true });
     } else if (initial.page === "run" && initial.runId) {
       navigate("run", { replace: true, runId: initial.runId });
+    } else if (initial.page === "club" && initial.clubId) {
+      navigate("club", { replace: true, clubId: initial.clubId });
     } else {
       navigate(initial.page, { replace: true });
     }

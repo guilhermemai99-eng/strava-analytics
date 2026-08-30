@@ -1,0 +1,119 @@
+"""Run clubs — create, join, leave, club runs."""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+
+
+def _login(client, make_session, athlete_id: int):
+    raw, cookie = make_session(athlete_id)
+    client.cookies.set(cookie, raw)
+    return raw, cookie
+
+
+def _run_payload(**overrides):
+    meeting = datetime.now(timezone.utc) + timedelta(days=2)
+    payload = {
+        "title": "Tuesday Easy Run",
+        "location_name": "Foz, Porto",
+        "meeting_time": meeting.replace(microsecond=0).isoformat(),
+        "distance_km": 8.0,
+        "pace_min": "5:15",
+        "pace_max": "5:45",
+        "run_type": "easy",
+        "visibility": "everyone",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_create_join_leave_club(client, make_session, make_athlete):
+    make_athlete(940001, firstname="Owner", lastname="Club")
+    make_athlete(940002, firstname="Member", lastname="Club")
+    _login(client, make_session, 940001)
+
+    created = client.post(
+        "/api/clubs",
+        json={
+            "name": "Porto Sunrise Runners",
+            "description": "Easy mornings by the river.",
+            "location_name": "Porto",
+            "visibility": "public",
+        },
+    )
+    assert created.status_code == 200, created.text
+    club = created.json()
+    assert club["name"] == "Porto Sunrise Runners"
+    assert club["is_owner"] is True
+    assert club["member_count"] == 1
+    club_id = club["id"]
+
+    discover = client.get("/api/clubs?tab=discover")
+    assert discover.status_code == 200
+    assert any(item["id"] == club_id for item in discover.json()["items"])
+
+    _login(client, make_session, 940002)
+    joined = client.post(f"/api/clubs/{club_id}/join")
+    assert joined.status_code == 200
+    assert joined.json()["is_member"] is True
+    assert joined.json()["member_count"] == 2
+
+    members = client.get(f"/api/clubs/{club_id}/members")
+    assert members.status_code == 200
+    assert len(members.json()["items"]) == 2
+
+    left = client.post(f"/api/clubs/{club_id}/leave")
+    assert left.status_code == 200
+    assert left.json()["is_member"] is False
+
+
+def test_owner_cannot_leave(client, make_session, make_athlete):
+    make_athlete(940010, firstname="Owner", lastname="Stay")
+    _login(client, make_session, 940010)
+    club_id = client.post(
+        "/api/clubs", json={"name": "Stay Club", "visibility": "public"}
+    ).json()["id"]
+    leave = client.post(f"/api/clubs/{club_id}/leave")
+    assert leave.status_code == 400
+
+
+def test_private_club_hidden_from_non_members(client, make_session, make_athlete):
+    make_athlete(940020, firstname="Owner", lastname="Private")
+    make_athlete(940021, firstname="Outsider", lastname="Private")
+    _login(client, make_session, 940020)
+    club_id = client.post(
+        "/api/clubs",
+        json={"name": "Secret Miles", "visibility": "private"},
+    ).json()["id"]
+
+    _login(client, make_session, 940021)
+    discover = client.get("/api/clubs?tab=discover")
+    assert all(item["id"] != club_id for item in discover.json()["items"])
+    detail = client.get(f"/api/clubs/{club_id}")
+    assert detail.status_code == 404
+    join = client.post(f"/api/clubs/{club_id}/join")
+    assert join.status_code == 403
+
+
+def test_club_run_hosted_by_admin(client, make_session, make_athlete):
+    make_athlete(940030, firstname="Host", lastname="Club")
+    make_athlete(940031, firstname="Guest", lastname="Club")
+    _login(client, make_session, 940030)
+    club_id = client.post(
+        "/api/clubs",
+        json={"name": "Porto Sunrise Runners", "visibility": "public"},
+    ).json()["id"]
+
+    created = client.post("/api/runs", json=_run_payload(club_id=club_id))
+    assert created.status_code == 200, created.text
+    run = created.json()
+    assert run["club_id"] == club_id
+    assert run["club"]["name"] == "Porto Sunrise Runners"
+
+    upcoming = client.get(f"/api/clubs/{club_id}/runs?tab=upcoming")
+    assert upcoming.status_code == 200
+    assert any(item["id"] == run["id"] for item in upcoming.json()["items"])
+
+    _login(client, make_session, 940031)
+    forbidden = client.post("/api/runs", json=_run_payload(club_id=club_id, title="Nope"))
+    assert forbidden.status_code == 403

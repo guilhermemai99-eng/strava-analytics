@@ -63,7 +63,12 @@ class Run(Base):
         nullable=False,
         index=True,
     )
-    club_id = Column(Integer, nullable=True, index=True)
+    club_id = Column(
+        Integer,
+        ForeignKey("run_clubs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     title = Column(String(160), nullable=False)
     description = Column(Text, nullable=True)

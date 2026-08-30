@@ -1,4 +1,4 @@
-/* Pulse — Runs UI (Phase 1: Create, Discover, Join, My Runs) */
+/* Pulse — Runs UI (Create, Discover, Join, People, Clubs) */
 (() => {
   "use strict";
 
@@ -28,6 +28,24 @@
     people: { status: "idle", items: [], error: null },
     myRuns: { status: "idle", items: [], error: null, tab: "upcoming" },
     detail: { status: "idle", run: null, error: null, runId: null },
+    clubs: { status: "idle", items: [], error: null, subtab: "discover" },
+    clubDetail: {
+      status: "idle",
+      club: null,
+      error: null,
+      clubId: null,
+      tab: "upcoming",
+      runs: [],
+      runsStatus: "idle",
+    },
+    createClub: {
+      name: "",
+      location_name: "",
+      description: "",
+      visibility: "public",
+      submitting: false,
+    },
+    adminClubs: { status: "idle", items: [] },
     create: {
       step: 1,
       location_name: "",
@@ -40,10 +58,30 @@
       title: "",
       description: "",
       max_participants: null,
+      club_id: null,
       submitting: false,
       peer: null,
     },
   };
+
+  function emptyCreateState() {
+    return {
+      step: 1,
+      location_name: "",
+      meeting_time: "",
+      distance_km: 10,
+      pace_min: "5:00",
+      pace_max: "5:30",
+      run_type: "easy",
+      visibility: "everyone",
+      title: "",
+      description: "",
+      max_participants: null,
+      club_id: null,
+      submitting: false,
+      peer: null,
+    };
+  }
 
   function h(str) {
     return hooks.escapeHtml(str);
@@ -89,6 +127,7 @@
         </div>
         <p class="run-card-when">📅 ${h(formatRunWhen(run.meeting_time))}</p>
         <p class="run-card-loc">📍 ${h(run.location_name)}</p>
+        ${run.club && run.club.name ? `<p class="run-card-club">Hosted by ${h(run.club.name)}</p>` : ""}
         <div class="run-card-metrics">
           <span>${h(String(run.distance_km))} km</span>
           ${run.pace_range ? `<span>${h(run.pace_range)}</span>` : ""}
@@ -183,6 +222,192 @@
     return `<div class="people-match-list">${p.items.map(renderPeopleCard).join("")}</div>`;
   }
 
+  function roleLabel(role) {
+    if (role === "owner") return "Owner";
+    if (role === "admin") return "Admin";
+    return "Member";
+  }
+
+  function renderClubCard(club) {
+    const joinCta = club.is_member
+      ? `<span class="run-card-going">${h(roleLabel(club.role))}</span>`
+      : `<button type="button" class="btn btn-primary btn-sm" data-action="join-club" data-club-id="${h(club.id)}">Join</button>`;
+    return `
+      <article class="club-card" data-action="open-club" data-club-id="${h(club.id)}">
+        <div class="club-card-mark" aria-hidden="true">${h((club.name || "C").slice(0, 1).toUpperCase())}</div>
+        <div class="club-card-body">
+          <div class="run-card-top">
+            <h3>${h(club.name)}</h3>
+            ${club.visibility === "private" ? `<span class="run-card-type">Private</span>` : ""}
+          </div>
+          ${club.location_name ? `<p class="run-card-loc">📍 ${h(club.location_name)}</p>` : ""}
+          <p class="club-card-desc">${h(club.description || "A running club. Show up, find your people.")}</p>
+          <div class="run-card-foot">
+            <span class="run-card-count">👥 ${h(String(club.member_count || 0))} members</span>
+            ${joinCta}
+          </div>
+        </div>
+      </article>`;
+  }
+
+  function renderClubsDiscover() {
+    const block = runsState.clubs;
+    const sub = block.subtab || "discover";
+    const subtabs = [
+      { id: "discover", label: "Discover" },
+      { id: "mine", label: "My Clubs" },
+    ];
+    let list = "";
+    if (block.status === "loading" || block.status === "idle") {
+      list = `<p class="runs-section-sub">Finding clubs…</p>`;
+    } else if (block.status === "error") {
+      list = `<p class="runs-section-sub">${h(block.error)} <button type="button" class="btn btn-ghost btn-sm" data-action="retry-clubs">Retry</button></p>`;
+    } else if (!block.items.length) {
+      list =
+        sub === "mine"
+          ? `<p class="runs-section-sub">You haven’t joined a club yet. Discover one or start your own.</p>`
+          : `<p class="runs-section-sub">No public clubs yet. Be the first — name it, meet up, run together.</p>`;
+    } else {
+      list = `<div class="clubs-list">${block.items.map(renderClubCard).join("")}</div>`;
+    }
+    return `
+      <div class="clubs-discover">
+        <div class="clubs-discover-toolbar">
+          <div class="discover-tabs is-sub" role="tablist">
+            ${subtabs
+              .map(
+                (t) =>
+                  `<button type="button" class="discover-tab ${sub === t.id ? "is-active" : ""}" data-action="clubs-subtab" data-tab="${h(t.id)}">${h(t.label)}</button>`
+              )
+              .join("")}
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" data-nav="create-club">Create Club</button>
+        </div>
+        ${list}
+      </div>`;
+  }
+
+  function clubJoinLeaveCta(club) {
+    if (club.is_owner) {
+      return `<span class="run-card-going">You're the owner</span>`;
+    }
+    if (club.is_member) {
+      return `<button type="button" class="btn btn-ghost" data-action="leave-club" data-club-id="${h(club.id)}">Leave Club</button>`;
+    }
+    return `<button type="button" class="btn btn-primary" data-action="join-club" data-club-id="${h(club.id)}">Join Club</button>`;
+  }
+
+  function renderClubPage() {
+    const d = runsState.clubDetail;
+    if (d.status === "loading" || d.status === "idle") {
+      return `<section class="pulse-page club-page"><p class="runs-section-sub">Loading club…</p></section>`;
+    }
+    if (d.status === "error" || !d.club) {
+      return `
+        <section class="pulse-page club-page">
+          <p class="runs-section-sub">${h(d.error || "Club not found.")}</p>
+          <button type="button" class="btn btn-primary" data-action="back-from-club">Back to Discover</button>
+        </section>`;
+    }
+    const club = d.club;
+    const tab = d.tab || "upcoming";
+    const tabs = [
+      { id: "upcoming", label: "Upcoming" },
+      { id: "feed", label: "Feed" },
+      { id: "members", label: "Members" },
+    ];
+    const members = Array.isArray(club.members) ? club.members : [];
+    let body = "";
+    if (tab === "members") {
+      body = members.length
+        ? `<div class="club-member-list">${members
+            .map(
+              (m) => `
+            <button type="button" class="club-member-row" data-action="open-user" data-athlete-id="${h(m.athlete_id)}">
+              <span class="pulse-avatar">${m.avatar_url ? `<img src="${h(m.avatar_url)}" alt="">` : h(m.initials || "P")}</span>
+              <span class="club-member-meta">
+                <strong>${h(m.name || "Runner")}</strong>
+                <span>${h(roleLabel(m.role))}${m.handle ? ` · @${h(m.handle)}` : ""}</span>
+              </span>
+            </button>`
+            )
+            .join("")}</div>`
+        : `<p class="runs-section-sub">No members yet.</p>`;
+    } else if (d.runsStatus === "loading" || d.runsStatus === "idle") {
+      body = `<p class="runs-section-sub">${tab === "feed" ? "Loading club feed…" : "Loading upcoming runs…"}</p>`;
+    } else if (!d.runs.length) {
+      body =
+        tab === "feed"
+          ? `<p class="runs-section-sub">No past club runs yet. Host one and this feed fills up.</p>`
+          : `<p class="runs-section-sub">No upcoming club runs. ${club.can_manage ? "Host the next one." : "Check back soon."}</p>`;
+    } else {
+      body = `<div class="runs-list">${d.runs.map((r) => renderRunCard(r)).join("")}</div>`;
+    }
+
+    const hostCta = club.can_manage
+      ? `<button type="button" class="btn btn-primary" data-action="create-club-run" data-club-id="${h(club.id)}">Create a club run</button>`
+      : "";
+
+    return `
+      <section class="pulse-page club-page" data-page="club">
+        <header class="run-detail-head">
+          <button type="button" class="ig-action-btn" data-action="back-from-club" aria-label="Back">←</button>
+          <h1>${h(club.name)}</h1>
+          <span></span>
+        </header>
+        <div class="club-hero">
+          <div class="club-hero-mark" aria-hidden="true">${h((club.name || "C").slice(0, 1).toUpperCase())}</div>
+          <div>
+            ${club.location_name ? `<p class="run-detail-loc">📍 ${h(club.location_name)}</p>` : ""}
+            <p class="club-hero-count">${h(String(club.member_count || 0))} members${club.visibility === "private" ? " · Private" : ""}</p>
+            ${club.description ? `<p class="club-hero-desc">${h(club.description)}</p>` : ""}
+          </div>
+        </div>
+        <div class="club-hero-actions">${clubJoinLeaveCta(club)}${hostCta}</div>
+        <div class="discover-tabs" role="tablist">
+          ${tabs
+            .map(
+              (t) =>
+                `<button type="button" class="discover-tab ${tab === t.id ? "is-active" : ""}" data-action="club-tab" data-tab="${h(t.id)}">${h(t.label)}</button>`
+            )
+            .join("")}
+        </div>
+        ${body}
+      </section>`;
+  }
+
+  function renderCreateClub() {
+    const c = runsState.createClub;
+    return `
+      <section class="pulse-page runs-page create-club-page" data-page="create-club">
+        <header class="runs-page-head">
+          <button type="button" class="ig-action-btn" data-action="back-from-create-club" aria-label="Back">←</button>
+          <h1>Create a Club</h1>
+          <span></span>
+        </header>
+        <p class="runs-tagline">A home for people who show up. Name it, pick a city, start running together.</p>
+        <label class="run-form-label">Club name
+          <input type="text" id="createClubName" value="${h(c.name)}" placeholder="Porto Sunrise Runners" maxlength="120" autocomplete="off">
+        </label>
+        <label class="run-form-label">Location
+          <input type="text" id="createClubLocation" value="${h(c.location_name)}" placeholder="Porto" autocomplete="off">
+        </label>
+        <label class="run-form-label">Description (optional)
+          <textarea id="createClubDesc" rows="3" placeholder="Easy mornings by the river. All paces welcome.">${h(c.description)}</textarea>
+        </label>
+        <p class="run-form-label">Visibility</p>
+        <div class="run-visibility-list">
+          <label><input type="radio" name="clubVis" value="public" ${c.visibility === "public" ? "checked" : ""}> 🌍 Public — anyone can find and join</label>
+          <label><input type="radio" name="clubVis" value="private" ${c.visibility === "private" ? "checked" : ""}> 🔒 Private — members only</label>
+        </div>
+        <div class="create-run-nav">
+          <button type="button" class="btn btn-primary" data-action="create-club-submit" ${c.submitting ? "disabled" : ""}>
+            ${c.submitting ? "Creating…" : "Create Club"}
+          </button>
+        </div>
+      </section>`;
+  }
+
   function renderDiscover() {
     const tab = runsState.discover.tab || "runs";
     const tabs = [
@@ -194,11 +419,13 @@
     let body = "";
     if (tab === "people") {
       body = renderPeopleMatches();
-    } else if (tab !== "runs") {
+    } else if (tab === "clubs") {
+      body = renderClubsDiscover();
+    } else if (tab === "routes") {
       body = `
         <div class="coming-soon is-inline">
-          <h2>${h(tabs.find((t) => t.id === tab)?.label || tab)}</h2>
-          <p>Coming in Phase 3. Clubs and routes are next.</p>
+          <h2>Routes</h2>
+          <p>Coming next. Save a loop, share it, show up.</p>
         </div>`;
     } else {
       const d = runsState.discover;
@@ -313,6 +540,14 @@
         </section>
         <section class="run-detail-block">
           <h2>Hosted by</h2>
+          ${
+            run.club && run.club.id
+              ? `<button type="button" class="run-host-row" data-action="open-club" data-club-id="${h(run.club.id)}">
+                   <span class="pulse-avatar club-mini-mark">${h((run.club.name || "C").slice(0, 1).toUpperCase())}</span>
+                   <strong>${h(run.club.name)}</strong>
+                 </button>`
+              : ""
+          }
           <button type="button" class="run-host-row" data-action="open-user" data-athlete-id="${h(host.athlete_id || "")}">
             <span class="pulse-avatar">${host.avatar_url ? `<img src="${h(host.avatar_url)}" alt="">` : h(host.initials || "P")}</span>
             <strong>${h(host.name || "Runner")}</strong>
@@ -396,6 +631,21 @@
         <label class="run-form-label">Max runners (optional)
           <input type="number" id="createRunMax" min="2" max="500" value="${c.max_participants || ""}" placeholder="No limit">
         </label>
+        ${
+          runsState.adminClubs.items.length
+            ? `<label class="run-form-label">Host as
+                <select id="createRunClub">
+                  <option value="">Just me</option>
+                  ${runsState.adminClubs.items
+                    .map(
+                      (club) =>
+                        `<option value="${h(club.id)}" ${Number(c.club_id) === Number(club.id) ? "selected" : ""}>${h(club.name)}</option>`
+                    )
+                    .join("")}
+                </select>
+              </label>`
+            : ""
+        }
         <div class="run-create-summary">
           <p>📍 ${h(c.location_name || "—")}</p>
           <p>📅 ${h(formatRunWhen(c.meeting_time))}</p>
@@ -477,6 +727,180 @@
     }
   }
 
+  async function loadClubs(force = false) {
+    const sub = runsState.clubs.subtab || "discover";
+    if (!force && runsState.clubs.status === "ready") return;
+    runsState.clubs.status = "loading";
+    try {
+      const res = await hooks.apiFetch(`/api/clubs?tab=${encodeURIComponent(sub)}&limit=40`);
+      if (!res.ok) throw new Error("Could not load clubs.");
+      const data = await res.json();
+      runsState.clubs.items = Array.isArray(data.items) ? data.items : [];
+      runsState.clubs.status = "ready";
+      runsState.clubs.error = null;
+    } catch (err) {
+      runsState.clubs.status = "error";
+      runsState.clubs.error = err.message || "Try again.";
+    }
+  }
+
+  async function loadAdminClubs(force = false) {
+    if (!force && runsState.adminClubs.status === "ready") return;
+    try {
+      const res = await hooks.apiFetch("/api/clubs?tab=admin&limit=40");
+      if (!res.ok) throw new Error("Could not load clubs.");
+      const data = await res.json();
+      runsState.adminClubs.items = Array.isArray(data.items) ? data.items : [];
+      runsState.adminClubs.status = "ready";
+    } catch (_err) {
+      runsState.adminClubs.items = [];
+      runsState.adminClubs.status = "error";
+    }
+  }
+
+  async function loadClubDetail(clubId, force = false) {
+    if (!force && runsState.clubDetail.clubId === clubId && runsState.clubDetail.status === "ready") {
+      return;
+    }
+    if (String(runsState.clubDetail.clubId || "") !== String(clubId)) {
+      runsState.clubDetail.tab = "upcoming";
+      runsState.clubDetail.runsStatus = "idle";
+      runsState.clubDetail.runs = [];
+    }
+    runsState.clubDetail.clubId = clubId;
+    runsState.clubDetail.status = "loading";
+    try {
+      const res = await hooks.apiFetch(`/api/clubs/${encodeURIComponent(clubId)}`);
+      if (!res.ok) throw new Error("Club not found.");
+      runsState.clubDetail.club = await res.json();
+      runsState.clubDetail.status = "ready";
+      runsState.clubDetail.error = null;
+    } catch (err) {
+      runsState.clubDetail.status = "error";
+      runsState.clubDetail.error = err.message || "Try again.";
+      runsState.clubDetail.club = null;
+    }
+  }
+
+  async function loadClubRuns(force = false) {
+    const clubId = runsState.clubDetail.clubId;
+    const tab = runsState.clubDetail.tab === "feed" ? "past" : "upcoming";
+    if (!clubId) return;
+    if (!force && runsState.clubDetail.runsStatus === "ready") return;
+    runsState.clubDetail.runsStatus = "loading";
+    try {
+      const res = await hooks.apiFetch(
+        `/api/clubs/${encodeURIComponent(clubId)}/runs?tab=${encodeURIComponent(tab)}&limit=40`
+      );
+      if (!res.ok) throw new Error("Could not load club runs.");
+      const data = await res.json();
+      runsState.clubDetail.runs = Array.isArray(data.items) ? data.items : [];
+      runsState.clubDetail.runsStatus = "ready";
+    } catch (_err) {
+      runsState.clubDetail.runs = [];
+      runsState.clubDetail.runsStatus = "ready";
+    }
+  }
+
+  function syncCreateClubFromDom() {
+    const c = runsState.createClub;
+    const name = document.getElementById("createClubName");
+    if (name) c.name = name.value.trim();
+    const loc = document.getElementById("createClubLocation");
+    if (loc) c.location_name = loc.value.trim();
+    const desc = document.getElementById("createClubDesc");
+    if (desc) c.description = desc.value.trim();
+    const vis = document.querySelector('input[name="clubVis"]:checked');
+    if (vis) c.visibility = vis.value;
+  }
+
+  async function submitCreateClub() {
+    syncCreateClubFromDom();
+    const c = runsState.createClub;
+    if (!c.name || c.name.length < 3) {
+      hooks.showToast("Give the club a name (at least 3 characters).");
+      return;
+    }
+    c.submitting = true;
+    hooks.render();
+    try {
+      const res = await hooks.apiFetch("/api/clubs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: c.name,
+          description: c.description || null,
+          location_name: c.location_name || null,
+          visibility: c.visibility || "public",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not create club.");
+      hooks.showToast("Club created. Invite your people.");
+      runsState.createClub = {
+        name: "",
+        location_name: "",
+        description: "",
+        visibility: "public",
+        submitting: false,
+      };
+      runsState.clubs.status = "idle";
+      runsState.adminClubs.status = "idle";
+      openClub(data.id);
+    } catch (err) {
+      c.submitting = false;
+      hooks.showToast(err.message || "Try again.");
+      hooks.render();
+    }
+  }
+
+  function openClub(clubId) {
+    hooks.navigate("club", { clubId: String(clubId) });
+  }
+
+  async function joinClub(clubId) {
+    const res = await hooks.apiFetch(`/api/clubs/${clubId}/join`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      hooks.showToast(data.detail || "Could not join.");
+      return;
+    }
+    runsState.clubDetail.club = data;
+    runsState.clubDetail.status = "ready";
+    runsState.clubDetail.clubId = String(data.id || clubId);
+    runsState.clubs.status = "idle";
+    hooks.showToast("You're in. See you at the next run.");
+    if (hooks.getPage() !== "club") {
+      openClub(data.id || clubId);
+    } else {
+      hooks.render();
+    }
+  }
+
+  async function leaveClub(clubId) {
+    const res = await hooks.apiFetch(`/api/clubs/${clubId}/leave`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      hooks.showToast(data.detail || "Could not leave.");
+      return;
+    }
+    runsState.clubDetail.club = data;
+    runsState.clubs.status = "idle";
+    hooks.showToast("You left this club.");
+    hooks.render();
+  }
+
+  function startClubRun(clubId) {
+    const club = runsState.clubDetail.club;
+    const c = runsState.create;
+    Object.assign(c, emptyCreateState());
+    c.club_id = Number(clubId) || null;
+    if (club && club.location_name) c.location_name = club.location_name;
+    if (club && club.name) c.title = `${club.name} run`;
+    if (!c.meeting_time) c.meeting_time = defaultMeetingTime();
+    hooks.navigate("create-run");
+  }
+
   async function loadMyRuns(force = false) {
     const tab = runsState.myRuns.tab || "upcoming";
     runsState.myRuns.status = "loading";
@@ -532,6 +956,8 @@
     if (maxp && maxp.value) c.max_participants = Number(maxp.value);
     const vis = document.querySelector('input[name="runVis"]:checked');
     if (vis) c.visibility = vis.value;
+    const clubSel = document.getElementById("createRunClub");
+    if (clubSel) c.club_id = clubSel.value ? Number(clubSel.value) : null;
   }
 
   async function submitCreateRun() {
@@ -563,27 +989,16 @@
           run_type: c.run_type,
           max_participants: c.max_participants,
           visibility: c.visibility,
+          club_id: c.club_id || null,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Could not create run.");
       hooks.showToast("Run created. See you out there.");
-      runsState.create = {
-        step: 1,
-        location_name: "",
-        meeting_time: "",
-        distance_km: 10,
-        pace_min: "5:00",
-        pace_max: "5:30",
-        run_type: "easy",
-        visibility: "everyone",
-        title: "",
-        description: "",
-        max_participants: null,
-        submitting: false,
-      };
+      runsState.create = emptyCreateState();
       runsState.nearby.status = "idle";
       runsState.discover.status = "idle";
+      runsState.clubDetail.runsStatus = "idle";
       openRun(data.id);
     } catch (err) {
       c.submitting = false;
@@ -660,7 +1075,21 @@
       openRun(el?.dataset?.runId);
       return true;
     }
+    if (action === "open-club") {
+      openClub(el?.dataset?.clubId);
+      return true;
+    }
     if (action === "back-from-run") {
+      hooks.navigate("discover");
+      return true;
+    }
+    if (action === "back-from-club") {
+      runsState.discover.tab = "clubs";
+      hooks.navigate("discover");
+      return true;
+    }
+    if (action === "back-from-create-club") {
+      runsState.discover.tab = "clubs";
       hooks.navigate("discover");
       return true;
     }
@@ -668,9 +1097,49 @@
       runsState.discover.tab = el?.dataset?.tab || "runs";
       if (runsState.discover.tab === "people") {
         loadPeopleMatches(false).then(() => hooks.render());
+      } else if (runsState.discover.tab === "clubs") {
+        loadClubs(false).then(() => hooks.render());
+      } else if (runsState.discover.tab === "runs") {
+        loadDiscover(false).then(() => hooks.render());
       } else {
         hooks.render();
       }
+      return true;
+    }
+    if (action === "clubs-subtab") {
+      runsState.clubs.subtab = el?.dataset?.tab || "discover";
+      runsState.clubs.status = "idle";
+      loadClubs(true).then(() => hooks.render());
+      return true;
+    }
+    if (action === "retry-clubs") {
+      loadClubs(true).then(() => hooks.render());
+      return true;
+    }
+    if (action === "club-tab") {
+      runsState.clubDetail.tab = el?.dataset?.tab || "upcoming";
+      if (runsState.clubDetail.tab === "members") {
+        hooks.render();
+      } else {
+        runsState.clubDetail.runsStatus = "idle";
+        loadClubRuns(true).then(() => hooks.render());
+      }
+      return true;
+    }
+    if (action === "create-club-submit") {
+      submitCreateClub();
+      return true;
+    }
+    if (action === "create-club-run") {
+      startClubRun(el?.dataset?.clubId);
+      return true;
+    }
+    if (action === "join-club") {
+      joinClub(el?.dataset?.clubId);
+      return true;
+    }
+    if (action === "leave-club") {
+      leaveClub(el?.dataset?.clubId);
       return true;
     }
     if (action === "retry-people-matches") {
@@ -761,7 +1230,11 @@
         loadPeopleMatches(false).then(() => {
           if (hooks.getPage() === "discover") hooks.render();
         });
-      } else {
+      } else if (runsState.discover.tab === "clubs") {
+        loadClubs(false).then(() => {
+          if (hooks.getPage() === "discover") hooks.render();
+        });
+      } else if (runsState.discover.tab !== "routes") {
         loadDiscover(false).then(() => {
           if (hooks.getPage() === "discover") hooks.render();
         });
@@ -774,10 +1247,24 @@
     }
     if (page === "create-run") {
       if (!runsState.create.meeting_time) runsState.create.meeting_time = defaultMeetingTime();
+      loadAdminClubs(false).then(() => {
+        if (hooks.getPage() === "create-run") hooks.render();
+      });
     }
     if (page === "run" && opts.runId) {
       loadRunDetail(opts.runId, true).then(() => {
         if (hooks.getPage() === "run") hooks.render();
+      });
+    }
+    if (page === "club" && opts.clubId) {
+      loadClubDetail(opts.clubId, true).then(() => {
+        if (hooks.getPage() === "club") hooks.render();
+        const tab = runsState.clubDetail.tab;
+        if (tab !== "members") {
+          loadClubRuns(true).then(() => {
+            if (hooks.getPage() === "club") hooks.render();
+          });
+        }
       });
     }
   }
@@ -787,6 +1274,8 @@
     if (page === "my-runs") return renderMyRuns();
     if (page === "create-run") return renderCreateRun();
     if (page === "run") return renderRunDetail();
+    if (page === "club") return renderClubPage();
+    if (page === "create-club") return renderCreateClub();
     return null;
   }
 
@@ -799,9 +1288,15 @@
     handleAction,
     onPageEnter,
     openRun,
+    openClub,
     getRunIdFromHash() {
       const raw = (location.hash || "").slice(1);
       if (raw.startsWith("run/")) return decodeURIComponent(raw.slice(4)).trim();
+      return null;
+    },
+    getClubIdFromHash() {
+      const raw = (location.hash || "").slice(1);
+      if (raw.startsWith("club/")) return decodeURIComponent(raw.slice(5)).trim();
       return null;
     },
   };

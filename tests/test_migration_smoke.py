@@ -119,5 +119,7 @@ def test_alembic_upgrade_head_on_empty_database():
         "notifications",
         "runs",
         "run_participants",
+        "run_clubs",
+        "club_members",
     }.issubset(tables)
-    assert version == "0011_runs"
+    assert version == "0012_run_clubs"
