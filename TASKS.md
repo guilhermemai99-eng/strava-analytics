@@ -55,6 +55,9 @@ Strava remains the activity data source. The product centre is real runs and peo
 ### Run Clubs
 - Create, join, leave, discover, members, club runs
 - Host a run as a club (owner/admin)
+- Cover image upload (blob) on club hero/cards
+- Direct invites by handle + shareable invite links
+- Accept/decline in Notifications and on the club page
 
 ### Production pass
 - Dead activity stub removed; photo/map in activity detail
@@ -68,8 +71,13 @@ Strava remains the activity data source. The product centre is real runs and peo
 
 | # | Phase | Status |
 |---|--------|--------|
+<<<<<<< HEAD
 | 1 | Clubs polish (cover image, invites) | Ready (#35) |
 | 2 | Broader polish / production hardening | Later |
+=======
+| 1 | Production pass (privacy, mobile, dead UI) | Ongoing (#34) |
+| 2 | Broader polish | Later |
+>>>>>>> origin/cursor/clubs-cover-invites-b3a3
 
 ## Do not ship
 

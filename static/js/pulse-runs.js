@@ -37,12 +37,18 @@
       tab: "upcoming",
       runs: [],
       runsStatus: "idle",
+      inviteOpen: false,
+      inviteHandle: "",
+      invitePending: [],
+      invitePendingStatus: "idle",
+      inviteBusy: false,
     },
     createClub: {
       name: "",
       location_name: "",
       description: "",
       visibility: "public",
+      coverFile: null,
       submitting: false,
     },
     adminClubs: { status: "idle", items: [] },
@@ -230,13 +236,23 @@
     return "Member";
   }
 
+  function clubMarkHtml(club, extraClass = "") {
+    const letter = h((club.name || "C").slice(0, 1).toUpperCase());
+    if (club.cover_url) {
+      return `<div class="club-card-mark ${extraClass} has-cover" aria-hidden="true"><img src="${h(club.cover_url)}" alt=""></div>`;
+    }
+    return `<div class="club-card-mark ${extraClass}" aria-hidden="true">${letter}</div>`;
+  }
+
   function renderClubCard(club) {
     const joinCta = club.is_member
       ? `<span class="run-card-going">${h(roleLabel(club.role))}</span>`
-      : `<button type="button" class="btn btn-primary btn-sm" data-action="join-club" data-club-id="${h(club.id)}">Join</button>`;
+      : club.visibility === "private"
+        ? `<span class="run-card-going">Private</span>`
+        : `<button type="button" class="btn btn-primary btn-sm" data-action="join-club" data-club-id="${h(club.id)}">Join</button>`;
     return `
       <article class="club-card" data-action="open-club" data-club-id="${h(club.id)}">
-        <div class="club-card-mark" aria-hidden="true">${h((club.name || "C").slice(0, 1).toUpperCase())}</div>
+        ${clubMarkHtml(club)}
         <div class="club-card-body">
           <div class="run-card-top">
             <h3>${h(club.name)}</h3>
@@ -290,13 +306,54 @@
   }
 
   function clubJoinLeaveCta(club) {
+    if (club.pending_invite_id && !club.is_member) {
+      return `
+        <button type="button" class="btn btn-primary" data-action="accept-club-invite" data-invite-id="${h(club.pending_invite_id)}">Accept invite</button>
+        <button type="button" class="btn btn-ghost" data-action="decline-club-invite" data-invite-id="${h(club.pending_invite_id)}">Decline</button>`;
+    }
     if (club.is_owner) {
       return `<span class="run-card-going">You're the owner</span>`;
     }
     if (club.is_member) {
       return `<button type="button" class="btn btn-ghost" data-action="leave-club" data-club-id="${h(club.id)}">Leave Club</button>`;
     }
+    if (club.visibility === "private") {
+      return `<span class="run-card-going">Invite only</span>`;
+    }
     return `<button type="button" class="btn btn-primary" data-action="join-club" data-club-id="${h(club.id)}">Join Club</button>`;
+  }
+
+  function renderInvitePanel(club) {
+    const d = runsState.clubDetail;
+    if (!club.can_manage || !d.inviteOpen) return "";
+    const pending = Array.isArray(d.invitePending) ? d.invitePending : [];
+    const pendingList = pending.length
+      ? `<ul class="club-invite-pending">${pending
+          .map(
+            (inv) => `
+          <li>
+            <span>${h(inv.invitee?.name || inv.invitee?.handle || "Runner")}${
+              inv.invitee?.handle ? ` · @${h(inv.invitee.handle)}` : ""
+            }</span>
+            <button type="button" class="btn btn-ghost btn-sm" data-action="cancel-club-invite" data-invite-id="${h(inv.id)}" data-club-id="${h(club.id)}">Cancel</button>
+          </li>`
+          )
+          .join("")}</ul>`
+      : `<p class="runs-section-sub">No pending invites.</p>`;
+    return `
+      <div class="club-invite-panel">
+        <h3>Invite runners</h3>
+        <p class="runs-section-sub">Send a handle invite, or copy a link that works even for private clubs.</p>
+        <div class="club-invite-row">
+          <input type="text" id="clubInviteHandle" value="${h(d.inviteHandle || "")}" placeholder="@handle" maxlength="32" autocomplete="off">
+          <button type="button" class="btn btn-primary btn-sm" data-action="send-club-invite" data-club-id="${h(club.id)}" ${d.inviteBusy ? "disabled" : ""}>Send</button>
+        </div>
+        <div class="club-invite-row">
+          <button type="button" class="btn btn-ghost btn-sm" data-action="copy-club-invite-link" data-club-id="${h(club.id)}" ${d.inviteBusy ? "disabled" : ""}>Copy invite link</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-action="close-club-invite">Close</button>
+        </div>
+        ${pendingList}
+      </div>`;
   }
 
   function renderClubPage() {
@@ -321,10 +378,17 @@
     const members = Array.isArray(club.members) ? club.members : [];
     let body = "";
     if (tab === "members") {
-      body = members.length
-        ? `<div class="club-member-list">${members
-            .map(
-              (m) => `
+      const inviteCta = club.can_manage
+        ? `<button type="button" class="btn btn-primary btn-sm" data-action="open-club-invite">Invite</button>`
+        : "";
+      body = `
+        <div class="club-members-toolbar">${inviteCta}</div>
+        ${renderInvitePanel(club)}
+        ${
+          members.length
+            ? `<div class="club-member-list">${members
+                .map(
+                  (m) => `
             <button type="button" class="club-member-row" data-action="open-user" data-athlete-id="${h(m.athlete_id)}">
               <span class="pulse-avatar">${m.avatar_url ? `<img src="${h(m.avatar_url)}" alt="">` : h(m.initials || "P")}</span>
               <span class="club-member-meta">
@@ -332,9 +396,10 @@
                 <span>${h(roleLabel(m.role))}${m.handle ? ` · @${h(m.handle)}` : ""}</span>
               </span>
             </button>`
-            )
-            .join("")}</div>`
-        : `<p class="runs-section-sub">No members yet.</p>`;
+                )
+                .join("")}</div>`
+            : `<p class="runs-section-sub">No members yet.</p>`
+        }`;
     } else if (d.runsStatus === "loading" || d.runsStatus === "idle") {
       body = `<p class="runs-section-sub">${tab === "feed" ? "Loading club feed…" : "Loading upcoming runs…"}</p>`;
     } else if (!d.runs.length) {
@@ -349,6 +414,13 @@
     const hostCta = club.can_manage
       ? `<button type="button" class="btn btn-primary" data-action="create-club-run" data-club-id="${h(club.id)}">Create a club run</button>`
       : "";
+    const inviteCta = club.can_manage
+      ? `<button type="button" class="btn btn-ghost" data-action="open-club-invite">Invite</button>`
+      : "";
+    const coverCta = club.can_manage
+      ? `<button type="button" class="btn btn-ghost btn-sm" data-action="pick-club-cover" data-club-id="${h(club.id)}">${club.cover_url ? "Change cover" : "Add cover"}</button>
+         <input type="file" id="clubCoverInput" accept="image/jpeg,image/png,image/webp" hidden>`
+      : "";
 
     return `
       <section class="pulse-page club-page" data-page="club">
@@ -358,14 +430,16 @@
           <span></span>
         </header>
         <div class="club-hero">
-          <div class="club-hero-mark" aria-hidden="true">${h((club.name || "C").slice(0, 1).toUpperCase())}</div>
+          ${clubMarkHtml(club, "club-hero-mark")}
           <div>
             ${club.location_name ? `<p class="run-detail-loc">📍 ${h(club.location_name)}</p>` : ""}
             <p class="club-hero-count">${h(String(club.member_count || 0))} members${club.visibility === "private" ? " · Private" : ""}</p>
             ${club.description ? `<p class="club-hero-desc">${h(club.description)}</p>` : ""}
+            ${coverCta}
           </div>
         </div>
-        <div class="club-hero-actions">${clubJoinLeaveCta(club)}${hostCta}</div>
+        <div class="club-hero-actions">${clubJoinLeaveCta(club)}${inviteCta}${hostCta}</div>
+        ${tab !== "members" ? renderInvitePanel(club) : ""}
         <div class="discover-tabs" role="tablist">
           ${tabs
             .map(
@@ -396,6 +470,9 @@
         </label>
         <label class="run-form-label">Description (optional)
           <textarea id="createClubDesc" rows="3" placeholder="Easy mornings by the river. All paces welcome.">${h(c.description)}</textarea>
+        </label>
+        <label class="run-form-label">Cover image (optional)
+          <input type="file" id="createClubCover" accept="image/jpeg,image/png,image/webp">
         </label>
         <p class="run-form-label">Visibility</p>
         <div class="run-visibility-list">
@@ -809,6 +886,8 @@
     if (desc) c.description = desc.value.trim();
     const vis = document.querySelector('input[name="clubVis"]:checked');
     if (vis) c.visibility = vis.value;
+    const cover = document.getElementById("createClubCover");
+    if (cover && cover.files && cover.files[0]) c.coverFile = cover.files[0];
   }
 
   async function submitCreateClub() {
@@ -833,16 +912,30 @@
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Could not create club.");
+      if (c.coverFile) {
+        const fd = new FormData();
+        fd.append("file", c.coverFile);
+        const coverRes = await hooks.apiFetch(`/api/clubs/${data.id}/cover`, {
+          method: "POST",
+          body: fd,
+        });
+        if (coverRes.ok) {
+          const covered = await coverRes.json().catch(() => null);
+          if (covered) Object.assign(data, covered);
+        }
+      }
       hooks.showToast("Club created. Invite your people.");
       runsState.createClub = {
         name: "",
         location_name: "",
         description: "",
         visibility: "public",
+        coverFile: null,
         submitting: false,
       };
       runsState.clubs.status = "idle";
       runsState.adminClubs.status = "idle";
+      runsState.clubDetail.inviteOpen = true;
       openClub(data.id);
     } catch (err) {
       c.submitting = false;
@@ -885,6 +978,162 @@
     runsState.clubs.status = "idle";
     hooks.showToast("You left this club.");
     hooks.render();
+  }
+
+  async function loadClubInvites(force = false) {
+    const clubId = runsState.clubDetail.clubId || runsState.clubDetail.club?.id;
+    if (!clubId) return;
+    if (runsState.clubDetail.invitePendingStatus === "ready" && !force) return;
+    runsState.clubDetail.invitePendingStatus = "loading";
+    try {
+      const res = await hooks.apiFetch(`/api/clubs/${clubId}/invites`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not load invites.");
+      runsState.clubDetail.invitePending = Array.isArray(data.items) ? data.items : [];
+      runsState.clubDetail.invitePendingStatus = "ready";
+    } catch (_err) {
+      runsState.clubDetail.invitePending = [];
+      runsState.clubDetail.invitePendingStatus = "error";
+    }
+  }
+
+  async function openInvitePanel() {
+    runsState.clubDetail.inviteOpen = true;
+    runsState.clubDetail.tab = "members";
+    hooks.render();
+    await loadClubInvites(true);
+    hooks.render();
+  }
+
+  async function sendClubInvite(clubId) {
+    const input = document.getElementById("clubInviteHandle");
+    const handle = (input ? input.value : runsState.clubDetail.inviteHandle || "").trim();
+    runsState.clubDetail.inviteHandle = handle;
+    if (!handle) {
+      hooks.showToast("Enter a handle to invite.");
+      return;
+    }
+    runsState.clubDetail.inviteBusy = true;
+    hooks.render();
+    try {
+      const res = await hooks.apiFetch(`/api/clubs/${clubId}/invites`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ handle }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not send invite.");
+      hooks.showToast("Invite sent.");
+      runsState.clubDetail.inviteHandle = "";
+      await loadClubInvites(true);
+    } catch (err) {
+      hooks.showToast(err.message || "Could not send invite.");
+    } finally {
+      runsState.clubDetail.inviteBusy = false;
+      hooks.render();
+    }
+  }
+
+  async function copyClubInviteLink(clubId) {
+    runsState.clubDetail.inviteBusy = true;
+    hooks.render();
+    try {
+      const res = await hooks.apiFetch(`/api/clubs/${clubId}/invite-link`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not create link.");
+      const url = `${location.origin}${data.path || ""}`;
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      }
+      hooks.showToast("Invite link copied.");
+    } catch (err) {
+      hooks.showToast(err.message || "Could not create link.");
+    } finally {
+      runsState.clubDetail.inviteBusy = false;
+      hooks.render();
+    }
+  }
+
+  async function cancelClubInvite(clubId, inviteId) {
+    const res = await hooks.apiFetch(
+      `/api/clubs/${clubId}/invites/${inviteId}/cancel`,
+      { method: "POST" }
+    );
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      hooks.showToast(data.detail || "Could not cancel.");
+      return;
+    }
+    await loadClubInvites(true);
+    hooks.render();
+  }
+
+  async function acceptClubInvite(inviteId) {
+    const res = await hooks.apiFetch(`/api/club-invites/${inviteId}/accept`, {
+      method: "POST",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      hooks.showToast(data.detail || "Could not accept.");
+      return;
+    }
+    hooks.showToast("You're in. See you at the next run.");
+    runsState.clubs.status = "idle";
+    openClub(data.id);
+  }
+
+  async function declineClubInvite(inviteId) {
+    const res = await hooks.apiFetch(`/api/club-invites/${inviteId}/decline`, {
+      method: "POST",
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      hooks.showToast(data.detail || "Could not decline.");
+      return;
+    }
+    hooks.showToast("Invite declined.");
+    if (runsState.clubDetail.club) {
+      runsState.clubDetail.club.pending_invite_id = null;
+    }
+    hooks.render();
+  }
+
+  async function uploadClubCover(clubId, file) {
+    if (!file) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await hooks.apiFetch(`/api/clubs/${clubId}/cover`, {
+      method: "POST",
+      body: fd,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      hooks.showToast(data.detail || "Could not upload cover.");
+      return;
+    }
+    runsState.clubDetail.club = data;
+    runsState.clubs.status = "idle";
+    hooks.showToast("Cover updated.");
+    hooks.render();
+  }
+
+  async function redeemClubInviteToken(token) {
+    if (!token) return null;
+    const res = await hooks.apiFetch("/api/club-invites/redeem", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      hooks.showToast(data.detail || "Invite link is invalid.");
+      return null;
+    }
+    hooks.showToast("You're in. See you at the next run.");
+    runsState.clubs.status = "idle";
+    return data;
   }
 
   function startClubRun(clubId) {
@@ -1140,6 +1389,47 @@
       leaveClub(el?.dataset?.clubId);
       return true;
     }
+    if (action === "open-club-invite") {
+      openInvitePanel();
+      return true;
+    }
+    if (action === "close-club-invite") {
+      runsState.clubDetail.inviteOpen = false;
+      hooks.render();
+      return true;
+    }
+    if (action === "send-club-invite") {
+      sendClubInvite(el?.dataset?.clubId);
+      return true;
+    }
+    if (action === "copy-club-invite-link") {
+      copyClubInviteLink(el?.dataset?.clubId);
+      return true;
+    }
+    if (action === "cancel-club-invite") {
+      cancelClubInvite(el?.dataset?.clubId, el?.dataset?.inviteId);
+      return true;
+    }
+    if (action === "accept-club-invite") {
+      acceptClubInvite(el?.dataset?.inviteId);
+      return true;
+    }
+    if (action === "decline-club-invite") {
+      declineClubInvite(el?.dataset?.inviteId);
+      return true;
+    }
+    if (action === "pick-club-cover") {
+      const input = document.getElementById("clubCoverInput");
+      if (input) {
+        input.onchange = () => {
+          const file = input.files && input.files[0];
+          uploadClubCover(el?.dataset?.clubId, file);
+          input.value = "";
+        };
+        input.click();
+      }
+      return true;
+    }
     if (action === "retry-people-matches") {
       loadPeopleMatches(true).then(() => hooks.render());
       return true;
@@ -1266,6 +1556,11 @@
             if (hooks.getPage() === "club") hooks.render();
           });
         }
+        if (runsState.clubDetail.inviteOpen) {
+          loadClubInvites(true).then(() => {
+            if (hooks.getPage() === "club") hooks.render();
+          });
+        }
       });
     }
   }
@@ -1291,6 +1586,9 @@
     onPageEnter,
     openRun,
     openClub,
+    redeemClubInviteToken,
+    acceptClubInvite,
+    declineClubInvite,
     setDiscoverTab(tab) {
       runsState.discover.tab = tab || "people";
     },

@@ -129,8 +129,13 @@ def make_athlete(db_session):
         from follow import Follow
         from follow_request import FollowRequest
         from club import ClubMember, RunClub
+        from club_invite import ClubInvite
         from run import Run, RunParticipant
 
+        db_session.query(ClubInvite).filter(
+            (ClubInvite.inviter_id == athlete_id)
+            | (ClubInvite.invitee_id == athlete_id)
+        ).delete(synchronize_session=False)
         db_session.query(ClubMember).filter(
             ClubMember.athlete_id == athlete_id
         ).delete(synchronize_session=False)

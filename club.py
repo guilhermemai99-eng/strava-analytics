@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -46,7 +47,10 @@ class RunClub(Base):
     name = Column(String(120), nullable=False)
     description = Column(Text, nullable=True)
     location_name = Column(String(200), nullable=True)
+    # Legacy external URL field; prefer cover_data. serialize_club prefers blob.
     cover_url = Column(String(500), nullable=True)
+    cover_data = Column(LargeBinary, nullable=True)
+    cover_content_type = Column(String(64), nullable=True)
     visibility = Column(
         String(16),
         nullable=False,

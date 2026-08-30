@@ -19,6 +19,8 @@ KIND_FOLLOW_ACCEPTED = "follow_accepted"
 KIND_RUN_JOIN = "run_join"
 KIND_CLUB_JOIN = "club_join"
 KIND_CLUB_RUN = "club_run"
+KIND_CLUB_INVITE = "club_invite"
+KIND_CLUB_INVITE_ACCEPTED = "club_invite_accepted"
 
 
 def _serialize_actor(athlete: Athlete | None) -> dict | None:
@@ -243,6 +245,65 @@ def notify_club_run(
         db.commit()
 
 
+def notify_club_invite(
+    db: Session,
+    *,
+    club_id: int,
+    inviter_id: int,
+    invitee_id: int,
+    club_name: str,
+    invite_id: int,
+) -> None:
+    if invitee_id == inviter_id:
+        return
+    inviter = db.query(Athlete).filter(Athlete.id == inviter_id).one_or_none()
+    if inviter is None:
+        return
+    name = display_name_for(inviter)
+    label = (club_name or "a club").strip() or "a club"
+    if len(label) > 60:
+        label = label[:57] + "…"
+    create_notification(
+        db,
+        recipient_id=invitee_id,
+        actor_id=inviter_id,
+        kind=KIND_CLUB_INVITE,
+        body=f"{name} invited you to {label}.",
+        target_type="club",
+        target_id=club_id,
+    )
+    db.commit()
+
+
+def notify_club_invite_accepted(
+    db: Session,
+    *,
+    club_id: int,
+    inviter_id: int,
+    invitee_id: int,
+    club_name: str,
+) -> None:
+    if invitee_id == inviter_id:
+        return
+    invitee = db.query(Athlete).filter(Athlete.id == invitee_id).one_or_none()
+    if invitee is None:
+        return
+    name = display_name_for(invitee)
+    label = (club_name or "your club").strip() or "your club"
+    if len(label) > 60:
+        label = label[:57] + "…"
+    create_notification(
+        db,
+        recipient_id=inviter_id,
+        actor_id=invitee_id,
+        kind=KIND_CLUB_INVITE_ACCEPTED,
+        body=f"{name} accepted your invite to {label}.",
+        target_type="club",
+        target_id=club_id,
+    )
+    db.commit()
+
+
 def notify_message(
     db: Session,
     *,
@@ -309,6 +370,17 @@ def list_notifications(
             rel = relationship_payload(
                 db, viewer_id=recipient_id, target_id=actor.id
             )
+        can_accept_club = False
+        if (
+            row.kind == KIND_CLUB_INVITE
+            and row.target_type == "club"
+            and row.target_id
+        ):
+            from club_helpers import has_pending_club_invite
+
+            can_accept_club = has_pending_club_invite(
+                db, invitee_id=recipient_id, club_id=int(row.target_id)
+            )
         out.append(
             {
                 "id": row.id,
@@ -330,6 +402,7 @@ def list_notifications(
                     and row.kind == KIND_FOLLOW_REQUEST
                     and rel.get("has_incoming_follow_request")
                 ),
+                "can_accept_club_invite": can_accept_club,
             }
         )
     return out

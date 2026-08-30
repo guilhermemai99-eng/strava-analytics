@@ -94,6 +94,15 @@ def test_alembic_upgrade_head_on_empty_database():
                 )
             )
         }
+        club_cols = {
+            row[0]
+            for row in conn.execute(
+                text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name='run_clubs'"
+                )
+            )
+        }
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
 
     engine.dispose()
@@ -126,6 +135,9 @@ def test_alembic_upgrade_head_on_empty_database():
         "hidden_activities",
         "activity_reports",
         "follow_requests",
+        "club_invites",
     }.issubset(tables)
-    assert version == "0014_follow_requests"
+    assert version == "0015_club_covers_invites"
     assert "visibility" in activity_cols
+    assert "cover_data" in club_cols
+    assert "cover_content_type" in club_cols

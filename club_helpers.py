@@ -1,15 +1,19 @@
-"""Run clubs: create, join/leave, listing, club runs."""
+"""Run clubs: create, join/leave, listing, covers, invites, club runs."""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import hashlib
+import secrets
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from athlete import Athlete
-from club import CLUB_ROLES, CLUB_VISIBILITIES, ClubMember, RunClub
+from club import CLUB_VISIBILITIES, ClubMember, RunClub
+from club_invite import ClubInvite
+from follow_helpers import get_athlete_by_handle
 from profile_helpers import display_name_for, initials_for, public_avatar_url_for
 from run import Run
 
@@ -73,6 +77,18 @@ def get_club(db: Session, club_id: int) -> RunClub | None:
     return db.query(RunClub).filter(RunClub.id == club_id).one_or_none()
 
 
+def public_cover_url_for(club: RunClub) -> str | None:
+    if not club.cover_data:
+        return None
+    version = 0
+    if club.updated_at is not None:
+        try:
+            version = int(club.updated_at.timestamp())
+        except (OSError, OverflowError, ValueError):
+            version = 0
+    return f"/api/clubs/{club.id}/cover?v={version}"
+
+
 def serialize_club_ref(db: Session, club_id: int | None) -> dict | None:
     if not club_id:
         return None
@@ -91,18 +107,28 @@ def serialize_club(
     member_limit: int = 40,
 ) -> dict:
     role = membership_role(db, club_id=club.id, athlete_id=viewer_id)
+    pending_invite = (
+        db.query(ClubInvite)
+        .filter(
+            ClubInvite.club_id == club.id,
+            ClubInvite.invitee_id == viewer_id,
+            ClubInvite.status == "pending",
+        )
+        .one_or_none()
+    )
     payload = {
         "id": club.id,
         "name": club.name,
         "description": club.description,
         "location_name": club.location_name,
-        "cover_url": club.cover_url,
+        "cover_url": public_cover_url_for(club),
         "visibility": club.visibility,
         "member_count": _member_count(db, club.id),
         "is_member": role is not None,
         "role": role,
         "can_manage": role in ("owner", "admin"),
         "is_owner": role == "owner",
+        "pending_invite_id": pending_invite.id if pending_invite else None,
         "created_at": club.created_at.isoformat() if club.created_at else None,
     }
     if include_members:
@@ -132,7 +158,7 @@ def create_club(
         description=(description or "").strip() or None,
         location_name=(location_name or "").strip() or None,
         visibility=validate_visibility(visibility),
-        cover_url=(cover_url or "").strip() or None,
+        cover_url=None,
     )
     db.add(club)
     db.flush()
@@ -148,9 +174,40 @@ def create_club(
     return club
 
 
+def set_club_cover(
+    db: Session,
+    *,
+    club: RunClub,
+    actor_id: int,
+    data: bytes,
+    content_type: str,
+) -> RunClub:
+    if not can_manage_club(db, club_id=club.id, athlete_id=actor_id):
+        raise ClubError("Only owners and admins can change the cover.", status_code=403)
+    club.cover_data = data
+    club.cover_content_type = content_type
+    club.updated_at = _utcnow()
+    db.commit()
+    db.refresh(club)
+    return club
+
+
+def clear_club_cover(db: Session, *, club: RunClub, actor_id: int) -> RunClub:
+    if not can_manage_club(db, club_id=club.id, athlete_id=actor_id):
+        raise ClubError("Only owners and admins can change the cover.", status_code=403)
+    club.cover_data = None
+    club.cover_content_type = None
+    club.updated_at = _utcnow()
+    db.commit()
+    db.refresh(club)
+    return club
+
+
 def join_club(db: Session, *, club: RunClub, athlete_id: int) -> ClubMember:
     if club.visibility == "private":
-        raise ClubError("This club is private. Ask an admin to invite you.", status_code=403)
+        raise ClubError(
+            "This club is private. Ask an admin to invite you.", status_code=403
+        )
     existing = get_membership(db, club_id=club.id, athlete_id=athlete_id)
     if existing:
         return existing
@@ -172,6 +229,20 @@ def join_club(db: Session, *, club: RunClub, athlete_id: int) -> ClubMember:
         club_name=club.name or "your club",
         admin_ids=list_admin_ids(db, club_id=club.id),
     )
+    return member
+
+
+def _add_member(db: Session, *, club: RunClub, athlete_id: int) -> ClubMember:
+    existing = get_membership(db, club_id=club.id, athlete_id=athlete_id)
+    if existing:
+        return existing
+    member = ClubMember(club_id=club.id, athlete_id=athlete_id, role="member")
+    db.add(member)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise ClubError("Already a member.") from exc
     return member
 
 
@@ -289,3 +360,322 @@ def list_club_runs(
             Run.meeting_time.asc()
         )
     return q.limit(min(limit, 50)).all()
+
+
+def _hash_token(raw: str) -> str:
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _serialize_invite(
+    db: Session, invite: ClubInvite, *, club: RunClub | None = None
+) -> dict:
+    club = club or get_club(db, invite.club_id)
+    invitee = None
+    if invite.invitee_id:
+        invitee = db.query(Athlete).filter(Athlete.id == invite.invitee_id).one_or_none()
+    inviter = db.query(Athlete).filter(Athlete.id == invite.inviter_id).one_or_none()
+    return {
+        "id": invite.id,
+        "club_id": invite.club_id,
+        "club_name": club.name if club else None,
+        "status": invite.status,
+        "is_link": invite.token_hash is not None and invite.invitee_id is None,
+        "created_at": invite.created_at.isoformat() if invite.created_at else None,
+        "invitee": (
+            {
+                "athlete_id": invitee.id,
+                "name": display_name_for(invitee),
+                "handle": invitee.handle,
+                "avatar_url": public_avatar_url_for(invitee),
+                "initials": initials_for(invitee),
+            }
+            if invitee
+            else None
+        ),
+        "inviter": (
+            {
+                "athlete_id": inviter.id,
+                "name": display_name_for(inviter),
+                "handle": inviter.handle,
+                "avatar_url": public_avatar_url_for(inviter),
+                "initials": initials_for(inviter),
+            }
+            if inviter
+            else None
+        ),
+    }
+
+
+def resolve_invitee(
+    db: Session, *, athlete_id: int | None, handle: str | None
+) -> Athlete:
+    if athlete_id:
+        row = db.query(Athlete).filter(Athlete.id == int(athlete_id)).one_or_none()
+        if row is None:
+            raise ClubError("Runner not found.", status_code=404)
+        return row
+    clean = (handle or "").strip().lstrip("@")
+    if not clean:
+        raise ClubError("Provide a handle or athlete id.")
+    row = get_athlete_by_handle(db, clean)
+    if row is None:
+        raise ClubError("Runner not found.", status_code=404)
+    return row
+
+
+def create_direct_invite(
+    db: Session,
+    *,
+    club: RunClub,
+    inviter_id: int,
+    athlete_id: int | None = None,
+    handle: str | None = None,
+) -> ClubInvite:
+    if not can_manage_club(db, club_id=club.id, athlete_id=inviter_id):
+        raise ClubError("Only owners and admins can invite.", status_code=403)
+    invitee = resolve_invitee(db, athlete_id=athlete_id, handle=handle)
+    if invitee.id == inviter_id:
+        raise ClubError("You are already in this club.")
+    if get_membership(db, club_id=club.id, athlete_id=invitee.id):
+        raise ClubError("They are already a member.")
+    existing = (
+        db.query(ClubInvite)
+        .filter(
+            ClubInvite.club_id == club.id,
+            ClubInvite.invitee_id == invitee.id,
+            ClubInvite.status == "pending",
+        )
+        .one_or_none()
+    )
+    if existing:
+        return existing
+
+    invite = ClubInvite(
+        club_id=club.id,
+        inviter_id=inviter_id,
+        invitee_id=invitee.id,
+        token_hash=None,
+        status="pending",
+        created_at=_utcnow(),
+        expires_at=_utcnow() + timedelta(days=14),
+    )
+    db.add(invite)
+    db.commit()
+    db.refresh(invite)
+
+    from notification_helpers import notify_club_invite
+
+    notify_club_invite(
+        db,
+        club_id=club.id,
+        inviter_id=inviter_id,
+        invitee_id=invitee.id,
+        club_name=club.name or "a club",
+        invite_id=invite.id,
+    )
+    return invite
+
+
+def list_pending_invites_for_club(
+    db: Session, *, club_id: int, actor_id: int
+) -> list[dict]:
+    if not can_manage_club(db, club_id=club_id, athlete_id=actor_id):
+        raise ClubError("Only owners and admins can view invites.", status_code=403)
+    club = get_club(db, club_id)
+    rows = (
+        db.query(ClubInvite)
+        .filter(
+            ClubInvite.club_id == club_id,
+            ClubInvite.status == "pending",
+            ClubInvite.invitee_id.isnot(None),
+        )
+        .order_by(ClubInvite.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    return [_serialize_invite(db, row, club=club) for row in rows]
+
+
+def list_incoming_club_invites(db: Session, *, invitee_id: int) -> list[dict]:
+    rows = (
+        db.query(ClubInvite)
+        .filter(
+            ClubInvite.invitee_id == invitee_id,
+            ClubInvite.status == "pending",
+        )
+        .order_by(ClubInvite.created_at.desc())
+        .limit(40)
+        .all()
+    )
+    return [_serialize_invite(db, row) for row in rows]
+
+
+def cancel_invite(
+    db: Session, *, club: RunClub, invite_id: int, actor_id: int
+) -> None:
+    if not can_manage_club(db, club_id=club.id, athlete_id=actor_id):
+        raise ClubError("Only owners and admins can cancel invites.", status_code=403)
+    invite = (
+        db.query(ClubInvite)
+        .filter(ClubInvite.id == invite_id, ClubInvite.club_id == club.id)
+        .one_or_none()
+    )
+    if invite is None or invite.status != "pending":
+        raise ClubError("Invite not found.", status_code=404)
+    invite.status = "cancelled"
+    invite.responded_at = _utcnow()
+    db.commit()
+
+
+def accept_invite(db: Session, *, invite_id: int, athlete_id: int) -> RunClub:
+    invite = db.query(ClubInvite).filter(ClubInvite.id == invite_id).one_or_none()
+    if (
+        invite is None
+        or invite.invitee_id != athlete_id
+        or invite.status != "pending"
+    ):
+        raise ClubError("Invite not found.", status_code=404)
+    if invite.expires_at and invite.expires_at < _utcnow():
+        invite.status = "cancelled"
+        invite.responded_at = _utcnow()
+        db.commit()
+        raise ClubError("This invite expired.", status_code=410)
+
+    club = get_club(db, invite.club_id)
+    if club is None:
+        raise ClubError("Club not found.", status_code=404)
+
+    _add_member(db, club=club, athlete_id=athlete_id)
+    invite.status = "accepted"
+    invite.responded_at = _utcnow()
+    db.commit()
+    db.refresh(club)
+
+    from notification_helpers import notify_club_invite_accepted, notify_club_join
+
+    notify_club_invite_accepted(
+        db,
+        club_id=club.id,
+        inviter_id=invite.inviter_id,
+        invitee_id=athlete_id,
+        club_name=club.name or "your club",
+    )
+    notify_club_join(
+        db,
+        club_id=club.id,
+        joiner_id=athlete_id,
+        club_name=club.name or "your club",
+        admin_ids=list_admin_ids(db, club_id=club.id),
+    )
+    return club
+
+
+def decline_invite(db: Session, *, invite_id: int, athlete_id: int) -> None:
+    invite = db.query(ClubInvite).filter(ClubInvite.id == invite_id).one_or_none()
+    if (
+        invite is None
+        or invite.invitee_id != athlete_id
+        or invite.status != "pending"
+    ):
+        raise ClubError("Invite not found.", status_code=404)
+    invite.status = "declined"
+    invite.responded_at = _utcnow()
+    db.commit()
+
+
+def create_or_rotate_invite_link(
+    db: Session, *, club: RunClub, inviter_id: int
+) -> dict:
+    if not can_manage_club(db, club_id=club.id, athlete_id=inviter_id):
+        raise ClubError(
+            "Only owners and admins can create invite links.", status_code=403
+        )
+
+    (
+        db.query(ClubInvite)
+        .filter(
+            ClubInvite.club_id == club.id,
+            ClubInvite.invitee_id.is_(None),
+            ClubInvite.status == "pending",
+        )
+        .update(
+            {
+                ClubInvite.status: "revoked",
+                ClubInvite.responded_at: _utcnow(),
+            },
+            synchronize_session=False,
+        )
+    )
+
+    raw = secrets.token_urlsafe(24)
+    invite = ClubInvite(
+        club_id=club.id,
+        inviter_id=inviter_id,
+        invitee_id=None,
+        token_hash=_hash_token(raw),
+        status="pending",
+        created_at=_utcnow(),
+        expires_at=None,
+    )
+    db.add(invite)
+    db.commit()
+    db.refresh(invite)
+    return {
+        "invite_id": invite.id,
+        "token": raw,
+        "path": f"/dashboard?club_invite={raw}#club/{club.id}",
+    }
+
+
+def redeem_invite_token(db: Session, *, token: str, athlete_id: int) -> RunClub:
+    clean = (token or "").strip()
+    if not clean:
+        raise ClubError("Invite token required.")
+    invite = (
+        db.query(ClubInvite)
+        .filter(
+            ClubInvite.token_hash == _hash_token(clean),
+            ClubInvite.invitee_id.is_(None),
+            ClubInvite.status == "pending",
+        )
+        .one_or_none()
+    )
+    if invite is None:
+        raise ClubError("Invite link is invalid or expired.", status_code=404)
+    club = get_club(db, invite.club_id)
+    if club is None:
+        raise ClubError("Club not found.", status_code=404)
+
+    existing = get_membership(db, club_id=club.id, athlete_id=athlete_id)
+    if existing:
+        return club
+
+    _add_member(db, club=club, athlete_id=athlete_id)
+    db.commit()
+    db.refresh(club)
+
+    from notification_helpers import notify_club_join
+
+    notify_club_join(
+        db,
+        club_id=club.id,
+        joiner_id=athlete_id,
+        club_name=club.name or "your club",
+        admin_ids=list_admin_ids(db, club_id=club.id),
+    )
+    return club
+
+
+def has_pending_club_invite(
+    db: Session, *, invitee_id: int, club_id: int
+) -> bool:
+    return (
+        db.query(ClubInvite.id)
+        .filter(
+            ClubInvite.invitee_id == invitee_id,
+            ClubInvite.club_id == club_id,
+            ClubInvite.status == "pending",
+        )
+        .first()
+        is not None
+    )
