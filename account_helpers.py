@@ -9,6 +9,7 @@ from coach_message import CoachMessage
 from dm_helpers import delete_dms_for_athlete
 from notification_helpers import delete_notifications_for_athlete
 from follow import Follow
+from follow_request import FollowRequest
 from models import Activity
 from strava_auth import StravaAuth
 from user_session import UserSession, utcnow
@@ -81,6 +82,10 @@ def delete_athlete_account(db: Session, athlete_id: int) -> dict:
         )
         .delete(synchronize_session=False)
     )
+    db.query(FollowRequest).filter(
+        (FollowRequest.requester_id == athlete_id)
+        | (FollowRequest.target_id == athlete_id)
+    ).delete(synchronize_session=False)
     dm_stats = delete_dms_for_athlete(db, athlete_id)
     notifications_deleted = delete_notifications_for_athlete(db, athlete_id)
 

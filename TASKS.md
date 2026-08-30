@@ -12,65 +12,54 @@ Strava remains the activity data source. The product centre is real runs and peo
 - Pulse profile (name, handle, avatar, bio, city, public/private)
 - Activity import with photos and polylines
 
-### Social graph (partial)
+### Social graph
 - Follow / unfollow
 - Followers / following lists
-- Public vs private **profiles** (`is_profile_public`) — private profiles hide content from non-owners
-- **Not done:** follow *requests* for private accounts (follow is currently blocked/hidden, not requested)
+- Public vs private **profiles** (`is_profile_public`)
+- **Follow requests** for private accounts (request / accept / decline / cancel)
+- Accepted followers can see a private profile; everyone else sees a locked page
 
 ### Direct messages
 - Mutual-follow required to start a chat
 - Inbox, thread, unread badges
-- **Not done:** sending a feed post as a message card
+- Share a feed post into DMs
 
 ### Notifications
-- Follow, mutual follow, new message
+- Follow, mutual follow, new message, likes, comments
+- Follow request + accepted request
 - Activity page + nav badge
-- **Not done:** likes, comments, run join, club events
 
-### Feed (partial)
+### Feed
 - Home feed: **your runs + people you follow**
-- Photo-first overlay (distance / time / pace on the image); map fallback when there is no photo
+- Photo-first overlay (distance / time / pace); map fallback when there is no photo
 - Likes, comments, hide (+ undo), privacy (public / followers / private), author delete
 - Share a post into DMs (mutual follow required)
-- Working ⋯ menu (not visual-only)
-- Notifications for likes and comments
 
-### Explore (partial)
-- People search + suggested public runners
-- Masonry still mixes activity tiles with people
-- **Product rule (next):** Explore is people-only — no runs, clubs, or posts as primary content
+### Explore / Discover people
+- Discover defaults to **People** — search, pace matches, nearby / recent / new
+- No activity masonry, no runs or clubs as primary Explore content
+- `#explore` and More → Find people open Discover → People
+- Exact-handle search can find private accounts so you can request to follow
 
-### Runs (Phase 1)
+### Runs
 - Create / discover / join / leave / My Runs
 - Pace compatibility (Great / Possible / Challenging) — never blocks join
-- Visibility: everyone / followers / invite only
 
-### People matching (Phase 2)
-- Discover → People, match score, **Run together** prefill
+### People matching
+- Match score + **Run together** prefill
 
-### Run Clubs (Phase 3) — `cursor/run-clubs-b3a3` / PR #30
-- Models + APIs: create, join, leave, discover, members, club runs
-- Public listable/joinable; private 404 for non-members; owner cannot leave
-- UI: Discover → Clubs, `#club/{id}` (Upcoming / Feed / Members), Create Club
+### Run Clubs
+- Create, join, leave, discover, members, club runs
 - Host a run as a club (owner/admin)
-- Run cards: “Hosted by {club}”
-- Verified: pytest + mobile Playwright (discover, club page, create club, create club run)
 
-## In progress / next (product roadmap)
-
-Priority: finish Clubs, then social feed, then remaining gaps.
+## Next
 
 | # | Phase | Status |
 |---|--------|--------|
-| 0 | Finish Run Clubs (UI + tests + PR) | Done — PR #30 |
-| 1 | Audit / stabilize | After Clubs lands |
-| 2 | Feed: photo-first overlay, likes, comments, share, hide, privacy, working menu | In progress — this branch |
-| 5 | Chat: share posts into DMs | Included with feed share |
-| 6 | Runs polish (already shipped core) | Later |
-| 7 | Clubs polish (cover image, invites) | Later |
-| 8 | Notifications for likes/comments/runs + UX polish | After social posts |
-| 9 | Production pass (privacy, mobile, dead UI) | Ongoing |
+| 1 | Clubs polish (cover image, invites) | Later |
+| 2 | Notifications for run join / club events | Later |
+| 3 | Caption edit UX (replace `window.prompt`) | Later |
+| 4 | Production pass (privacy, mobile, dead UI) | Ongoing |
 
 ## Do not ship
 

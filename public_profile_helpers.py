@@ -17,10 +17,16 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 
-def can_view_profile(viewer: Athlete, target: Athlete) -> bool:
+def can_view_profile(viewer: Athlete, target: Athlete, db: Session | None = None) -> bool:
     if viewer.id == target.id:
         return True
-    return bool(target.is_profile_public)
+    if bool(target.is_profile_public):
+        return True
+    if db is None:
+        return False
+    from follow_helpers import is_following
+
+    return is_following(db, follower_id=viewer.id, following_id=target.id)
 
 
 def resolve_profile_athlete(db: Session, handle: str) -> Athlete | None:
@@ -127,10 +133,14 @@ def serialize_public_profile(
             "country": target.country,
         },
         "is_profile_public": bool(target.is_profile_public),
+        "is_private_locked": False,
         "is_self": rel["is_self"],
         "is_following": rel["is_following"],
         "is_followed_by": rel["is_followed_by"],
         "is_mutual": rel["is_mutual"],
+        "is_follow_requested": rel["is_follow_requested"],
+        "has_incoming_follow_request": rel["has_incoming_follow_request"],
+        "follow_status": rel["follow_status"],
         "relationship": rel,
         "follower_count": followers,
         "following_count": following,
@@ -140,6 +150,59 @@ def serialize_public_profile(
         "activity_count": stats["activity_count"],
         "posts_count": stats["activity_count"],
     }
+
+
+def serialize_locked_profile(
+    db: Session, *, target: Athlete, viewer: Athlete
+) -> dict:
+    """Private account visible enough to send a follow request — no posts."""
+    rel = relationship_payload(db, viewer_id=viewer.id, target_id=target.id)
+    followers = follower_count(db, target.id)
+    following = following_count(db, target.id)
+    return {
+        "athlete_id": target.id,
+        "id": target.id,
+        "display_name": display_name_for(target),
+        "handle": target.handle,
+        "username": target.handle or target.username,
+        "bio": None,
+        "initials": initials_for(target),
+        "avatar_url": public_avatar_url_for(target),
+        "location": {
+            "display_name": None,
+            "city": None,
+            "country": None,
+        },
+        "is_profile_public": False,
+        "is_private_locked": True,
+        "is_self": False,
+        "is_following": False,
+        "is_followed_by": rel["is_followed_by"],
+        "is_mutual": False,
+        "is_follow_requested": rel["is_follow_requested"],
+        "has_incoming_follow_request": rel["has_incoming_follow_request"],
+        "follow_status": rel["follow_status"],
+        "relationship": rel,
+        "follower_count": followers,
+        "following_count": following,
+        "followers_count": followers,
+        "stats": {
+            "activity_count": None,
+            "total_distance_km": None,
+            "total_moving_time_s": None,
+        },
+        "activities": [],
+        "activity_count": 0,
+        "posts_count": 0,
+    }
+
+
+def serialize_profile_for_viewer(
+    db: Session, *, target: Athlete, viewer: Athlete
+) -> dict:
+    if can_view_profile(viewer, target, db):
+        return serialize_public_profile(db, target=target, viewer=viewer)
+    return serialize_locked_profile(db, target=target, viewer=viewer)
 
 
 def ensure_own_handle_on_me(db: Session, athlete: Athlete) -> Athlete:

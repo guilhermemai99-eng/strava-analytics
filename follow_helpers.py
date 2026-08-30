@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from athlete import Athlete
 from follow import Follow
+from follow_request import FollowRequest
 from profile_helpers import display_name_for, initials_for, public_avatar_url_for
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
@@ -82,11 +83,36 @@ def relationship_payload(
         if is_self
         else is_following(db, follower_id=target_id, following_id=viewer_id)
     )
+    requested = (
+        False
+        if is_self
+        else has_outgoing_request(
+            db, requester_id=viewer_id, target_id=target_id
+        )
+    )
+    incoming = (
+        False
+        if is_self
+        else has_outgoing_request(
+            db, requester_id=target_id, target_id=viewer_id
+        )
+    )
+    if is_self:
+        status = "self"
+    elif following:
+        status = "following"
+    elif requested:
+        status = "requested"
+    else:
+        status = "none"
     return {
         "is_self": is_self,
         "is_following": following,
         "is_followed_by": followed_by,
         "is_mutual": bool(following and followed_by),
+        "is_follow_requested": requested,
+        "has_incoming_follow_request": incoming,
+        "follow_status": status,
     }
 
 
@@ -194,8 +220,14 @@ def delete_follow(db: Session, *, follower_id: int, following_id: int) -> bool:
         .one_or_none()
     )
     if row is None:
+        cancel_follow_request(
+            db, requester_id=follower_id, target_id=following_id, commit=True
+        )
         return False
     db.delete(row)
+    cancel_follow_request(
+        db, requester_id=follower_id, target_id=following_id, commit=False
+    )
     db.commit()
     return True
 
@@ -207,6 +239,7 @@ def serialize_follow_person(
     following_count_value: int = 0,
     viewer_follows: bool = False,
     is_self: bool = False,
+    is_follow_requested: bool = False,
 ) -> dict:
     name = display_name_for(athlete)
     return {
@@ -221,6 +254,7 @@ def serialize_follow_person(
         "follower_count": int(follower_count_value),
         "following_count": int(following_count_value),
         "is_following": bool(viewer_follows) and not is_self,
+        "is_follow_requested": bool(is_follow_requested) and not is_self,
         "is_self": bool(is_self),
     }
 
@@ -384,6 +418,9 @@ def _serialize_people(
     ids = [a.id for a in athletes]
     counts = follow_counts_map(db, ids)
     follows = following_set(db, viewer_id=viewer_id, target_ids=ids)
+    requested = outgoing_request_set(
+        db, requester_id=viewer_id, target_ids=ids
+    )
     return [
         serialize_follow_person(
             athlete,
@@ -391,6 +428,205 @@ def _serialize_people(
             following_count_value=counts.get(athlete.id, {}).get("following_count", 0),
             viewer_follows=athlete.id in follows,
             is_self=athlete.id == viewer_id,
+            is_follow_requested=athlete.id in requested,
         )
         for athlete in athletes
     ]
+
+
+def has_outgoing_request(
+    db: Session, *, requester_id: int, target_id: int
+) -> bool:
+    if requester_id == target_id:
+        return False
+    row = (
+        db.query(FollowRequest.id)
+        .filter(
+            FollowRequest.requester_id == requester_id,
+            FollowRequest.target_id == target_id,
+        )
+        .first()
+    )
+    return row is not None
+
+
+def outgoing_request_set(
+    db: Session, *, requester_id: int, target_ids: list[int]
+) -> set[int]:
+    if not target_ids:
+        return set()
+    rows = (
+        db.query(FollowRequest.target_id)
+        .filter(
+            FollowRequest.requester_id == requester_id,
+            FollowRequest.target_id.in_(target_ids),
+        )
+        .all()
+    )
+    return {int(r[0]) for r in rows}
+
+
+def get_follow_request(
+    db: Session, *, requester_id: int, target_id: int
+) -> FollowRequest | None:
+    return (
+        db.query(FollowRequest)
+        .filter(
+            FollowRequest.requester_id == requester_id,
+            FollowRequest.target_id == target_id,
+        )
+        .one_or_none()
+    )
+
+
+def cancel_follow_request(
+    db: Session, *, requester_id: int, target_id: int, commit: bool = True
+) -> bool:
+    row = get_follow_request(
+        db, requester_id=requester_id, target_id=target_id
+    )
+    if row is None:
+        return False
+    db.delete(row)
+    if commit:
+        db.commit()
+    return True
+
+
+def create_follow_request(
+    db: Session, *, requester_id: int, target_id: int
+) -> tuple[FollowRequest, bool]:
+    if requester_id == target_id:
+        raise FollowError("You can’t follow yourself. Bold, though.")
+    existing = get_follow_request(
+        db, requester_id=requester_id, target_id=target_id
+    )
+    if existing is not None:
+        return existing, False
+    row = FollowRequest(requester_id=requester_id, target_id=target_id)
+    db.add(row)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        existing = get_follow_request(
+            db, requester_id=requester_id, target_id=target_id
+        )
+        if existing is not None:
+            return existing, False
+        raise FollowError("Couldn’t send that follow request.") from exc
+    db.refresh(row)
+    return row, True
+
+
+def delete_follow_requests_for_athlete(db: Session, athlete_id: int) -> int:
+    n = (
+        db.query(FollowRequest)
+        .filter(
+            (FollowRequest.requester_id == athlete_id)
+            | (FollowRequest.target_id == athlete_id)
+        )
+        .delete(synchronize_session=False)
+    )
+    return int(n or 0)
+
+
+def follow_or_request(
+    db: Session, *, follower_id: int, following_id: int
+) -> dict:
+    """Follow immediately when public or follow-back; otherwise request."""
+    if follower_id == following_id:
+        raise FollowError("You can’t follow yourself. Bold, though.")
+    target = get_athlete_by_id(db, following_id)
+    if target is None:
+        raise FollowError("Couldn’t follow that runner.")
+
+    if is_following(db, follower_id=follower_id, following_id=following_id):
+        cancel_follow_request(
+            db, requester_id=follower_id, target_id=following_id, commit=True
+        )
+        return {
+            "status": "following",
+            "created_follow": False,
+            "created_request": False,
+        }
+
+    follow_back = is_following(
+        db, follower_id=following_id, following_id=follower_id
+    )
+    instant = bool(target.is_profile_public) or follow_back
+    if instant:
+        create_follow(db, follower_id=follower_id, following_id=following_id)
+        cancel_follow_request(
+            db, requester_id=follower_id, target_id=following_id, commit=True
+        )
+        return {
+            "status": "following",
+            "created_follow": True,
+            "created_request": False,
+        }
+
+    _row, created = create_follow_request(
+        db, requester_id=follower_id, target_id=following_id
+    )
+    return {
+        "status": "requested",
+        "created_follow": False,
+        "created_request": created,
+    }
+
+
+def accept_follow_request(
+    db: Session, *, target_id: int, requester_id: int
+) -> Follow:
+    row = get_follow_request(
+        db, requester_id=requester_id, target_id=target_id
+    )
+    if row is None:
+        raise FollowError("No follow request to accept.")
+    db.delete(row)
+    db.flush()
+    follow = create_follow(
+        db, follower_id=requester_id, following_id=target_id
+    )
+    return follow
+
+
+def decline_follow_request(
+    db: Session, *, target_id: int, requester_id: int
+) -> bool:
+    return cancel_follow_request(
+        db, requester_id=requester_id, target_id=target_id, commit=True
+    )
+
+
+def list_incoming_follow_requests(
+    db: Session, *, target_id: int, limit: int = 40
+) -> list[dict]:
+    safe_limit = max(1, min(int(limit), 80))
+    rows = (
+        db.query(FollowRequest, Athlete)
+        .join(Athlete, Athlete.id == FollowRequest.requester_id)
+        .filter(FollowRequest.target_id == target_id)
+        .order_by(FollowRequest.created_at.desc())
+        .limit(safe_limit)
+        .all()
+    )
+    people = _serialize_people(
+        db, [athlete for _req, athlete in rows], viewer_id=target_id
+    )
+    by_id = {p["athlete_id"]: p for p in people}
+    out = []
+    for req, athlete in rows:
+        person = by_id.get(athlete.id) or serialize_follow_person(athlete)
+        out.append(
+            {
+                "id": req.id,
+                "requester_id": athlete.id,
+                "created_at": req.created_at.isoformat()
+                if req.created_at
+                else None,
+                "requester": person,
+            }
+        )
+    return out

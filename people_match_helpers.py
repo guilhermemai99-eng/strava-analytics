@@ -6,7 +6,7 @@ Privacy: never expose exact coordinates. Only city/country / coarse area labels.
 from __future__ import annotations
 
 from athlete import Athlete
-from follow_helpers import is_following
+from follow_helpers import is_following, has_outgoing_request
 from pace_compatibility import estimate_running_profile, format_pace_range
 from profile_helpers import display_name_for, initials_for, public_avatar_url_for
 from sqlalchemy import func
@@ -222,6 +222,9 @@ def serialize_match_card(
         "location_label": match.get("location_label"),
         "match": match,
         "is_following": following,
+        "is_follow_requested": has_outgoing_request(
+            db, requester_id=viewer.id, target_id=other.id
+        ),
         "is_mutual": bool(following and followed_by),
         "is_self": False,
     }

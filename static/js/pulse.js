@@ -99,6 +99,7 @@
       searchResults: [],
       peek: null,
       suggestions: [],
+      matches: [],
     },
     inbox: {
       status: "idle",
@@ -832,6 +833,23 @@
     if (state.page === "feed") render();
   }
 
+  function followControlHtml(athlete, extraClass = "") {
+    const athleteId = athleteIdOf(athlete);
+    if (!athleteId || athlete.is_self) return "";
+    const idAttr = `data-athlete-id="${escapeHtml(athleteId)}"`;
+    const handle = athlete.handle || "";
+    const cls = extraClass ? ` ${extraClass}` : "";
+    if (athlete.is_following) {
+      return `<button type="button" class="btn btn-ghost btn-follow is-following${cls}" data-action="confirm-unfollow" ${idAttr} data-handle="${escapeHtml(handle)}">${
+        athlete.is_mutual ? "Friends" : "Following"
+      }</button>`;
+    }
+    if (athlete.is_follow_requested) {
+      return `<button type="button" class="btn btn-ghost btn-follow is-requested${cls}" data-action="cancel-follow-request" ${idAttr} data-handle="${escapeHtml(handle)}">Requested</button>`;
+    }
+    return `<button type="button" class="btn btn-primary btn-follow${cls}" data-action="follow-user" ${idAttr} data-handle="${escapeHtml(handle)}">Follow</button>`;
+  }
+
   function renderRunnerCard(athlete) {
     const athleteId = athleteIdOf(athlete);
     const handle = athlete.handle || "";
@@ -851,11 +869,7 @@
       initials: athlete.initials || "P",
     };
     const idAttr = athleteId ? `data-athlete-id="${escapeHtml(athleteId)}"` : "";
-    const followCtl = !athleteId
-      ? ""
-      : athlete.is_following
-        ? `<button type="button" class="btn btn-ghost btn-follow is-following" data-action="confirm-unfollow" ${idAttr} data-handle="${escapeHtml(handle)}">Following</button>`
-        : `<button type="button" class="btn btn-primary btn-follow" data-action="follow-user" ${idAttr} data-handle="${escapeHtml(handle)}">Follow</button>`;
+    const followCtl = followControlHtml(athlete);
     return `
       <div class="runner-card-wrap">
         <button type="button" class="runner-card" data-action="open-user" ${idAttr} data-handle="${escapeHtml(handle)}">
@@ -869,57 +883,6 @@
         ${followCtl}
       </div>
     `;
-  }
-
-  function renderExploreTile(item, index) {
-    const mod = index % 7;
-    const sizeClass = mod === 0 ? "is-wide" : mod === 3 ? "is-tall" : "";
-    if (item.kind === "athlete") {
-      const a = item.data;
-      const athleteId = athleteIdOf(a);
-      const bg = TILE_BACKGROUNDS[(Number(athleteId) || index) % TILE_BACKGROUNDS.length];
-      return `
-        <button type="button" class="explore-tile ${sizeClass}" data-action="open-user" data-athlete-id="${escapeHtml(athleteId || "")}" data-handle="${escapeHtml(a.handle || "")}">
-          <div class="explore-tile-bg" style="background:${bg}"></div>
-          <div class="explore-tile-overlay">
-            <strong>${escapeHtml(displayNameOf(a))}</strong>
-            <span>${escapeHtml(a.location?.display_name || publicHandleLabel(a))}</span>
-          </div>
-        </button>`;
-    }
-    const act = item.data;
-    const bg = tileBackground(act, index);
-    return `
-      <button type="button" class="explore-tile ${sizeClass}" data-activity-id="${escapeHtml(act.id)}">
-        <div class="explore-tile-bg" style="background:${bg}"></div>
-        <div class="explore-tile-overlay">
-          <strong>${escapeHtml((act.name || act.sport_type || "Run").toUpperCase())}</strong>
-          <span>${escapeHtml(formatKm(act.distance_m))} km</span>
-        </div>
-      </button>`;
-  }
-
-  function buildExploreTiles() {
-    const ex = state.explore;
-    const tiles = [];
-    (ex.suggestions || []).slice(0, 6).forEach((a) => {
-      tiles.push({ kind: "athlete", data: a });
-    });
-    (ex.sections || []).forEach((section) => {
-      (section.athletes || []).slice(0, 4).forEach((a) => {
-        tiles.push({ kind: "athlete", data: a });
-      });
-    });
-    state.activities.slice(0, 9).forEach((a) => {
-      tiles.push({ kind: "activity", data: a });
-    });
-    return tiles.slice(0, 18);
-  }
-
-  function renderExploreMasonry() {
-    const tiles = buildExploreTiles();
-    if (!tiles.length) return "";
-    return `<div class="explore-masonry">${tiles.map(renderExploreTile).join("")}</div>`;
   }
 
   function renderExploreSection(section) {
@@ -939,6 +902,43 @@
     `;
   }
 
+  function renderExploreMatches(matches) {
+    if (!matches.length) return "";
+    const cards = matches.map((person) =>
+      window.PulseRuns && PulseRuns.renderPeopleCard
+        ? PulseRuns.renderPeopleCard(person)
+        : renderRunnerCard(person)
+    );
+    return `
+      <section class="explore-section" data-explore-section="matches">
+        <div class="explore-section-head">
+          <h2>Who can I run with?</h2>
+          <span>${matches.length}</span>
+        </div>
+        <div class="people-match-list">${cards.join("")}</div>
+      </section>`;
+  }
+
+  function renderExploreSearchBar() {
+    const q = state.explore.searchQ || "";
+    const hint =
+      q.trim().length >= 2
+        ? `Searching people for “${q.trim()}”.`
+        : "Search people by name, handle, or city. Private accounts only appear on an exact handle.";
+    return `
+        <div class="explore-search-bar">
+          <div class="search-wrap">
+            <span class="search-ico" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
+              </svg>
+            </span>
+            <input id="exploreSearch" type="search" placeholder="Search people…" autocomplete="off" value="${escapeHtml(q)}">
+          </div>
+          <p class="search-hint" id="exploreSearchHint">${escapeHtml(hint)}</p>
+        </div>`;
+  }
+
   function renderExploreBody() {
     const ex = state.explore;
     const q = (ex.searchQ || "").trim();
@@ -955,7 +955,7 @@
       }
       const results = ex.searchResults || [];
       if (results.length === 0) {
-        return `<p class="explore-empty">No public runners match “${escapeHtml(q)}”. Try another name — or ask them to flip Show me in Explore.</p>`;
+        return `<p class="explore-empty">No runners match “${escapeHtml(q)}”. Try another name — or ask them to flip Show me in Explore.</p>`;
       }
       return `
         <p class="explore-results-label">${results.length} match${results.length === 1 ? "" : "es"}</p>
@@ -964,7 +964,7 @@
     }
 
     if (ex.status === "loading" || ex.status === "idle") {
-      return `<p class="explore-empty">Finding who’s putting in the miles…</p>`;
+      return `<p class="explore-empty">Finding who you can run with…</p>`;
     }
     if (ex.status === "error") {
       return `
@@ -985,6 +985,7 @@
           <button type="button" class="btn btn-ghost" data-action="open-settings">Settings</button>
         </div>`;
 
+    const matches = Array.isArray(ex.matches) ? ex.matches : [];
     const suggestions = Array.isArray(ex.suggestions) ? ex.suggestions : [];
     const suggestedBlock =
       suggestions.length === 0
@@ -999,46 +1000,42 @@
       </section>`;
 
     const sections = Array.isArray(ex.sections) ? ex.sections : [];
-    if (sections.length === 0 && suggestions.length === 0) {
+    if (sections.length === 0 && suggestions.length === 0 && matches.length === 0) {
       const empty = copyEmpty("explore");
       return `${incompleteHint}${privacy}<div class="empty-state-block" style="margin-top:28px"><h2>${escapeHtml(
         empty.title
       )}</h2><p>${escapeHtml(empty.body)}</p></div>`;
     }
-    return `${incompleteHint}${privacy}${renderExploreMasonry()}<div class="explore-runners-block">${suggestedBlock}${sections.map(renderExploreSection).join("")}</div>`;
+    return `${incompleteHint}${privacy}<div class="explore-runners-block">${renderExploreMatches(
+      matches
+    )}${suggestedBlock}${sections.map(renderExploreSection).join("")}</div>`;
+  }
+
+  function renderPeopleExplore() {
+    return `${renderExploreSearchBar()}${renderExploreBody()}`;
   }
 
   function renderExplore() {
-    const q = state.explore.searchQ || "";
-    const hint =
-      q.trim().length >= 2
-        ? `Searching public runners for “${q.trim()}”.`
-        : "Type at least 2 characters. Only public profiles show up.";
     return `
       <section class="pulse-page pulse-page--wide" data-page="explore">
-        <div class="explore-search-bar">
-          <div class="search-wrap">
-            <span class="search-ico" aria-hidden="true">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
-              </svg>
-            </span>
-            <input id="exploreSearch" type="search" placeholder="Search athletes, cities, routes…" autocomplete="off" value="${escapeHtml(q)}">
-          </div>
-          <p class="search-hint" id="exploreSearchHint">${escapeHtml(hint)}</p>
-        </div>
-        ${renderExploreBody()}
+        ${renderPeopleExplore()}
       </section>
     `;
   }
 
   async function loadExplore(force = false) {
     if (!force && (state.explore.status === "ready" || state.explore.status === "loading")) {
+      if (state.page === "discover" || state.page === "explore") render();
       return;
     }
     state.explore.status = "loading";
     state.explore.error = null;
-    if (state.page === "explore" && !(state.explore.searchQ || "").trim()) render();
+    if (
+      (state.page === "explore" || state.page === "discover") &&
+      !(state.explore.searchQ || "").trim()
+    ) {
+      render();
+    }
 
     try {
       const [res, sugRes] = await Promise.all([
@@ -1049,6 +1046,7 @@
       const data = await res.json();
       state.explore.me = data.me || null;
       state.explore.sections = Array.isArray(data.sections) ? data.sections : [];
+      state.explore.matches = Array.isArray(data.matches) ? data.matches : [];
       if (sugRes.ok) {
         const sug = await sugRes.json();
         state.explore.suggestions = Array.isArray(sug.people) ? sug.people : [];
@@ -1062,7 +1060,12 @@
       state.explore.error = err.message || "Try again.";
     }
 
-    if (state.page === "explore" && !(state.explore.searchQ || "").trim()) render();
+    if (
+      (state.page === "explore" || state.page === "discover") &&
+      !(state.explore.searchQ || "").trim()
+    ) {
+      render();
+    }
   }
 
   let exploreSearchTimer = null;
@@ -1073,12 +1076,12 @@
     if (q.length < 2) {
       state.explore.searchStatus = "idle";
       state.explore.searchResults = [];
-      if (state.page === "explore") render();
+      if (state.page === "explore" || state.page === "discover") render();
       return;
     }
 
     state.explore.searchStatus = "loading";
-    if (state.page === "explore") render();
+    if (state.page === "explore" || state.page === "discover") render();
 
     try {
       const res = await apiFetch(`/api/explore/search?q=${encodeURIComponent(q)}`);
@@ -1095,7 +1098,7 @@
       state.explore.error = err.message || "Try again.";
     }
 
-    if (state.page === "explore") render();
+    if (state.page === "explore" || state.page === "discover") render();
   }
 
   function scheduleExploreSearch(query) {
@@ -1128,11 +1131,7 @@
       initials: athlete.initials || "P",
     };
     const athleteId = athleteIdOf(athlete);
-    const followCtl = athleteId
-      ? athlete.is_following
-        ? `<button type="button" class="btn btn-ghost btn-follow is-following" data-action="confirm-unfollow" data-athlete-id="${escapeHtml(athleteId)}" data-handle="${escapeHtml(athlete.handle || "")}">Following</button>`
-        : `<button type="button" class="btn btn-primary btn-follow" data-action="follow-user" data-athlete-id="${escapeHtml(athleteId)}" data-handle="${escapeHtml(athlete.handle || "")}">Follow</button>`
-      : "";
+    const followCtl = followControlHtml(athlete);
     els.activityModalTitle.textContent = displayNameOf(athlete);
     els.activityModalBody.innerHTML = `
       <div style="display:flex;gap:16px;align-items:center;margin-bottom:18px;">
@@ -1313,8 +1312,12 @@
           }
           <div class="ig-profile-actions">${actionsHtml}</div>
         </div>
-        ${renderProfileTabs(activeTab)}
-        ${renderProfileTabContent(activeTab, profile, activities, summary)}
+        ${
+          profile.is_private_locked
+            ? `<div class="profile-locked-note"><p>This account is private. Send a follow request to see their runs.</p></div>`
+            : `${renderProfileTabs(activeTab)}
+        ${renderProfileTabContent(activeTab, profile, activities, summary)}`
+        }
       </section>`;
   }
 
@@ -1357,7 +1360,12 @@
     const followBtn =
       item.can_follow_back && actor.athlete_id
         ? `<button type="button" class="btn btn-primary btn-sm ig-notif-follow" data-action="follow-user" data-athlete-id="${escapeHtml(actor.athlete_id)}" data-handle="${escapeHtml(actor.handle || "")}">Follow</button>`
-        : "";
+        : item.can_accept_follow_request && actor.athlete_id
+          ? `<div class="ig-notif-request-actions">
+              <button type="button" class="btn btn-primary btn-sm" data-action="accept-follow-request" data-athlete-id="${escapeHtml(actor.athlete_id)}">Accept</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-action="decline-follow-request" data-athlete-id="${escapeHtml(actor.athlete_id)}">Decline</button>
+            </div>`
+          : "";
     const action =
       item.kind === "message" && item.target_id
         ? "open-notification"
@@ -1500,7 +1508,7 @@
           <p class="page-kicker">Profile</p>
           <h1 class="page-title">Ghost mile.</h1>
           <p class="page-sub">${escapeHtml(v.error || "That profile isn’t public — or vanished.")}</p>
-          <button type="button" class="btn btn-primary" data-nav="explore">Back to Explore</button>
+          <button type="button" class="btn btn-primary" data-nav="discover">Back to Discover</button>
         </section>
       `;
     }
@@ -1513,17 +1521,18 @@
 
     const athleteId = athleteIdOf(p);
     const idAttr = athleteId ? `data-athlete-id="${escapeHtml(athleteId)}"` : "";
-    const followBtn = p.is_following
-      ? `<button type="button" class="btn btn-ghost btn-follow is-following" data-action="confirm-unfollow" ${idAttr} data-handle="${escapeHtml(p.handle || "")}">${
-          p.is_mutual ? "Friends" : "Following"
-        }</button>`
-      : `<button type="button" class="btn btn-primary btn-follow" data-action="follow-user" ${idAttr} data-handle="${escapeHtml(p.handle || "")}">Follow</button>`;
-    const messageBtn = p.is_mutual
-      ? `<button type="button" class="btn btn-primary btn-message" data-action="open-dm" ${idAttr} data-handle="${escapeHtml(p.handle || "")}">Message</button>`
-      : `<span class="form-hint dm-mutual-hint">Follow each other to message.</span>`;
-    const runTogetherBtn = athleteId
-      ? `<button type="button" class="btn btn-primary" data-action="run-together" ${idAttr}>Run together</button>`
-      : "";
+    const followBtn = followControlHtml(p);
+    const locked = !!p.is_private_locked;
+    const messageBtn =
+      locked
+        ? ""
+        : p.is_mutual
+          ? `<button type="button" class="btn btn-primary btn-message" data-action="open-dm" ${idAttr} data-handle="${escapeHtml(p.handle || "")}">Message</button>`
+          : `<span class="form-hint dm-mutual-hint">Follow each other to message.</span>`;
+    const runTogetherBtn =
+      athleteId && !locked
+        ? `<button type="button" class="btn btn-primary" data-action="run-together" ${idAttr}>Run together</button>`
+        : "";
     const activities = Array.isArray(p.activities)
       ? p.activities.map((a) => ({
           id: a.id,
@@ -1637,7 +1646,7 @@
         <div class="dm-empty">
           <h2>Your inbox is quiet.</h2>
           <p>Messages open when you follow each other. Find runners in Explore.</p>
-          <button type="button" class="btn btn-primary" data-nav="explore">Explore</button>
+          <button type="button" class="btn btn-primary" data-nav="discover">Discover people</button>
         </div>`;
     }
     return `<div class="dm-inbox-list">${inbox.items.map(renderInboxRow).join("")}</div>`;
@@ -1986,6 +1995,11 @@
       return;
     }
 
+    if (page === "explore") {
+      if (window.PulseRuns) PulseRuns.setDiscoverTab("people");
+      page = "discover";
+    }
+
     const next = PAGES.includes(page) ? page : "feed";
     state.page = next;
     state.runId = next === "run" ? runId || state.runId : null;
@@ -2023,6 +2037,9 @@
       if (window.PulseRuns) PulseRuns.onPageEnter("feed");
     }
     if (next === "explore") loadExplore(false);
+    if (next === "discover" || next === "explore") {
+      /* Discover People tab loads via PulseRuns.onPageEnter + loadExplore hook. */
+    }
     if (["discover", "my-runs", "create-run", "run", "club", "create-club"].includes(next)) {
       if (window.PulseRuns) {
         PulseRuns.onPageEnter(next, { runId: state.runId, clubId: state.clubId });
@@ -2194,16 +2211,22 @@
     );
   }
 
-  function applyFollowButtonDom(athleteId, { isFollowing, isMutual }) {
+  function applyFollowButtonDom(athleteId, { isFollowing, isMutual, isRequested }) {
     const id = athleteIdOf(athleteId);
     followButtonsFor(id).forEach((btn) => {
       btn.disabled = false;
       btn.dataset.armed = "0";
       btn.classList.toggle("is-following", !!isFollowing);
+      btn.classList.toggle("is-requested", !!isRequested && !isFollowing);
       btn.classList.remove("is-unfollow");
       if (isFollowing) {
         btn.dataset.action = "confirm-unfollow";
         btn.textContent = isMutual ? "Friends" : "Following";
+        btn.classList.add("btn-ghost");
+        btn.classList.remove("btn-primary");
+      } else if (isRequested) {
+        btn.dataset.action = "cancel-follow-request";
+        btn.textContent = "Requested";
         btn.classList.add("btn-ghost");
         btn.classList.remove("btn-primary");
       } else {
@@ -2256,15 +2279,22 @@
     }
   }
 
-  function syncExploreFollowFlag(athleteId, isFollowing) {
+  function syncExploreFollowFlag(athleteId, isFollowing, isRequested = false) {
     const id = athleteIdOf(athleteId);
     if (!id) return;
     const mark = (list) =>
       (list || []).map((a) =>
-        athleteIdOf(a) === id ? { ...a, is_following: isFollowing } : a
+        athleteIdOf(a) === id
+          ? {
+              ...a,
+              is_following: isFollowing,
+              is_follow_requested: !!isRequested && !isFollowing,
+            }
+          : a
       );
     state.explore.suggestions = mark(state.explore.suggestions);
     state.explore.searchResults = mark(state.explore.searchResults);
+    state.explore.matches = mark(state.explore.matches);
     state.explore.sections = (state.explore.sections || []).map((section) => ({
       ...section,
       athletes: mark(section.athletes),
@@ -2291,23 +2321,33 @@
       state.viewed.athleteId === athleteId ||
       athleteIdOf(state.viewed.data) === athleteId;
 
+    const treatAsRequest =
+      viewingThis &&
+      state.viewed.data &&
+      state.viewed.data.is_private_locked &&
+      !state.viewed.data.is_following;
+
     // Optimistic UI — update DOM in place (no full re-render mid-tap on mobile).
     if (viewingThis && state.viewed.data) {
-      const delta = wantFollow ? 1 : -1;
+      const requested = wantFollow && treatAsRequest;
+      const following = wantFollow && !treatAsRequest;
+      const delta = following ? 1 : wantFollow ? 0 : state.viewed.data.is_following ? -1 : 0;
       const nextCount = Math.max(
         0,
         Number(state.viewed.data.follower_count || 0) + delta
       );
       state.viewed.data = {
         ...state.viewed.data,
-        is_following: wantFollow,
-        is_mutual: wantFollow && !!state.viewed.data.is_followed_by,
+        is_following: following,
+        is_follow_requested: requested,
+        is_mutual: following && !!state.viewed.data.is_followed_by,
         follower_count: nextCount,
         followers_count: nextCount,
       };
       applyFollowButtonDom(athleteId, {
-        isFollowing: wantFollow,
+        isFollowing: following,
         isMutual: state.viewed.data.is_mutual,
+        isRequested: requested,
       });
       applyProfileMessageDom(athleteId, {
         isMutual: state.viewed.data.is_mutual,
@@ -2318,13 +2358,24 @@
 
     state.people.items = state.people.items.map((p) => {
       if (athleteIdOf(p) !== athleteId) return p;
-      return { ...p, is_following: wantFollow };
+      return {
+        ...p,
+        is_following: wantFollow && !treatAsRequest,
+        is_follow_requested: wantFollow && treatAsRequest,
+      };
     });
-    syncExploreFollowFlag(athleteId, wantFollow);
+    syncExploreFollowFlag(
+      athleteId,
+      wantFollow && !treatAsRequest,
+      wantFollow && treatAsRequest
+    );
     if (els.peopleModal && !els.peopleModal.hidden) paintPeopleModal();
-    if (state.page === "explore") {
-      // Keep Explore follow buttons in sync without remounting mid-tap when possible.
-      applyFollowButtonDom(athleteId, { isFollowing: wantFollow, isMutual: false });
+    if (state.page === "explore" || state.page === "discover") {
+      applyFollowButtonDom(athleteId, {
+        isFollowing: wantFollow && !treatAsRequest,
+        isMutual: false,
+        isRequested: wantFollow && treatAsRequest,
+      });
     }
 
     try {
@@ -2345,6 +2396,7 @@
         applyFollowButtonDom(athleteId, {
           isFollowing: !!data.is_following,
           isMutual: !!data.is_mutual,
+          isRequested: !!data.is_follow_requested,
         });
         applyProfileMessageDom(athleteId, {
           isMutual: !!data.is_mutual,
@@ -2353,13 +2405,21 @@
         applyFollowerCountDom(
           Number(data.follower_count ?? data.followers_count ?? 0)
         );
+        if (data.is_private_locked) render();
       }
-      syncExploreFollowFlag(athleteId, !!data.is_following);
+      syncExploreFollowFlag(
+        athleteId,
+        !!data.is_following,
+        !!data.is_follow_requested
+      );
       applyFollowButtonDom(athleteId, {
         isFollowing: !!data.is_following,
         isMutual: !!data.is_mutual,
+        isRequested: !!data.is_follow_requested,
       });
-      if (wantFollow && Math.random() < 0.55) {
+      if (wantFollow && data.is_follow_requested) {
+        showToast("Request sent. Waiting on them.");
+      } else if (wantFollow && Math.random() < 0.55) {
         const line = copyFresh("follow");
         if (line) showToast(line);
       } else if (!wantFollow) {
@@ -2380,6 +2440,7 @@
         applyFollowButtonDom(athleteId, {
           isFollowing: !!prevViewed.is_following,
           isMutual: !!prevViewed.is_mutual,
+          isRequested: !!prevViewed.is_follow_requested,
         });
         applyProfileMessageDom(athleteId, {
           isMutual: !!prevViewed.is_mutual,
@@ -2397,17 +2458,41 @@
     }
   }
 
+  async function respondFollowRequest(athleteId, accept) {
+    const id = athleteIdOf(athleteId);
+    if (!id) return;
+    const path = `/api/users/${encodeURIComponent(id)}/follow-request/${
+      accept ? "accept" : "decline"
+    }`;
+    try {
+      const res = await apiFetch(path, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof err.detail === "string" ? err.detail : errLine()
+        );
+      }
+      showToast(accept ? "You’re following each other now. Almost." : "Request declined.");
+      loadNotifications(true, false);
+      refreshNotificationBadge();
+      if (
+        state.viewed.athleteId === id ||
+        athleteIdOf(state.viewed.data) === id
+      ) {
+        loadViewedProfileById(id, true);
+      }
+    } catch (err) {
+      showToast(err.message || errLine());
+    }
+  }
+
   function renderPeopleRow(person) {
     const athleteId = athleteIdOf(person);
     const handle = person.handle || "";
     const idAttr = athleteId ? `data-athlete-id="${escapeHtml(athleteId)}"` : "";
     const followCtl = person.is_self
       ? `<span class="form-hint">You</span>`
-      : !athleteId
-        ? ""
-        : person.is_following
-          ? `<button type="button" class="btn btn-ghost btn-follow is-following" data-action="confirm-unfollow" ${idAttr} data-handle="${escapeHtml(handle)}">Following</button>`
-          : `<button type="button" class="btn btn-primary btn-follow" data-action="follow-user" ${idAttr} data-handle="${escapeHtml(handle)}">Follow</button>`;
+      : followControlHtml(person);
     const shareCtl = state.people.shareActivityId && athleteId && !person.is_self
       ? `<button type="button" class="btn btn-primary btn-sm" data-action="send-shared-post" ${idAttr}>Send</button>`
       : "";
@@ -2977,7 +3062,8 @@
       if (
         action === "follow-user" ||
         action === "unfollow-user" ||
-        action === "confirm-unfollow"
+        action === "confirm-unfollow" ||
+        action === "cancel-follow-request"
       ) {
         return;
       }
@@ -3146,6 +3232,18 @@
         { athleteId: el?.dataset?.athleteId, handle: el?.dataset?.handle },
         true
       );
+    }
+    if (action === "cancel-follow-request") {
+      toggleFollow(
+        { athleteId: el?.dataset?.athleteId, handle: el?.dataset?.handle },
+        false
+      );
+    }
+    if (action === "accept-follow-request") {
+      respondFollowRequest(el?.dataset?.athleteId, true);
+    }
+    if (action === "decline-follow-request") {
+      respondFollowRequest(el?.dataset?.athleteId, false);
     }
     if (action === "unfollow-user") {
       toggleFollow(
@@ -3500,7 +3598,7 @@
       els.settingsMsg.className = "form-msg is-ok";
       // Refresh Explore so “Show me” / city changes land immediately.
       state.explore.status = "idle";
-      if (state.page === "explore") loadExplore(true);
+      if (state.page === "explore" || state.page === "discover") loadExplore(true);
       if (state.page === "profile") render();
     });
   }
@@ -3531,6 +3629,8 @@
         render,
         navigate,
         getPage: () => state.page,
+        loadExplore: (force) => loadExplore(!!force),
+        renderPeopleExplore,
       });
     }
 

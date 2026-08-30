@@ -259,7 +259,26 @@
   gap: 0;
 }
 
-/* ——— Explore masonry ——— */
+.profile-locked-note {
+  margin: 20px 16px 32px;
+  padding: 20px 16px;
+  text-align: center;
+  color: var(--muted);
+  border-top: 1px solid var(--line, rgba(255,255,255,0.08));
+}
+.profile-locked-note p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.btn-follow.is-requested {
+  opacity: 0.9;
+}
+.ig-notif-request-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
 
 .explore-masonry {
   display: grid;

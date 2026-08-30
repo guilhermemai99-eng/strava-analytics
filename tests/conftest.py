@@ -127,6 +127,7 @@ def make_athlete(db_session):
         db_session.query(StravaAuth).filter(StravaAuth.athlete_id == athlete_id).delete()
         from coach_message import CoachMessage
         from follow import Follow
+        from follow_request import FollowRequest
         from club import ClubMember, RunClub
         from run import Run, RunParticipant
 
@@ -143,6 +144,10 @@ def make_athlete(db_session):
         db_session.query(CoachMessage).filter(CoachMessage.athlete_id == athlete_id).delete()
         db_session.query(Follow).filter(
             (Follow.follower_id == athlete_id) | (Follow.following_id == athlete_id)
+        ).delete(synchronize_session=False)
+        db_session.query(FollowRequest).filter(
+            (FollowRequest.requester_id == athlete_id)
+            | (FollowRequest.target_id == athlete_id)
         ).delete(synchronize_session=False)
         db_session.query(Athlete).filter(Athlete.id == athlete_id).delete()
     db_session.commit()
