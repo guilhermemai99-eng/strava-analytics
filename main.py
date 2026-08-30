@@ -58,6 +58,7 @@ from follow_helpers import (
     following_count,
     get_athlete_by_handle,
     get_athlete_by_id,
+    is_following,
     list_followers,
     list_following,
     relationship_payload,
@@ -72,9 +73,17 @@ from dm_helpers import (
     list_conversations,
     list_messages,
     mark_conversation_read,
+    other_participant_id,
     send_message,
     serialize_message,
     total_unread,
+)
+from notification_helpers import (
+    list_notifications,
+    mark_all_read,
+    notify_follow,
+    notify_message,
+    unread_count as notification_unread_count,
 )
 from ai_coach_chat import (
     CoachChatError,
@@ -1224,7 +1233,14 @@ def follow_profile(handle: str, request: Request):
         ):
             raise HTTPException(status_code=404, detail="Profile not found")
         try:
+            already = is_following(
+                db, follower_id=viewer_id, following_id=target.id
+            )
             create_follow(db, follower_id=viewer_id, following_id=target.id)
+            if not already:
+                notify_follow(
+                    db, follower_id=viewer_id, following_id=target.id
+                )
         except FollowError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -1356,7 +1372,14 @@ def follow_user(athlete_id: int, request: Request):
         ):
             raise HTTPException(status_code=404, detail="Profile not found")
         try:
+            already = is_following(
+                db, follower_id=viewer_id, following_id=target.id
+            )
             create_follow(db, follower_id=viewer_id, following_id=target.id)
+            if not already:
+                notify_follow(
+                    db, follower_id=viewer_id, following_id=target.id
+                )
         except FollowError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         viewer = db.query(Athlete).filter(Athlete.id == viewer_id).one()
@@ -2057,6 +2080,40 @@ def api_list_dms(request: Request, limit: int = 40):
         db.close()
 
 
+@app.get("/api/notifications")
+def api_list_notifications(request: Request, limit: int = 40):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        items = list_notifications(db, recipient_id=viewer_id, limit=limit)
+        return {
+            "items": items,
+            "unread_total": notification_unread_count(db, viewer_id),
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/notifications/unread-count")
+def api_notifications_unread_count(request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        return {"unread_total": notification_unread_count(db, viewer_id)}
+    finally:
+        db.close()
+
+
+@app.post("/api/notifications/read")
+def api_mark_notifications_read(request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        return mark_all_read(db, recipient_id=viewer_id)
+    finally:
+        db.close()
+
+
 @app.get("/api/dms/unread-count")
 def api_dms_unread_count(request: Request):
     viewer_id = require_athlete_id(request)
@@ -2140,6 +2197,17 @@ def api_send_dm(conversation_id: int, request: Request, body: DmSendRequest):
             sender_id=viewer_id,
             content=body.content,
         )
+        peer_id = other_participant_id(
+            db, conversation_id=conversation_id, viewer_id=viewer_id
+        )
+        if peer_id:
+            notify_message(
+                db,
+                recipient_id=peer_id,
+                sender_id=viewer_id,
+                conversation_id=conversation_id,
+                preview=body.content,
+            )
         return serialize_message(msg, viewer_id)
     except DmError as exc:
         raise _dm_http(exc) from exc

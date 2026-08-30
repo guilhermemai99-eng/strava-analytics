@@ -17,6 +17,8 @@ def test_dashboard_serves_pulse_shell(client, make_session, make_athlete):
     assert 'data-nav="explore"' in body
     assert 'data-nav="messages"' in body
     assert 'data-nav="activity"' in body
+    assert 'sidebarNotifBadge' in body
+    assert 'Notifications' in body
     assert 'pulse-mobile-header' in body
 
 
