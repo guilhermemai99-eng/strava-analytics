@@ -30,6 +30,7 @@ def serialize_explore_athlete(
     is_follow_requested: bool = False,
 ) -> dict:
     handle = athlete.handle or athlete.username
+    public = bool(athlete.is_profile_public)
     return {
         "athlete_id": athlete.id,
         "id": athlete.id,
@@ -39,18 +40,18 @@ def serialize_explore_athlete(
         "handle": athlete.handle,
         "initials": initials_for(athlete),
         "avatar_url": public_avatar_url_for(athlete),
-        "bio": athlete.bio,
+        "bio": athlete.bio if public else None,
         "location": {
-            "display_name": location_display_for(athlete),
-            "city": athlete.city,
-            "country": athlete.country,
+            "display_name": location_display_for(athlete) if public else None,
+            "city": athlete.city if public else None,
+            "country": athlete.country if public else None,
         },
-        "last_activity_at": _iso_or_none(last_activity_at),
+        "last_activity_at": _iso_or_none(last_activity_at) if public else None,
         "stats": {
-            "activity_count": activity_count,
-            "total_distance_km": total_distance_km,
+            "activity_count": activity_count if public else None,
+            "total_distance_km": total_distance_km if public else None,
         },
-        "is_profile_public": bool(athlete.is_profile_public),
+        "is_profile_public": public,
         "is_following": bool(is_following),
         "is_follow_requested": bool(is_follow_requested),
     }

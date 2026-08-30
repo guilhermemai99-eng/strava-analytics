@@ -116,6 +116,9 @@ def test_explore_search_public_only(
     exact_ids = [a["athlete_id"] for a in exact_private.json()["results"]]
     assert 930012 in exact_ids
     assert 930011 not in exact_ids
+    private_row = exact_private.json()["results"][0]
+    assert private_row["stats"]["activity_count"] is None
+    assert private_row["location"]["city"] is None
 
 
 def test_public_profile_and_avatar_gate(
