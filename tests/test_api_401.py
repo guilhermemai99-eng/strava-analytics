@@ -35,6 +35,16 @@ PROTECTED = [
     ("GET", "/api/notifications"),
     ("GET", "/api/notifications/unread-count"),
     ("POST", "/api/notifications/read"),
+    ("GET", "/api/runs"),
+    ("GET", "/api/runs/nearby"),
+    ("GET", "/api/runs/profile"),
+    ("POST", "/api/runs"),
+    ("GET", "/api/runs/1"),
+    ("PATCH", "/api/runs/1"),
+    ("DELETE", "/api/runs/1"),
+    ("POST", "/api/runs/1/join"),
+    ("POST", "/api/runs/1/leave"),
+    ("GET", "/api/runs/1/participants"),
     ("POST", "/strava/sync"),
     ("GET", "/analytics/summary"),
     ("GET", "/analytics/weekly"),
@@ -81,6 +91,16 @@ def test_protected_apis_return_401_without_session(client):
             resp = client.post(path, json={"message": "hi"})
         elif method == "POST" and path.endswith("/messages"):
             resp = client.post(path, json={"content": "hi"})
+        elif method == "POST" and path == "/api/runs":
+            resp = client.post(
+                path,
+                json={
+                    "title": "Test",
+                    "location_name": "Porto",
+                    "meeting_time": "2030-01-01T09:00:00+00:00",
+                    "distance_km": 10,
+                },
+            )
         elif method == "POST" and path.endswith("/follow"):
             resp = client.post(path)
         else:

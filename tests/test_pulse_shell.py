@@ -12,9 +12,12 @@ def test_dashboard_serves_pulse_shell(client, make_session, make_athlete):
     body = response.text
     assert "Pulse" in body
     assert "/static/js/pulse.js" in body
-    assert "/static/css/pulse.css" in body
+    assert "/static/js/pulse-runs.js" in body
+    assert "/static/css/pulse-runs.css" in body
     assert 'data-nav="feed"' in body
-    assert 'data-nav="explore"' in body
+    assert 'data-nav="discover"' in body
+    assert 'data-nav="my-runs"' in body
+    assert 'data-nav="create-run"' in body
     assert 'data-nav="messages"' in body
     assert 'data-nav="activity"' in body
     assert 'sidebarNotifBadge' in body

@@ -2,7 +2,7 @@
 (() => {
   "use strict";
 
-  const PAGES = ["feed", "explore", "messages", "activity", "profile", "coach"];
+  const PAGES = ["feed", "discover", "my-runs", "create-run", "run", "explore", "messages", "activity", "profile", "coach"];
   const PROFILE_TABS = ["activities", "media", "stats", "lab"];
   const Copy = window.PulseCopy || null;
 
@@ -104,6 +104,7 @@
     },
     profileTab: "activities",
     viewedProfileTab: "activities",
+    runId: null,
     notifications: {
       status: "idle",
       items: [],
@@ -253,6 +254,10 @@
 
   const MOBILE_TITLES = {
     feed: "Pulse",
+    discover: "Discover",
+    "my-runs": "My Runs",
+    "create-run": "Create Run",
+    run: "Run",
     explore: "Explore",
     messages: "Messages",
     activity: "Notifications",
@@ -784,6 +789,7 @@
 
     return `
       <section class="pulse-page" data-page="feed">
+        ${window.PulseRuns ? PulseRuns.renderHomeRunsStrip() : ""}
         ${body}
       </section>
     `;
@@ -1919,6 +1925,16 @@
       const athleteId = athleteIdOf(decodeURIComponent(raw.slice(3)).trim());
       return { page: "u", handle: null, athleteId, conversationId: null };
     }
+    if (raw.startsWith("run/")) {
+      const runId = decodeURIComponent(raw.slice(4)).trim();
+      return {
+        page: "run",
+        handle: null,
+        athleteId: null,
+        conversationId: null,
+        runId: runId || null,
+      };
+    }
     if (raw.startsWith("dm/") || raw.startsWith("messages/")) {
       const conversationId = decodeURIComponent(
         raw.slice(raw.indexOf("/") + 1)
@@ -1931,17 +1947,18 @@
       };
     }
     const page = PAGES.includes(raw) ? raw : "feed";
-    return { page, handle: null, athleteId: null, conversationId: null };
+    return { page, handle: null, athleteId: null, conversationId: null, runId: null };
   }
 
-  function navigate(page, { replace = false } = {}) {
+  function navigate(page, { replace = false, runId = null } = {}) {
     if (page === "create") {
-      syncStrava(false);
+      navigate("create-run", { replace });
       return;
     }
 
     const next = PAGES.includes(page) ? page : "feed";
     state.page = next;
+    state.runId = next === "run" ? runId || state.runId : null;
     state.viewed.handle = null;
     state.viewed.athleteId = null;
     if (next !== "dm" && next !== "messages") {
@@ -1950,16 +1967,27 @@
     } else if (next === "messages" && !isDesktop()) {
       state.thread.conversationId = null;
     }
-    setNavActive(next === "dm" ? "messages" : next);
-    const hash = `#${next}`;
+    setNavActive(next === "dm" ? "messages" : next === "run" ? "discover" : next);
+    let hash = `#${next}`;
+    if (next === "run" && state.runId) {
+      hash = `#run/${encodeURIComponent(String(state.runId))}`;
+    }
     if (replace) {
-      history.replaceState({ page: next }, "", hash);
-    } else if (location.hash !== hash && !location.hash.startsWith(`#${next}/`)) {
-      history.pushState({ page: next }, "", hash);
+      history.replaceState({ page: next, runId: state.runId }, "", hash);
+    } else if (location.hash !== hash) {
+      history.pushState({ page: next, runId: state.runId }, "", hash);
     }
     render();
-    if (next === "feed") loadFeed(false);
+    if (next === "feed") {
+      loadFeed(false);
+      if (window.PulseRuns) PulseRuns.onPageEnter("feed");
+    }
     if (next === "explore") loadExplore(false);
+    if (next === "discover" || next === "my-runs" || next === "create-run" || next === "run") {
+      if (window.PulseRuns) {
+        PulseRuns.onPageEnter(next, { runId: state.runId });
+      }
+    }
     if (next === "messages") loadInbox(true);
     if (next === "coach") loadCoachMessages(false);
     if (next === "activity") loadNotifications(true, true);
@@ -2679,6 +2707,9 @@
 
     let html = "";
     if (state.page === "feed") html = renderFeed();
+    else if (window.PulseRuns && ["discover", "my-runs", "create-run", "run"].includes(state.page)) {
+      html = PulseRuns.renderPage(state.page) || "";
+    }
     else if (state.page === "explore") html = renderExplore();
     else if (state.page === "messages") html = renderMessagesInbox();
     else if (state.page === "dm") html = renderDmThread();
@@ -2747,6 +2778,7 @@
       }
     }
     if (action === "edit-profile" || action === "open-settings") openSettings();
+    if (window.PulseRuns && PulseRuns.handleAction(action, el)) return;
     if (action === "retry-feed") loadFeed(true);
     if (action === "retry-explore") loadExplore(true);
     if (action === "retry-explore-search") runExploreSearch(state.explore.searchQ || "");
@@ -3057,6 +3089,10 @@
     });
 
     document.getElementById("syncNowBtn").addEventListener("click", () => syncStrava(false));
+    const syncDrawerBtn = document.getElementById("syncNowBtnDrawer");
+    if (syncDrawerBtn) {
+      syncDrawerBtn.addEventListener("click", () => syncStrava(false));
+    }
 
     const fileInput = document.getElementById("settingsAvatarFile");
     document.getElementById("settingsAvatarPick").addEventListener("click", () => fileInput.click());
@@ -3145,6 +3181,17 @@
   /* ——— Boot ——— */
 
   async function boot() {
+    if (window.PulseRuns) {
+      PulseRuns.attach({
+        apiFetch,
+        escapeHtml,
+        showToast,
+        render,
+        navigate,
+        getPage: () => state.page,
+      });
+    }
+
     document.addEventListener("click", onClick);
     window.addEventListener("popstate", () => {
       const loc = parseLocationHash();
@@ -3155,6 +3202,8 @@
         );
       } else if (loc.conversationId && (loc.page === "dm" || loc.page === "messages")) {
         navigateDm(loc.conversationId, { replace: true });
+      } else if (loc.page === "run" && loc.runId) {
+        navigate("run", { replace: true, runId: loc.runId });
       } else {
         navigate(loc.page, { replace: true });
       }
@@ -3185,6 +3234,8 @@
       );
     } else if (initial.conversationId && (initial.page === "dm" || initial.page === "messages")) {
       navigateDm(initial.conversationId, { replace: true });
+    } else if (initial.page === "run" && initial.runId) {
+      navigate("run", { replace: true, runId: initial.runId });
     } else {
       navigate(initial.page, { replace: true });
     }

@@ -117,5 +117,7 @@ def test_alembic_upgrade_head_on_empty_database():
         "conversation_participants",
         "direct_messages",
         "notifications",
+        "runs",
+        "run_participants",
     }.issubset(tables)
-    assert version == "0010_notifications"
+    assert version == "0011_runs"

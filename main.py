@@ -85,6 +85,24 @@ from notification_helpers import (
     notify_message,
     unread_count as notification_unread_count,
 )
+from run_helpers import (
+    RunError,
+    cancel_run,
+    can_view_run,
+    create_run,
+    get_run,
+    join_run,
+    leave_run,
+    list_discover_runs,
+    list_my_runs,
+    list_participants,
+    parse_meeting_time,
+    serialize_run,
+    serialize_run_card,
+    update_run,
+    _participant_count,
+)
+from pace_compatibility import estimate_running_profile
 from ai_coach_chat import (
     CoachChatError,
     build_coach_context,
@@ -2225,6 +2243,257 @@ def api_mark_dm_read(conversation_id: int, request: Request):
         )
     except DmError as exc:
         raise _dm_http(exc) from exc
+    finally:
+        db.close()
+
+
+# ============================================================
+# RUNS — social organized runs (Phase 1)
+# ============================================================
+
+
+class RunCreateRequest(BaseModel):
+    title: str
+    description: Optional[str] = None
+    location_name: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    meeting_time: str
+    distance_km: float
+    pace_min: Optional[str] = None
+    pace_max: Optional[str] = None
+    run_type: str = "easy"
+    max_participants: Optional[int] = None
+    visibility: str = "everyone"
+    route_data: Optional[dict] = None
+
+
+class RunUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    location_name: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    meeting_time: Optional[str] = None
+    distance_km: Optional[float] = None
+    pace_min: Optional[str] = None
+    pace_max: Optional[str] = None
+    run_type: Optional[str] = None
+    max_participants: Optional[int] = None
+    visibility: Optional[str] = None
+
+
+def _run_http(exc: RunError) -> HTTPException:
+    return HTTPException(status_code=exc.status_code, detail=str(exc))
+
+
+@app.get("/api/runs")
+def api_list_runs(
+    request: Request,
+    tab: str = "discover",
+    limit: int = 30,
+    run_type: Optional[str] = None,
+    location: Optional[str] = None,
+):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        tab_norm = (tab or "discover").lower()
+        if tab_norm in ("discover", "nearby"):
+            runs = list_discover_runs(
+                db,
+                viewer_id=viewer_id,
+                limit=limit,
+                run_type=run_type,
+                location_q=location,
+            )
+        else:
+            runs = list_my_runs(
+                db,
+                viewer_id=viewer_id,
+                tab=tab_norm,
+                limit=limit,
+            )
+        return {
+            "items": [
+                serialize_run_card(db, run, viewer_id=viewer_id) for run in runs
+            ],
+            "tab": tab_norm,
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/runs/nearby")
+def api_runs_nearby(
+    request: Request,
+    limit: int = 20,
+    run_type: Optional[str] = None,
+    location: Optional[str] = None,
+):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        runs = list_discover_runs(
+            db,
+            viewer_id=viewer_id,
+            limit=limit,
+            run_type=run_type,
+            location_q=location,
+        )
+        return {
+            "items": [
+                serialize_run_card(db, run, viewer_id=viewer_id) for run in runs
+            ],
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/runs/profile")
+def api_running_profile(request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        return estimate_running_profile(db, viewer_id)
+    finally:
+        db.close()
+
+
+@app.post("/api/runs")
+def api_create_run(body: RunCreateRequest, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        meeting = parse_meeting_time(body.meeting_time)
+        run = create_run(
+            db,
+            creator_id=viewer_id,
+            title=body.title,
+            description=body.description,
+            location_name=body.location_name,
+            latitude=body.latitude,
+            longitude=body.longitude,
+            meeting_time=meeting,
+            distance_km=body.distance_km,
+            pace_min=body.pace_min,
+            pace_max=body.pace_max,
+            run_type=body.run_type,
+            max_participants=body.max_participants,
+            visibility=body.visibility,
+            route_data=body.route_data,
+        )
+        return serialize_run(
+            db, run, viewer_id=viewer_id, include_participants=True
+        )
+    except RunError as exc:
+        raise _run_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.get("/api/runs/{run_id}")
+def api_get_run(run_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        run = get_run(db, run_id)
+        if not can_view_run(db, run, viewer_id):
+            raise HTTPException(status_code=404, detail="Run not found.")
+        return serialize_run(
+            db, run, viewer_id=viewer_id, include_participants=True
+        )
+    finally:
+        db.close()
+
+
+@app.patch("/api/runs/{run_id}")
+def api_update_run(run_id: int, body: RunUpdateRequest, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        run = get_run(db, run_id)
+        if not run:
+            raise HTTPException(status_code=404, detail="Run not found.")
+        fields = body.model_dump(exclude_unset=True)
+        run = update_run(db, run=run, editor_id=viewer_id, fields=fields)
+        return serialize_run(
+            db, run, viewer_id=viewer_id, include_participants=True
+        )
+    except RunError as exc:
+        raise _run_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.delete("/api/runs/{run_id}")
+def api_cancel_run(run_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        run = get_run(db, run_id)
+        if not run:
+            raise HTTPException(status_code=404, detail="Run not found.")
+        run = cancel_run(db, run=run, editor_id=viewer_id)
+        return serialize_run(
+            db, run, viewer_id=viewer_id, include_participants=True
+        )
+    except RunError as exc:
+        raise _run_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.post("/api/runs/{run_id}/join")
+def api_join_run(run_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        run = get_run(db, run_id)
+        if not run:
+            raise HTTPException(status_code=404, detail="Run not found.")
+        join_run(db, run=run, athlete_id=viewer_id)
+        db.refresh(run)
+        return serialize_run(
+            db, run, viewer_id=viewer_id, include_participants=True
+        )
+    except RunError as exc:
+        raise _run_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.post("/api/runs/{run_id}/leave")
+def api_leave_run(run_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        run = get_run(db, run_id)
+        if not run:
+            raise HTTPException(status_code=404, detail="Run not found.")
+        leave_run(db, run=run, athlete_id=viewer_id)
+        db.refresh(run)
+        return serialize_run(
+            db, run, viewer_id=viewer_id, include_participants=True
+        )
+    except RunError as exc:
+        raise _run_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.get("/api/runs/{run_id}/participants")
+def api_run_participants(run_id: int, request: Request, limit: int = 50):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        run = get_run(db, run_id)
+        if not can_view_run(db, run, viewer_id):
+            raise HTTPException(status_code=404, detail="Run not found.")
+        return {
+            "items": list_participants(db, run_id=run_id, limit=limit),
+            "total": _participant_count(db, run_id),
+        }
     finally:
         db.close()
 

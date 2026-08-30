@@ -13,6 +13,7 @@ import coach_message  # noqa: F401
 import follow  # noqa: F401
 import dm  # noqa: F401
 import notification  # noqa: F401
+import run  # noqa: F401
 
 
 config = context.config
