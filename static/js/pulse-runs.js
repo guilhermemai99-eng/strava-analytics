@@ -499,9 +499,20 @@
     const compat = run.compatibility || {};
     const participants = Array.isArray(run.participants) ? run.participants : [];
     const host = run.host || {};
-    const joinCta = run.is_going
-      ? `<button type="button" class="btn btn-ghost run-detail-cta" data-action="leave-run" data-run-id="${h(run.id)}">Leave Run</button>`
-      : `<button type="button" class="btn btn-primary run-detail-cta" data-action="join-run" data-run-id="${h(run.id)}" ${run.can_join ? "" : "disabled"}>Join Run</button>`;
+    let joinCta = "";
+    if (run.is_host) {
+      joinCta = `<span class="run-card-going">You're hosting</span>`;
+    } else if (run.is_going) {
+      joinCta = `<button type="button" class="btn btn-ghost run-detail-cta" data-action="leave-run" data-run-id="${h(run.id)}">Leave Run</button>`;
+    } else if (run.visibility === "invite_only") {
+      joinCta = `<span class="run-card-going">Invite only — ask the host</span>`;
+    } else {
+      joinCta = `<button type="button" class="btn btn-primary run-detail-cta" data-action="join-run" data-run-id="${h(run.id)}" ${run.can_join ? "" : "disabled"}>Join Run</button>`;
+    }
+    const inviteNote =
+      run.visibility === "invite_only" && run.is_host
+        ? `<p class="runs-section-sub">Invite only — people you invite show up here automatically.</p>`
+        : "";
 
     return `
       <section class="pulse-page run-detail-page" data-page="run">
@@ -517,6 +528,7 @@
             <span>${h(String(run.distance_km))} km</span>
             ${run.pace_range ? `<span>${h(run.pace_range)}</span>` : ""}
             <span>${h(runTypeLabel(run.run_type))}</span>
+            ${run.visibility === "invite_only" ? `<span>Invite only</span>` : ""}
           </div>
         </div>
         <div class="run-compat-block ${compatClass(compat.level)}">
@@ -525,6 +537,7 @@
         </div>
         <section class="run-detail-block">
           <h2>${h(run.participant_count || 0)} going</h2>
+          ${inviteNote}
           <div class="run-participant-avatars">
             ${participants
               .slice(0, 6)
@@ -654,7 +667,7 @@
     const peerBanner = c.peer
       ? `<div class="run-together-banner">
            <span class="pulse-avatar">${c.peer.avatar_url ? `<img src="${h(c.peer.avatar_url)}" alt="">` : h(c.peer.initials || "P")}</span>
-           <div><strong>Running with ${h(c.peer.name)}</strong><span>Suggested match — tweak anything before creating.</span></div>
+           <div><strong>Running with ${h(c.peer.name)}</strong><span>We'll invite them when you create — invite-only by default.</span></div>
          </div>`
       : "";
     return `
@@ -972,6 +985,8 @@
     c.submitting = true;
     hooks.render();
     try {
+      const inviteIds =
+        c.peer && c.peer.athlete_id ? [Number(c.peer.athlete_id)] : [];
       const res = await hooks.apiFetch("/api/runs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -987,11 +1002,17 @@
           max_participants: c.max_participants,
           visibility: c.visibility,
           club_id: c.club_id || null,
+          invite_athlete_ids: inviteIds.length ? inviteIds : null,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Could not create run.");
-      hooks.showToast("Run created. See you out there.");
+      const peerName = c.peer?.name;
+      hooks.showToast(
+        peerName
+          ? `Run created. ${peerName} is invited.`
+          : "Run created. See you out there."
+      );
       runsState.create = emptyCreateState();
       runsState.nearby.status = "idle";
       runsState.discover.status = "idle";
@@ -1051,6 +1072,7 @@
       if (data.suggested_pace_min) c.pace_min = data.suggested_pace_min;
       if (data.suggested_pace_max) c.pace_max = data.suggested_pace_max;
       if (!c.meeting_time) c.meeting_time = defaultMeetingTime();
+      c.visibility = "invite_only";
       if (c.peer?.name) {
         c.description = `Run together with ${c.peer.name}. Suggested: ${
           (data.match && data.match.suggested_pace) || "easy pace"
@@ -1060,7 +1082,7 @@
       hooks.showToast(
         data.match?.label
           ? `${data.match.emoji || ""} ${data.match.score}% · ${data.match.label}`
-          : "Adjust the run and invite them."
+          : "Adjust the run — they'll get an invite."
       );
     } catch (err) {
       hooks.showToast(err.message || "Try again.");

@@ -87,6 +87,13 @@ def can_view_run(db: Session, run: Run, viewer_id: int) -> bool:
     return _viewer_is_going(db, run.id, viewer_id)
 
 
+def discoverable_run(db: Session, run: Run, viewer_id: int) -> bool:
+    """Discover omits invite-only runs — those surface via invite / My Runs."""
+    if run.visibility == "invite_only":
+        return False
+    return can_view_run(db, run, viewer_id)
+
+
 def can_join_run(db: Session, run: Run, viewer_id: int) -> bool:
     if run.status != "scheduled":
         return False
@@ -236,6 +243,7 @@ def create_run(
     visibility: str,
     route_data: dict | str | None,
     club_id: int | None = None,
+    invite_athlete_ids: list[int] | None = None,
 ) -> Run:
     title_clean = (title or "").strip()
     location_clean = (location_name or "").strip()
@@ -301,6 +309,25 @@ def create_run(
     db.add(host_part)
     db.commit()
     db.refresh(run)
+
+    for raw_id in invite_athlete_ids or []:
+        try:
+            invitee_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if invitee_id == creator_id:
+            continue
+        try:
+            invite_to_run(
+                db,
+                run=run,
+                host_id=creator_id,
+                invitee_id=invitee_id,
+            )
+        except RunError:
+            # Skip invalid invitees so create still succeeds.
+            continue
+        db.refresh(run)
 
     if resolved_club_id:
         from club_helpers import get_club, list_member_ids
@@ -457,6 +484,76 @@ def leave_run(db: Session, *, run: Run, athlete_id: int) -> None:
     db.commit()
 
 
+def invite_to_run(
+    db: Session,
+    *,
+    run: Run,
+    host_id: int,
+    invitee_id: int,
+) -> RunParticipant:
+    if run.creator_id != host_id:
+        raise RunError("Only the host can invite runners.", status_code=403)
+    if run.status != "scheduled":
+        raise RunError("This run is no longer open.")
+    if run.meeting_time <= _utcnow():
+        raise RunError("This run already started.")
+    if invitee_id == host_id:
+        raise RunError("You're already on this run.")
+    invitee = db.query(Athlete).filter(Athlete.id == invitee_id).one_or_none()
+    if invitee is None:
+        raise RunError("Runner not found.", status_code=404)
+
+    existing = (
+        db.query(RunParticipant)
+        .filter(
+            RunParticipant.run_id == run.id,
+            RunParticipant.athlete_id == invitee_id,
+        )
+        .one_or_none()
+    )
+    if existing and existing.status == "going":
+        return existing
+
+    if run.max_participants:
+        count = _participant_count(db, run.id)
+        if count >= run.max_participants:
+            raise RunError("This run is full.")
+
+    newly = False
+    if existing:
+        existing.status = "going"
+        existing.joined_at = _utcnow()
+        part = existing
+        newly = True
+    else:
+        part = RunParticipant(
+            run_id=run.id,
+            athlete_id=invitee_id,
+            status="going",
+        )
+        db.add(part)
+        newly = True
+
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise RunError("Already on this run.") from exc
+    db.refresh(part)
+
+    if newly:
+        from notification_helpers import notify_run_invite
+
+        notify_run_invite(
+            db,
+            run_id=run.id,
+            host_id=host_id,
+            invitee_id=invitee_id,
+            run_title=run.title or "a run",
+        )
+    return part
+
+
 def list_discover_runs(
     db: Session,
     *,
@@ -482,7 +579,7 @@ def list_discover_runs(
         q = q.filter(Run.location_name.ilike(like))
 
     runs = q.all()
-    visible = [r for r in runs if can_view_run(db, r, viewer_id)]
+    visible = [r for r in runs if discoverable_run(db, r, viewer_id)]
     return visible
 
 

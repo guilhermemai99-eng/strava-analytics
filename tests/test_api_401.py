@@ -45,6 +45,7 @@ PROTECTED = [
     ("DELETE", "/api/runs/1"),
     ("POST", "/api/runs/1/join"),
     ("POST", "/api/runs/1/leave"),
+    ("POST", "/api/runs/1/invite"),
     ("GET", "/api/runs/1/participants"),
     ("GET", "/api/people/matches"),
     ("GET", "/api/people/1/compatibility"),
@@ -138,6 +139,8 @@ def test_protected_apis_return_401_without_session(client):
                 path,
                 json={"name": "Test Club", "visibility": "public"},
             )
+        elif method == "POST" and path.endswith("/invite"):
+            resp = client.post(path, json={"athlete_id": 1})
         elif method == "POST" and path.endswith("/follow"):
             resp = client.post(path)
         else:

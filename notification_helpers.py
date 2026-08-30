@@ -17,6 +17,7 @@ KIND_COMMENT = "comment"
 KIND_FOLLOW_REQUEST = "follow_request"
 KIND_FOLLOW_ACCEPTED = "follow_accepted"
 KIND_RUN_JOIN = "run_join"
+KIND_RUN_INVITE = "run_invite"
 KIND_CLUB_JOIN = "club_join"
 KIND_CLUB_RUN = "club_run"
 
@@ -133,6 +134,36 @@ def notify_run_join(db: Session, *, run_id: int, joiner_id: int, host_id: int, r
         actor_id=joiner_id,
         kind=KIND_RUN_JOIN,
         body=f"{name} joined {title}.",
+        target_type="run",
+        target_id=run_id,
+    )
+    db.commit()
+
+
+def notify_run_invite(
+    db: Session,
+    *,
+    run_id: int,
+    host_id: int,
+    invitee_id: int,
+    run_title: str,
+) -> None:
+    """Tell someone the host invited them onto a run."""
+    if host_id == invitee_id:
+        return
+    host = db.query(Athlete).filter(Athlete.id == host_id).one_or_none()
+    if host is None:
+        return
+    name = display_name_for(host)
+    title = (run_title or "a run").strip() or "a run"
+    if len(title) > 60:
+        title = title[:57] + "…"
+    create_notification(
+        db,
+        recipient_id=invitee_id,
+        actor_id=host_id,
+        kind=KIND_RUN_INVITE,
+        body=f"{name} invited you to {title}.",
         target_type="run",
         target_id=run_id,
     )
