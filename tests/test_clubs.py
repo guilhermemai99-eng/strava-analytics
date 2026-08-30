@@ -142,3 +142,80 @@ def test_list_mine_and_admin_clubs(client, make_session, make_athlete):
     assert any(item["id"] == club_id for item in mine_joiner.json()["items"])
     admin_joiner = client.get("/api/clubs?tab=admin")
     assert all(item["id"] != club_id for item in admin_joiner.json()["items"])
+
+
+def test_transfer_promote_and_delete_club(client, make_session, make_athlete):
+    make_athlete(940050, firstname="Owner", lastname="Life")
+    make_athlete(940051, firstname="Next", lastname="Owner")
+    make_athlete(940052, firstname="Member", lastname="Life")
+    _login(client, make_session, 940050)
+    club_id = client.post(
+        "/api/clubs",
+        json={"name": "Lifecycle Crew", "visibility": "public"},
+    ).json()["id"]
+
+    _login(client, make_session, 940051)
+    assert client.post(f"/api/clubs/{club_id}/join").status_code == 200
+    _login(client, make_session, 940052)
+    assert client.post(f"/api/clubs/{club_id}/join").status_code == 200
+
+    _login(client, make_session, 940050)
+    promote = client.patch(
+        f"/api/clubs/{club_id}/members/940052",
+        json={"role": "admin"},
+    )
+    assert promote.status_code == 200, promote.text
+    assert promote.json()["role"] == "admin"
+
+    transfer = client.post(
+        f"/api/clubs/{club_id}/transfer",
+        json={"athlete_id": 940051},
+    )
+    assert transfer.status_code == 200, transfer.text
+    body = transfer.json()
+    assert body["is_owner"] is False
+    assert body["role"] == "admin"
+
+    _login(client, make_session, 940051)
+    detail = client.get(f"/api/clubs/{club_id}")
+    assert detail.status_code == 200
+    assert detail.json()["is_owner"] is True
+
+    notifs = client.get("/api/notifications")
+    assert notifs.status_code == 200
+    assert any(
+        n.get("kind") == "club_ownership" and n.get("target_id") == club_id
+        for n in notifs.json().get("items", [])
+    )
+
+    _login(client, make_session, 940050)
+    forbidden = client.delete(f"/api/clubs/{club_id}")
+    assert forbidden.status_code == 403
+
+    _login(client, make_session, 940051)
+    deleted = client.delete(f"/api/clubs/{club_id}")
+    assert deleted.status_code == 200, deleted.text
+    assert client.get(f"/api/clubs/{club_id}").status_code == 404
+
+
+def test_non_owner_cannot_transfer_or_promote(client, make_session, make_athlete):
+    make_athlete(940060, firstname="Boss", lastname="Club")
+    make_athlete(940061, firstname="Joiner", lastname="Club")
+    _login(client, make_session, 940060)
+    club_id = client.post(
+        "/api/clubs", json={"name": "No Power", "visibility": "public"}
+    ).json()["id"]
+    _login(client, make_session, 940061)
+    assert client.post(f"/api/clubs/{club_id}/join").status_code == 200
+    assert (
+        client.post(
+            f"/api/clubs/{club_id}/transfer", json={"athlete_id": 940061}
+        ).status_code
+        == 403
+    )
+    assert (
+        client.patch(
+            f"/api/clubs/{club_id}/members/940060", json={"role": "admin"}
+        ).status_code
+        == 403
+    )

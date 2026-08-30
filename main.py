@@ -142,6 +142,7 @@ from club_helpers import (
     ClubError,
     can_view_club,
     create_club,
+    delete_club,
     get_club,
     join_club,
     leave_club,
@@ -151,6 +152,8 @@ from club_helpers import (
     list_members,
     list_my_clubs,
     serialize_club,
+    set_club_member_role,
+    transfer_club_ownership,
 )
 from ai_coach_chat import (
     CoachChatError,
@@ -2980,6 +2983,78 @@ def api_leave_club(club_id: int, request: Request):
         leave_club(db, club=club, athlete_id=viewer_id)
         db.refresh(club)
         return serialize_club(db, club, viewer_id=viewer_id)
+    except ClubError as exc:
+        raise _club_http(exc) from exc
+    finally:
+        db.close()
+
+
+class ClubTransferRequest(BaseModel):
+    athlete_id: int
+
+
+class ClubMemberRoleRequest(BaseModel):
+    role: str
+
+
+@app.post("/api/clubs/{club_id}/transfer")
+def api_transfer_club(club_id: int, body: ClubTransferRequest, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        club = get_club(db, club_id)
+        if not club:
+            raise HTTPException(status_code=404, detail="Club not found.")
+        club = transfer_club_ownership(
+            db,
+            club=club,
+            owner_id=viewer_id,
+            new_owner_id=int(body.athlete_id),
+        )
+        return serialize_club(db, club, viewer_id=viewer_id, include_members=True)
+    except ClubError as exc:
+        raise _club_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.patch("/api/clubs/{club_id}/members/{athlete_id}")
+def api_set_club_member_role(
+    club_id: int,
+    athlete_id: int,
+    body: ClubMemberRoleRequest,
+    request: Request,
+):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        club = get_club(db, club_id)
+        if not club:
+            raise HTTPException(status_code=404, detail="Club not found.")
+        member = set_club_member_role(
+            db,
+            club=club,
+            actor_id=viewer_id,
+            target_id=athlete_id,
+            role=body.role,
+        )
+        return member
+    except ClubError as exc:
+        raise _club_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.delete("/api/clubs/{club_id}")
+def api_delete_club(club_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        club = get_club(db, club_id)
+        if not club:
+            raise HTTPException(status_code=404, detail="Club not found.")
+        delete_club(db, club=club, owner_id=viewer_id)
+        return {"ok": True, "id": club_id}
     except ClubError as exc:
         raise _club_http(exc) from exc
     finally:

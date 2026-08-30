@@ -55,6 +55,7 @@ Strava remains the activity data source. The product centre is real runs and peo
 ### Run Clubs
 - Create, join, leave, discover, members, club runs
 - Host a run as a club (owner/admin)
+- **Owner lifecycle** — transfer ownership, promote/demote admins, delete club
 
 ## Next
 
@@ -62,6 +63,7 @@ Strava remains the activity data source. The product centre is real runs and peo
 |---|--------|--------|
 | 1 | Clubs polish (cover image, invites) | Later |
 | 2 | Production pass (privacy, mobile, dead UI) | Ongoing |
+| 3 | Run invite-only + peer invite after Run together | Next |
 
 ## Do not ship
 

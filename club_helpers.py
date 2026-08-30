@@ -206,6 +206,75 @@ def leave_club(db: Session, *, club: RunClub, athlete_id: int) -> None:
     db.commit()
 
 
+def transfer_club_ownership(
+    db: Session,
+    *,
+    club: RunClub,
+    owner_id: int,
+    new_owner_id: int,
+) -> RunClub:
+    owner = get_membership(db, club_id=club.id, athlete_id=owner_id)
+    if not owner or owner.role != "owner":
+        raise ClubError("Only the owner can transfer this club.", status_code=403)
+    if owner_id == new_owner_id:
+        raise ClubError("You already own this club.")
+    successor = get_membership(db, club_id=club.id, athlete_id=new_owner_id)
+    if not successor:
+        raise ClubError("That runner must be a club member first.", status_code=404)
+
+    owner.role = "admin"
+    successor.role = "owner"
+    club.creator_id = new_owner_id
+    club.updated_at = _utcnow()
+    db.commit()
+    db.refresh(club)
+
+    from notification_helpers import notify_club_ownership_transferred
+
+    notify_club_ownership_transferred(
+        db,
+        club_id=club.id,
+        from_id=owner_id,
+        to_id=new_owner_id,
+        club_name=club.name or "a club",
+    )
+    return club
+
+
+def set_club_member_role(
+    db: Session,
+    *,
+    club: RunClub,
+    actor_id: int,
+    target_id: int,
+    role: str,
+) -> dict:
+    if role not in ("admin", "member"):
+        raise ClubError("Role must be admin or member.")
+    actor = get_membership(db, club_id=club.id, athlete_id=actor_id)
+    if not actor or actor.role != "owner":
+        raise ClubError("Only the owner can change roles.", status_code=403)
+    if actor_id == target_id:
+        raise ClubError("Transfer ownership instead of changing your own role.")
+    target = get_membership(db, club_id=club.id, athlete_id=target_id)
+    if not target:
+        raise ClubError("That runner is not in this club.", status_code=404)
+    if target.role == "owner":
+        raise ClubError("Transfer ownership to change the owner.")
+    target.role = role
+    db.commit()
+    members = list_members(db, club_id=club.id)
+    return next((m for m in members if m["athlete_id"] == target_id), members[0])
+
+
+def delete_club(db: Session, *, club: RunClub, owner_id: int) -> None:
+    owner = get_membership(db, club_id=club.id, athlete_id=owner_id)
+    if not owner or owner.role != "owner":
+        raise ClubError("Only the owner can delete this club.", status_code=403)
+    db.delete(club)
+    db.commit()
+
+
 def list_discover_clubs(
     db: Session,
     *,

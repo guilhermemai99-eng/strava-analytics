@@ -67,6 +67,9 @@ PROTECTED = [
     ("GET", "/api/clubs/1"),
     ("POST", "/api/clubs/1/join"),
     ("POST", "/api/clubs/1/leave"),
+    ("POST", "/api/clubs/1/transfer"),
+    ("PATCH", "/api/clubs/1/members/1"),
+    ("DELETE", "/api/clubs/1"),
     ("GET", "/api/clubs/1/runs"),
     ("GET", "/api/clubs/1/members"),
     ("POST", "/strava/sync"),
@@ -111,6 +114,8 @@ def test_protected_apis_return_401_without_session(client):
             resp = client.patch(path, json={"visibility": "public"})
         elif method == "PATCH" and "/comments/" in path:
             resp = client.patch(path, json={"body": "nice"})
+        elif method == "PATCH" and "/members/" in path:
+            resp = client.patch(path, json={"role": "admin"})
         elif method == "PATCH":
             resp = client.patch(path, json={})
         elif method == "DELETE":
@@ -138,6 +143,8 @@ def test_protected_apis_return_401_without_session(client):
                 path,
                 json={"name": "Test Club", "visibility": "public"},
             )
+        elif method == "POST" and path.endswith("/transfer"):
+            resp = client.post(path, json={"athlete_id": 1})
         elif method == "POST" and path.endswith("/follow"):
             resp = client.post(path)
         else:

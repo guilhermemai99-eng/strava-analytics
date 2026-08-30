@@ -1372,7 +1372,7 @@
         ? "open-notification"
         : item.kind === "run_join" || item.kind === "club_run"
           ? "open-notification"
-          : item.kind === "club_join"
+          : item.kind === "club_join" || item.kind === "club_ownership"
             ? "open-notification"
             : actor.athlete_id
               ? "open-notification"
@@ -1385,7 +1385,8 @@
       (item.kind === "run_join" || item.kind === "club_run") && item.target_id
         ? `data-run-id="${escapeHtml(item.target_id)}"`
         : "",
-      item.kind === "club_join" && item.target_id
+      (item.kind === "club_join" || item.kind === "club_ownership") &&
+      item.target_id
         ? `data-club-id="${escapeHtml(item.target_id)}"`
         : "",
       actor.athlete_id
@@ -3687,6 +3688,7 @@
         getPage: () => state.page,
         loadExplore: (force) => loadExplore(!!force),
         renderPeopleExplore,
+        openConfirmModal,
       });
     }
 
