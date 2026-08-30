@@ -785,6 +785,7 @@
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: 3;
   padding: 48px 16px 16px;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.12) 70%, transparent 100%);
   pointer-events: none;
@@ -904,7 +905,7 @@
 
 .ig-post-media .feed-media.has-photo,
 .ig-post-media .feed-media.is-fallback {
-  aspect-ratio: 4 / 5;
+  aspect-ratio: 1 / 1;
 }
 
 .ig-post-media .feed-media.is-fallback .feed-media-map {

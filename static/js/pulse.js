@@ -2799,7 +2799,9 @@
   function bindViewInteractions() {
     // Activity tiles only — Follow/actions use document delegation (avoids double-fire on mobile).
     els.viewRoot.querySelectorAll("[data-activity-id]").forEach((tile) => {
+      if (tile.matches("button, a, input")) return;
       tile.addEventListener("click", (event) => {
+        if (event.target.closest("[data-action], button, a")) return;
         event.preventDefault();
         event.stopPropagation();
         openActivity(tile.dataset.activityId);
@@ -2808,7 +2810,7 @@
 
     els.viewRoot.querySelectorAll("[data-feed-activity-id]").forEach((post) => {
       post.addEventListener("click", (event) => {
-        if (event.target.closest("a,button")) return;
+        if (event.target.closest("a,button,[data-action]")) return;
         openActivity(post.dataset.feedActivityId);
       });
     });
