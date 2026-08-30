@@ -105,10 +105,23 @@ def make_athlete(db_session):
     yield _make
 
     from models import Activity
+    from activity_social import ActivityComment, ActivityLike, ActivityReport, HiddenActivity
     from strava_auth import StravaAuth
     from user_session import UserSession
 
     for athlete_id in created:
+        db_session.query(ActivityLike).filter(ActivityLike.athlete_id == athlete_id).delete(
+            synchronize_session=False
+        )
+        db_session.query(ActivityComment).filter(
+            ActivityComment.athlete_id == athlete_id
+        ).delete(synchronize_session=False)
+        db_session.query(HiddenActivity).filter(
+            HiddenActivity.athlete_id == athlete_id
+        ).delete(synchronize_session=False)
+        db_session.query(ActivityReport).filter(
+            ActivityReport.reporter_id == athlete_id
+        ).delete(synchronize_session=False)
         db_session.query(Activity).filter(Activity.athlete_id == athlete_id).delete()
         db_session.query(UserSession).filter(UserSession.athlete_id == athlete_id).delete()
         db_session.query(StravaAuth).filter(StravaAuth.athlete_id == athlete_id).delete()

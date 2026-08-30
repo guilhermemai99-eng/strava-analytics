@@ -48,6 +48,19 @@ PROTECTED = [
     ("GET", "/api/people/matches"),
     ("GET", "/api/people/1/compatibility"),
     ("GET", "/api/people/1/run-together"),
+    ("POST", "/api/activities/1/like"),
+    ("GET", "/api/activities/1/likes"),
+    ("GET", "/api/activities/1/comments"),
+    ("POST", "/api/activities/1/comments"),
+    ("PATCH", "/api/activities/1/comments/1"),
+    ("DELETE", "/api/activities/1/comments/1"),
+    ("POST", "/api/activities/1/hide"),
+    ("POST", "/api/activities/1/unhide"),
+    ("PATCH", "/api/activities/1/visibility"),
+    ("PATCH", "/api/activities/1/caption"),
+    ("DELETE", "/api/activities/1"),
+    ("POST", "/api/activities/1/report"),
+    ("POST", "/api/activities/1/share"),
     ("GET", "/api/clubs"),
     ("POST", "/api/clubs"),
     ("GET", "/api/clubs/1"),
@@ -93,6 +106,10 @@ def test_protected_apis_return_401_without_session(client):
     for method, path in PROTECTED:
         if method == "GET":
             resp = client.get(path)
+        elif method == "PATCH" and path.endswith("/visibility"):
+            resp = client.patch(path, json={"visibility": "public"})
+        elif method == "PATCH" and "/comments/" in path:
+            resp = client.patch(path, json={"body": "nice"})
         elif method == "PATCH":
             resp = client.patch(path, json={})
         elif method == "DELETE":
@@ -101,6 +118,10 @@ def test_protected_apis_return_401_without_session(client):
             resp = client.post(path, json={"message": "hi"})
         elif method == "POST" and path.endswith("/messages"):
             resp = client.post(path, json={"content": "hi"})
+        elif method == "POST" and path.endswith("/comments"):
+            resp = client.post(path, json={"body": "nice"})
+        elif method == "POST" and path.endswith("/share"):
+            resp = client.post(path, json={"athlete_ids": [1]})
         elif method == "POST" and path == "/api/runs":
             resp = client.post(
                 path,

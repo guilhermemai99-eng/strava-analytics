@@ -100,7 +100,14 @@ def serialize_public_profile(
         target = ensure_handle(db, target)
 
     stats = activity_stats_for(db, target.id)
-    activities = list_profile_activities(db, target.id, limit=activity_limit)
+    from activity_social_helpers import list_visible_profile_activities
+
+    activities = [
+        serialize_profile_activity(a)
+        for a in list_visible_profile_activities(
+            db, target_id=target.id, viewer_id=viewer.id, limit=activity_limit
+        )
+    ]
     rel = relationship_payload(db, viewer_id=viewer.id, target_id=target.id)
     followers = follower_count(db, target.id)
     following = following_count(db, target.id)

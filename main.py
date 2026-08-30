@@ -40,6 +40,28 @@ from avatar_helpers import (
     validate_avatar_upload,
 )
 from feed_helpers import serialize_feed_item
+from activity_social_helpers import (
+    SocialError,
+    add_comment,
+    delete_comment,
+    edit_comment,
+    get_comment,
+    hide_activity,
+    list_comments,
+    list_home_feed_activities,
+    list_likers,
+    report_activity,
+    require_viewable_activity,
+    set_caption,
+    set_visibility,
+    share_activity_via_dm,
+    soft_delete_activity,
+    social_payload,
+    toggle_like,
+    unhide_activity,
+    _counts_for,
+    liked_ids_for_viewer,
+)
 from media_helpers import fetch_remote_media, is_allowed_media_url
 from explore_helpers import (
     get_public_athlete,
@@ -1558,49 +1580,295 @@ def get_feed(
     request: Request,
     limit: int = 30,
 ):
-    """Own-athlete activity feed (follow graph lands later)."""
+    """Home feed: your runs plus people you follow, with privacy + hidden posts."""
 
     athlete_id = require_athlete_id(request)
     safe_limit = max(1, min(int(limit), 50))
 
     db = SessionLocal()
     try:
-        athlete = (
-            db.query(Athlete)
-            .filter(Athlete.id == athlete_id)
-            .one_or_none()
+        rows = list_home_feed_activities(
+            db, viewer_id=athlete_id, limit=safe_limit
         )
-        if athlete is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Perfil não encontrado.",
-            )
-
-        activities = (
-            db.query(Activity)
-            .filter(Activity.athlete_id == athlete_id)
-            .order_by(Activity.start_date_local.desc())
-            .limit(safe_limit)
-            .all()
+        activity_ids = [activity.id for activity, _author in rows]
+        like_counts, comment_counts, _ = _counts_for(db, activity_ids)
+        liked = liked_ids_for_viewer(
+            db, viewer_id=athlete_id, activity_ids=activity_ids
         )
-
         items = [
-            serialize_feed_item(activity, athlete)
-            for activity in activities
+            serialize_feed_item(
+                activity,
+                author,
+                viewer_id=athlete_id,
+                like_count=like_counts.get(activity.id, 0),
+                comment_count=comment_counts.get(activity.id, 0),
+                is_liked=activity.id in liked,
+            )
+            for activity, author in rows
         ]
 
         return {
-            "scope": "self",
-            "message": {
-                "eyebrow": "Your runs. Front row.",
+            "scope": "home",
+            "message": None if items else {
+                "eyebrow": "Too quiet out here.",
                 "body": (
-                    "The rest of the world is still lacing up. "
-                    "Follows land later — for now, it’s all you."
+                    "Follow runners you want to see — or go for a run "
+                    "and take the first post."
                 ),
             },
             "items": items,
             "count": len(items),
         }
+    finally:
+        db.close()
+
+
+def _social_http(exc: SocialError) -> HTTPException:
+    return HTTPException(status_code=exc.status_code, detail=str(exc))
+
+
+class ActivityCommentBody(BaseModel):
+    body: str
+
+
+class ActivityVisibilityBody(BaseModel):
+    visibility: str
+
+
+class ActivityCaptionBody(BaseModel):
+    caption: Optional[str] = None
+
+
+class ActivityShareBody(BaseModel):
+    athlete_ids: list[int]
+
+
+@app.post("/api/activities/{activity_id}/like")
+def api_toggle_like(activity_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        activity = require_viewable_activity(
+            db, activity_id, viewer_id=viewer_id
+        )
+        return toggle_like(db, activity=activity, viewer_id=viewer_id)
+    except SocialError as exc:
+        raise _social_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.get("/api/activities/{activity_id}/likes")
+def api_list_likes(activity_id: int, request: Request, limit: int = 40):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        require_viewable_activity(db, activity_id, viewer_id=viewer_id)
+        return {"items": list_likers(db, activity_id=activity_id, limit=limit)}
+    except SocialError as exc:
+        raise _social_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.get("/api/activities/{activity_id}/comments")
+def api_list_comments(activity_id: int, request: Request, limit: int = 50):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        require_viewable_activity(db, activity_id, viewer_id=viewer_id)
+        return {
+            "items": list_comments(
+                db, activity_id=activity_id, viewer_id=viewer_id, limit=limit
+            )
+        }
+    except SocialError as exc:
+        raise _social_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.post("/api/activities/{activity_id}/comments")
+def api_add_comment(activity_id: int, body: ActivityCommentBody, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        activity = require_viewable_activity(
+            db, activity_id, viewer_id=viewer_id
+        )
+        row = add_comment(
+            db, activity=activity, viewer_id=viewer_id, body=body.body
+        )
+        athlete = db.query(Athlete).filter(Athlete.id == viewer_id).one()
+        from activity_social_helpers import serialize_comment
+
+        return serialize_comment(row, athlete, viewer_id=viewer_id)
+    except SocialError as exc:
+        raise _social_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.patch("/api/activities/{activity_id}/comments/{comment_id}")
+def api_edit_comment(
+    activity_id: int, comment_id: int, body: ActivityCommentBody, request: Request
+):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        activity = require_viewable_activity(
+            db, activity_id, viewer_id=viewer_id
+        )
+        comment = get_comment(db, comment_id)
+        if comment is None or comment.activity_id != activity.id:
+            raise HTTPException(status_code=404, detail="Comment not found.")
+        row = edit_comment(
+            db, comment=comment, viewer_id=viewer_id, body=body.body
+        )
+        athlete = db.query(Athlete).filter(Athlete.id == viewer_id).one()
+        from activity_social_helpers import serialize_comment
+
+        return serialize_comment(row, athlete, viewer_id=viewer_id)
+    except SocialError as exc:
+        raise _social_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.delete("/api/activities/{activity_id}/comments/{comment_id}")
+def api_delete_comment(activity_id: int, comment_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        activity = require_viewable_activity(
+            db, activity_id, viewer_id=viewer_id
+        )
+        comment = get_comment(db, comment_id)
+        if comment is None or comment.activity_id != activity.id:
+            raise HTTPException(status_code=404, detail="Comment not found.")
+        delete_comment(
+            db, comment=comment, viewer_id=viewer_id, activity=activity
+        )
+        return {"ok": True}
+    except SocialError as exc:
+        raise _social_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.post("/api/activities/{activity_id}/hide")
+def api_hide_activity(activity_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        require_viewable_activity(db, activity_id, viewer_id=viewer_id)
+        hide_activity(db, activity_id=activity_id, viewer_id=viewer_id)
+        return {"ok": True, "hidden": True}
+    except SocialError as exc:
+        raise _social_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.post("/api/activities/{activity_id}/unhide")
+def api_unhide_activity(activity_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        unhide_activity(db, activity_id=activity_id, viewer_id=viewer_id)
+        return {"ok": True, "hidden": False}
+    except SocialError as exc:
+        raise _social_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.patch("/api/activities/{activity_id}/visibility")
+def api_set_visibility(
+    activity_id: int, body: ActivityVisibilityBody, request: Request
+):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        activity = require_viewable_activity(
+            db, activity_id, viewer_id=viewer_id
+        )
+        activity = set_visibility(
+            db, activity=activity, viewer_id=viewer_id, visibility=body.visibility
+        )
+        return social_payload(db, activity, viewer_id=viewer_id)
+    except SocialError as exc:
+        raise _social_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.patch("/api/activities/{activity_id}/caption")
+def api_set_caption(activity_id: int, body: ActivityCaptionBody, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        activity = require_viewable_activity(
+            db, activity_id, viewer_id=viewer_id
+        )
+        activity = set_caption(
+            db, activity=activity, viewer_id=viewer_id, caption=body.caption
+        )
+        return social_payload(db, activity, viewer_id=viewer_id)
+    except SocialError as extra:
+        raise _social_http(extra) from extra
+    finally:
+        db.close()
+
+
+@app.delete("/api/activities/{activity_id}")
+def api_delete_activity(activity_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        activity = require_viewable_activity(
+            db, activity_id, viewer_id=viewer_id
+        )
+        soft_delete_activity(db, activity=activity, viewer_id=viewer_id)
+        return {"ok": True}
+    except SocialError as extra:
+        raise _social_http(extra) from extra
+    finally:
+        db.close()
+
+
+@app.post("/api/activities/{activity_id}/report")
+def api_report_activity(activity_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        require_viewable_activity(db, activity_id, viewer_id=viewer_id)
+        report_activity(db, activity_id=activity_id, viewer_id=viewer_id)
+        return {"ok": True}
+    except SocialError as extra:
+        raise _social_http(extra) from extra
+    finally:
+        db.close()
+
+
+@app.post("/api/activities/{activity_id}/share")
+def api_share_activity(
+    activity_id: int, body: ActivityShareBody, request: Request
+):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        activity = require_viewable_activity(
+            db, activity_id, viewer_id=viewer_id
+        )
+        return share_activity_via_dm(
+            db,
+            activity=activity,
+            viewer_id=viewer_id,
+            peer_ids=body.athlete_ids or [],
+        )
+    except SocialError as extra:
+        raise _social_http(extra) from extra
     finally:
         db.close()
 

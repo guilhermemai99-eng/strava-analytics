@@ -29,11 +29,12 @@ Strava remains the activity data source. The product centre is real runs and peo
 - **Not done:** likes, comments, run join, club events
 
 ### Feed (partial)
-- Own activities as Instagram-style posts
-- Photo + map media, Pulse titles
-- Like / comment / share / ⋯ menu are **visual only** (no backend)
-- Feed scope is **self only** — does not yet include people you follow
-- No post privacy, hide, comments, or likes
+- Home feed: **your runs + people you follow**
+- Photo-first overlay (distance / time / pace on the image); map fallback when there is no photo
+- Likes, comments, hide (+ undo), privacy (public / followers / private), author delete
+- Share a post into DMs (mutual follow required)
+- Working ⋯ menu (not visual-only)
+- Notifications for likes and comments
 
 ### Explore (partial)
 - People search + suggested public runners
@@ -64,10 +65,8 @@ Priority: finish Clubs, then social feed, then remaining gaps.
 |---|--------|--------|
 | 0 | Finish Run Clubs (UI + tests + PR) | Done — PR #30 |
 | 1 | Audit / stabilize | After Clubs lands |
-| 2 | Feed: photo-first overlay, likes, comments, share, hide, privacy, working menu | Next |
-| 3 | Follow requests for private accounts; profile social/running/lab split | After feed |
-| 4 | Explore people-only + simple filters | After feed |
-| 5 | Chat: share posts into DMs | With feed share |
+| 2 | Feed: photo-first overlay, likes, comments, share, hide, privacy, working menu | In progress — this branch |
+| 5 | Chat: share posts into DMs | Included with feed share |
 | 6 | Runs polish (already shipped core) | Later |
 | 7 | Clubs polish (cover image, invites) | Later |
 | 8 | Notifications for likes/comments/runs + UX polish | After social posts |

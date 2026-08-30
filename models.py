@@ -2,6 +2,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     Column,
+    DateTime,
     Float,
     ForeignKey,
     Integer,
@@ -189,5 +190,20 @@ class Activity(Base):
 
     photo_count = Column(
         Integer,
+        nullable=True,
+    )
+
+    visibility = Column(
+        String(16),
+        nullable=False,
+        default="public",
+        server_default="public",
+    )
+    caption = Column(
+        Text,
+        nullable=True,
+    )
+    deleted_at = Column(
+        DateTime(timezone=True),
         nullable=True,
     )

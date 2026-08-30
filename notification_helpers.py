@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 KIND_FOLLOW = "follow"
 KIND_MUTUAL = "mutual"
 KIND_MESSAGE = "message"
+KIND_LIKE = "like"
+KIND_COMMENT = "comment"
 
 
 def _serialize_actor(athlete: Athlete | None) -> dict | None:

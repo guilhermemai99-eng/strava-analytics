@@ -121,5 +121,10 @@ def test_alembic_upgrade_head_on_empty_database():
         "run_participants",
         "run_clubs",
         "club_members",
+        "activity_likes",
+        "activity_comments",
+        "hidden_activities",
+        "activity_reports",
     }.issubset(tables)
-    assert version == "0012_run_clubs"
+    assert version == "0013_activity_social"
+    assert "visibility" in activity_cols

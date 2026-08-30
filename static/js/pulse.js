@@ -73,6 +73,7 @@
       offset: 0,
       hasMore: false,
       q: "",
+      shareActivityId: null,
     },
     feed: {
       status: "idle",
@@ -125,6 +126,14 @@
       unread_total: 0,
       error: null,
     },
+    postSheet: {
+      open: false,
+      kind: null,
+      activityId: null,
+      comments: [],
+      status: "idle",
+    },
+    feedUndo: { activityId: null, item: null },
   };
 
   const els = {
@@ -146,6 +155,9 @@
     peopleModal: document.getElementById("peopleModal"),
     peopleModalBody: document.getElementById("peopleModalBody"),
     peopleModalTitle: document.getElementById("peopleModalTitle"),
+    postSheet: document.getElementById("postSheet"),
+    postSheetTitle: document.getElementById("postSheetTitle"),
+    postSheetBody: document.getElementById("postSheetBody"),
     confirmModal: document.getElementById("confirmModal"),
     confirmModalTitle: document.getElementById("confirmModalTitle"),
     confirmModalBody: document.getElementById("confirmModalBody"),
@@ -630,50 +642,37 @@
     return `<div class="pulse-avatar">${escapeHtml(author?.initials || "P")}</div>`;
   }
 
+  function feedOverlayStats(item) {
+    const activity = item.activity || {};
+    const km =
+      activity.distance_km != null
+        ? Number(activity.distance_km).toFixed(
+            Number(activity.distance_km) >= 10 ? 1 : 2
+          )
+        : null;
+    const bits = [activity.duration_label, activity.pace_label ? `${activity.pace_label}/km` : null].filter(Boolean);
+    const loc = item.location?.display_name || "";
+    return { km, meta: bits.join(" · "), loc, type: activity.type || "Run" };
+  }
+
   function renderFeedMedia(item) {
     const media = item.media || {};
     const activity = item.activity || {};
     const polyline = media.summary_polyline || "";
     const gradientId = `routeGlow-${escapeHtml(activity.id || "x")}`;
     const mapSvg = polyline ? polylineToSvg(polyline, gradientId) : "";
-    const km =
-      activity.distance_km != null
-        ? Number(activity.distance_km).toFixed(
-            Number(activity.distance_km) >= 10 ? 1 : 2
-          )
-        : "—";
+    const stats = feedOverlayStats(item);
+    const overlay = `
+      <div class="feed-media-overlay">
+        ${stats.km ? `<p class="feed-ov-km">${escapeHtml(stats.km)} KM</p>` : ""}
+        ${stats.meta ? `<p class="feed-ov-meta">${escapeHtml(stats.meta)}</p>` : ""}
+        ${stats.loc ? `<p class="feed-ov-loc">${escapeHtml(stats.loc)}</p>` : `<p class="feed-ov-loc">${escapeHtml(stats.type)}</p>`}
+      </div>`;
     const bg = TILE_BACKGROUNDS[(Number(activity.id) || 0) % TILE_BACKGROUNDS.length];
-    const fallback = `
-      <div class="feed-media-fallback" style="background:${bg}">
-        <div class="tile-label">${escapeHtml((activity.type || "Run").toUpperCase())}</div>
-        <div class="tile-distance">${escapeHtml(km)} KM</div>
-      </div>
-    `;
-    const mapBlock = mapSvg
-      ? `<div class="feed-media-map" data-feed-map>${mapSvg}</div>`
-      : "";
 
-    if (media.primary_image_url && mapSvg) {
-      // Photo + route both visible (map was previously buried under the photo).
-      return `
-        <div class="feed-media has-photo has-map is-stacked">
-          <img
-            class="feed-media-photo"
-            src="${escapeHtml(proxiedMediaUrl(media.primary_image_url))}"
-            alt=""
-            loading="lazy"
-            decoding="async"
-            referrerpolicy="no-referrer"
-            onerror="this.classList.add('is-broken'); this.parentElement.classList.add('photo-failed');"
-          >
-          ${mapBlock}
-        </div>
-      `;
-    }
     if (media.primary_image_url) {
       return `
         <div class="feed-media has-photo">
-          ${fallback}
           <img
             class="feed-media-photo"
             src="${escapeHtml(proxiedMediaUrl(media.primary_image_url))}"
@@ -683,70 +682,67 @@
             referrerpolicy="no-referrer"
             onerror="this.classList.add('is-broken'); this.parentElement.classList.add('photo-failed');"
           >
-        </div>
-      `;
+          ${overlay}
+        </div>`;
     }
-    if (mapSvg) {
-      return `<div class="feed-media has-map">${mapBlock}</div>`;
-    }
-    return `<div class="feed-media">${fallback}</div>`;
+    return `
+      <div class="feed-media is-fallback" style="background:${bg}">
+        ${mapSvg ? `<div class="feed-media-map" data-feed-map>${mapSvg}</div>` : ""}
+        ${overlay}
+      </div>`;
   }
 
   function renderFeedPost(item) {
     const author = item.author || {};
     const activity = item.activity || {};
-    const location = item.location?.display_name || "Somewhere out there";
+    const social = item.social || {};
     const when = relativeWhen(
       activity.start_date_local || activity.start_date || item.created_at
     );
-    const distance =
-      activity.distance_km != null
-        ? `${Number(activity.distance_km).toFixed(
-            Number(activity.distance_km) >= 10 ? 1 : 2
-          )} km`
-        : "—";
-    const pace = activity.pace_label ? `${activity.pace_label}/km` : "—";
-    const duration = activity.duration_label || "—";
-    const insightLine = Copy ? Copy.activityInsight(activity) : null;
+    const caption = social.caption || activity.title || activity.original_name || "";
+    const likedClass = social.is_liked ? "is-liked" : "";
+    const likeLabel = social.is_liked ? "Unlike" : "Like";
+    const likeCount = Number(social.like_count || 0);
+    const commentCount = Number(social.comment_count || 0);
+    const aid = activity.id;
 
     return `
-      <article class="feed-post ig-post" data-feed-activity-id="${escapeHtml(activity.id)}">
+      <article class="feed-post ig-post" data-feed-activity-id="${escapeHtml(aid)}">
         <header class="ig-post-head">
           <button type="button" class="feed-author-btn" data-action="open-user" data-athlete-id="${escapeHtml(author.athlete_id || "")}" data-handle="${escapeHtml(author.handle || "")}">
             ${authorAvatarHtml(author)}
             <div class="feed-post-meta">
               <strong>${escapeHtml(displayNameOf(author))}</strong>
-              <span>${escapeHtml(location)}</span>
+              <span>${escapeHtml(item.location?.display_name || "Somewhere out there")}</span>
             </div>
           </button>
-          <button type="button" class="ig-post-menu" aria-label="More">⋯</button>
+          <button type="button" class="ig-post-menu" data-action="post-menu" data-activity-id="${escapeHtml(aid)}" aria-label="More">⋯</button>
         </header>
         <div class="ig-post-media">${renderFeedMedia(item)}</div>
         <div class="ig-post-actions">
-          <button type="button" class="ig-action-btn" aria-label="Like">
+          <button type="button" class="ig-action-btn ${likedClass}" data-action="like-post" data-activity-id="${escapeHtml(aid)}" aria-label="${escapeHtml(likeLabel)}">
             <svg viewBox="0 0 24 24"><path d="M12 21s-7-4.5-7-10a4 4 0 017-2.6A4 4 0 0119 11c0 5.5-7 10-7 10z"/></svg>
           </button>
-          <button type="button" class="ig-action-btn" aria-label="Comment">
+          <button type="button" class="ig-action-btn" data-action="comment-post" data-activity-id="${escapeHtml(aid)}" aria-label="Comment">
             <svg viewBox="0 0 24 24"><path d="M4 6h16v10H8l-4 3V6z"/></svg>
           </button>
-          <button type="button" class="ig-action-btn" aria-label="Share">
+          <button type="button" class="ig-action-btn" data-action="share-post" data-activity-id="${escapeHtml(aid)}" aria-label="Share">
             <svg viewBox="0 0 24 24"><path d="M4 12v7h16v-7M12 3v12M8 7l4-4 4 4"/></svg>
           </button>
         </div>
-        <div class="ig-post-metrics">
-          <span><strong>${escapeHtml(distance)}</strong> distance</span>
-          <span><strong>${escapeHtml(pace)}</strong> pace</span>
-          <span><strong>${escapeHtml(duration)}</strong> time</span>
-          <span><strong>${escapeHtml(activity.type || "Run")}</strong></span>
-        </div>
+        ${
+          likeCount
+            ? `<div class="ig-like-count"><button type="button" data-action="view-likes" data-activity-id="${escapeHtml(aid)}">${escapeHtml(String(likeCount))} like${likeCount === 1 ? "" : "s"}</button></div>`
+            : ""
+        }
         <div class="ig-post-caption">
           <strong>${escapeHtml(displayNameOf(author))}</strong>
-          ${escapeHtml(activity.title || activity.original_name || "Another one in the books.")}
+          ${escapeHtml(caption)}
         </div>
         ${
-          insightLine
-            ? `<div class="ig-post-comments">${escapeHtml(insightLine)}</div>`
-            : `<div class="ig-post-comments">View activity details</div>`
+          commentCount
+            ? `<button type="button" class="ig-post-comments" data-action="comment-post" data-activity-id="${escapeHtml(aid)}">View ${escapeHtml(String(commentCount))} comment${commentCount === 1 ? "" : "s"}</button>`
+            : ""
         }
         <div class="ig-post-meta-line">${escapeHtml(when || "")}</div>
       </article>
@@ -798,7 +794,10 @@
             feed.message.eyebrow || "Your runs. Front row."
           )}</strong><p>${escapeHtml(feed.message.body || "")}</p></div>`
         : "";
-      body = `${banner}<div class="feed-list ig-feed">${feed.items
+      const undo = state.feedUndo.activityId
+        ? `<div class="feed-undo-bar">Post hidden. <button type="button" class="btn btn-ghost btn-sm" data-action="undo-hide" data-activity-id="${escapeHtml(state.feedUndo.activityId)}">Undo</button></div>`
+        : "";
+      body = `${banner}${undo}<div class="feed-list ig-feed">${feed.items
         .map(renderFeedPost)
         .join("")}</div>`;
     }
@@ -2409,6 +2408,9 @@
         : person.is_following
           ? `<button type="button" class="btn btn-ghost btn-follow is-following" data-action="confirm-unfollow" ${idAttr} data-handle="${escapeHtml(handle)}">Following</button>`
           : `<button type="button" class="btn btn-primary btn-follow" data-action="follow-user" ${idAttr} data-handle="${escapeHtml(handle)}">Follow</button>`;
+    const shareCtl = state.people.shareActivityId && athleteId && !person.is_self
+      ? `<button type="button" class="btn btn-primary btn-sm" data-action="send-shared-post" ${idAttr}>Send</button>`
+      : "";
     return `
       <div class="people-row-wrap">
         <button type="button" class="people-row" data-action="open-user" ${idAttr} data-handle="${escapeHtml(handle)}">
@@ -2418,7 +2420,7 @@
             <p class="people-row-meta">${escapeHtml(publicHandleLabel(person))}</p>
           </div>
         </button>
-        ${followCtl}
+        ${shareCtl || followCtl}
       </div>
     `;
   }
@@ -2523,6 +2525,7 @@
   }
 
   function closePeopleModal() {
+    state.people.shareActivityId = null;
     els.peopleModal.classList.remove("is-open");
     setTimeout(() => {
       els.peopleModal.hidden = true;
@@ -2811,6 +2814,162 @@
     });
   }
 
+  function feedItemById(activityId) {
+    const id = String(activityId);
+    return state.feed.items.find((it) => String(it.activity?.id) === id);
+  }
+
+  function patchFeedSocial(activityId, patch) {
+    const item = feedItemById(activityId);
+    if (!item) return;
+    item.social = { ...(item.social || {}), ...patch };
+  }
+
+  function closePostSheet() {
+    state.postSheet.open = false;
+    state.postSheet.kind = null;
+    if (!els.postSheet) return;
+    els.postSheet.hidden = true;
+  }
+
+  function openPostSheet(kind, activityId) {
+    state.postSheet.open = true;
+    state.postSheet.kind = kind;
+    state.postSheet.activityId = activityId;
+    if (!els.postSheet) return;
+    els.postSheet.hidden = false;
+    paintPostSheet();
+  }
+
+  function paintPostSheet() {
+    if (!els.postSheetBody) return;
+    const kind = state.postSheet.kind;
+    const aid = state.postSheet.activityId;
+    const item = feedItemById(aid);
+    const social = item?.social || {};
+    if (kind === "menu") {
+      els.postSheetTitle.textContent = "Post";
+      const own = social.is_own;
+      els.postSheetBody.innerHTML = own
+        ? `<button type="button" class="sheet-menu-item" data-action="edit-caption" data-activity-id="${escapeHtml(aid)}">Edit caption</button>
+           <button type="button" class="sheet-menu-item" data-action="set-visibility" data-visibility="public" data-activity-id="${escapeHtml(aid)}">Privacy: Public</button>
+           <button type="button" class="sheet-menu-item" data-action="set-visibility" data-visibility="followers" data-activity-id="${escapeHtml(aid)}">Privacy: Followers</button>
+           <button type="button" class="sheet-menu-item" data-action="set-visibility" data-visibility="private" data-activity-id="${escapeHtml(aid)}">Privacy: Only me</button>
+           <button type="button" class="sheet-menu-item" data-action="delete-post" data-activity-id="${escapeHtml(aid)}">Delete post</button>`
+        : `<button type="button" class="sheet-menu-item" data-action="hide-post" data-activity-id="${escapeHtml(aid)}">Hide post</button>
+           <button type="button" class="sheet-menu-item" data-action="report-post" data-activity-id="${escapeHtml(aid)}">Report</button>
+           <button type="button" class="sheet-menu-item" data-action="copy-post-link" data-activity-id="${escapeHtml(aid)}">Copy link</button>`;
+      return;
+    }
+    if (kind === "comments") {
+      els.postSheetTitle.textContent = "Comments";
+      const rows = (state.postSheet.comments || [])
+        .map((c) => {
+          const a = c.author || {};
+          const del = c.is_own
+            ? `<button type="button" class="btn btn-ghost btn-sm" data-action="delete-comment" data-activity-id="${escapeHtml(aid)}" data-comment-id="${escapeHtml(c.id)}">Delete</button>`
+            : "";
+          return `<div class="comment-row">
+            <span class="pulse-avatar">${a.avatar_url ? `<img src="${escapeHtml(a.avatar_url)}" alt="">` : escapeHtml(a.initials || "P")}</span>
+            <div><strong>${escapeHtml(a.name || "Runner")}</strong> ${escapeHtml(c.body || "")}${del}</div>
+          </div>`;
+        })
+        .join("");
+      els.postSheetBody.innerHTML = `${rows || `<p class="runs-section-sub">Be the first to comment.</p>`}
+        <div class="comment-composer">
+          <input type="text" id="commentInput" maxlength="500" placeholder="Say something about the run">
+          <button type="button" class="btn btn-primary" data-action="send-comment" data-activity-id="${escapeHtml(aid)}">Send</button>
+        </div>`;
+    }
+  }
+
+  async function likePost(activityId) {
+    const item = feedItemById(activityId);
+    const prev = item?.social || {};
+    patchFeedSocial(activityId, {
+      is_liked: !prev.is_liked,
+      like_count: Math.max(0, (prev.like_count || 0) + (prev.is_liked ? -1 : 1)),
+    });
+    render();
+    try {
+      const res = await apiFetch(`/api/activities/${activityId}/like`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not like.");
+      patchFeedSocial(activityId, data);
+      render();
+    } catch (err) {
+      patchFeedSocial(activityId, prev);
+      render();
+      showToast(err.message || errLine());
+    }
+  }
+
+  async function openComments(activityId) {
+    state.postSheet.comments = [];
+    state.postSheet.status = "loading";
+    openPostSheet("comments", activityId);
+    try {
+      const res = await apiFetch(`/api/activities/${activityId}/comments`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not load comments.");
+      state.postSheet.comments = data.items || [];
+      state.postSheet.status = "ready";
+      paintPostSheet();
+    } catch (err) {
+      showToast(err.message || errLine());
+    }
+  }
+
+  async function sendComment(activityId) {
+    const input = document.getElementById("commentInput");
+    const body = input ? input.value.trim() : "";
+    if (!body) return;
+    try {
+      const res = await apiFetch(`/api/activities/${activityId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not comment.");
+      state.postSheet.comments = [...(state.postSheet.comments || []), data];
+      patchFeedSocial(activityId, {
+        comment_count: (feedItemById(activityId)?.social?.comment_count || 0) + 1,
+      });
+      paintPostSheet();
+      render();
+      openPostSheet("comments", activityId);
+      paintPostSheet();
+    } catch (err) {
+      showToast(err.message || errLine());
+    }
+  }
+
+  async function hidePost(activityId) {
+    const item = feedItemById(activityId);
+    const res = await apiFetch(`/api/activities/${activityId}/hide`, { method: "POST" });
+    if (!res.ok) {
+      showToast("Could not hide.");
+      return;
+    }
+    state.feedUndo = { activityId: String(activityId), item };
+    state.feed.items = state.feed.items.filter(
+      (it) => String(it.activity?.id) !== String(activityId)
+    );
+    closePostSheet();
+    render();
+    showToast("Hidden from your feed.");
+  }
+
+  async function undoHide(activityId) {
+    await apiFetch(`/api/activities/${activityId}/unhide`, { method: "POST" });
+    if (state.feedUndo.item) {
+      state.feed.items = [state.feedUndo.item, ...state.feed.items];
+    }
+    state.feedUndo = { activityId: null, item: null };
+    render();
+  }
+
   function handleAction(action, el) {
     if (Date.now() < followGhostGuardUntil) {
       if (
@@ -2823,6 +2982,131 @@
     }
     if (action === "edit-profile" || action === "open-settings") openSettings();
     if (window.PulseRuns && PulseRuns.handleAction(action, el)) return;
+    if (action === "like-post") likePost(el?.dataset?.activityId);
+    if (action === "comment-post") openComments(el?.dataset?.activityId);
+    if (action === "post-menu") openPostSheet("menu", el?.dataset?.activityId);
+    if (action === "hide-post") hidePost(el?.dataset?.activityId);
+    if (action === "undo-hide") undoHide(el?.dataset?.activityId);
+    if (action === "send-comment") sendComment(el?.dataset?.activityId);
+    if (action === "delete-comment") {
+      const aid = el?.dataset?.activityId;
+      const cid = el?.dataset?.commentId;
+      apiFetch(`/api/activities/${aid}/comments/${cid}`, { method: "DELETE" }).then(() => {
+        state.postSheet.comments = (state.postSheet.comments || []).filter(
+          (c) => String(c.id) !== String(cid)
+        );
+        paintPostSheet();
+      });
+    }
+    if (action === "share-post") {
+      const aid = el?.dataset?.activityId;
+      closePostSheet();
+      const me = state.profile;
+      openPeopleList("following", { athleteId: me?.athlete_id || me?.id, handle: me?.handle });
+      state.people.shareActivityId = aid;
+      if (els.peopleModalTitle) els.peopleModalTitle.textContent = "Send to";
+    }
+    if (action === "send-shared-post") {
+      const aid = state.people.shareActivityId;
+      const peer = el?.dataset?.athleteId;
+      if (aid && peer) {
+        apiFetch(`/api/activities/${aid}/share`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ athlete_ids: [Number(peer)] }),
+        })
+          .then(async (res) => {
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.detail || "Could not send.");
+            showToast("Sent.");
+            closePeopleModal();
+          })
+          .catch((err) => showToast(err.message || errLine()));
+      }
+    }
+    if (action === "view-likes") {
+      const aid = el?.dataset?.activityId;
+      apiFetch(`/api/activities/${aid}/likes`).then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        els.peopleModalTitle.textContent = "Likes";
+        els.peopleModal.hidden = false;
+        els.peopleModal.classList.add("is-open");
+        const items = data.items || [];
+        els.peopleModalBody.innerHTML = items.length
+          ? items
+              .map(
+                (p) => `<button type="button" class="people-row" data-action="open-user" data-athlete-id="${escapeHtml(p.athlete_id)}" data-handle="${escapeHtml(p.handle || "")}">
+                  <span class="pulse-avatar">${p.avatar_url ? `<img src="${escapeHtml(p.avatar_url)}" alt="">` : escapeHtml(p.initials || "P")}</span>
+                  <span>${escapeHtml(p.name || "Runner")}</span>
+                </button>`
+              )
+              .join("")
+          : `<p class="people-empty">No likes yet.</p>`;
+      });
+    }
+    if (action === "set-visibility") {
+      const aid = el?.dataset?.activityId;
+      const vis = el?.dataset?.visibility;
+      apiFetch(`/api/activities/${aid}/visibility`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visibility: vis }),
+      }).then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showToast(data.detail || "Could not update.");
+          return;
+        }
+        patchFeedSocial(aid, data);
+        closePostSheet();
+        showToast(vis === "private" ? "Only you can see this." : vis === "followers" ? "Followers only." : "Public.");
+        render();
+      });
+    }
+    if (action === "edit-caption") {
+      const aid = el?.dataset?.activityId;
+      const current = feedItemById(aid)?.social?.caption || "";
+      const next = window.prompt("Caption", current);
+      if (next == null) return;
+      apiFetch(`/api/activities/${aid}/caption`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ caption: next }),
+      }).then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          patchFeedSocial(aid, data);
+          closePostSheet();
+          render();
+        }
+      });
+    }
+    if (action === "delete-post") {
+      const aid = el?.dataset?.activityId;
+      apiFetch(`/api/activities/${aid}`, { method: "DELETE" }).then((res) => {
+        if (!res.ok) return;
+        state.feed.items = state.feed.items.filter(
+          (it) => String(it.activity?.id) !== String(aid)
+        );
+        closePostSheet();
+        render();
+        showToast("Post deleted.");
+      });
+    }
+    if (action === "report-post") {
+      const aid = el?.dataset?.activityId;
+      apiFetch(`/api/activities/${aid}/report`, { method: "POST" }).then(() => {
+        closePostSheet();
+        showToast("Thanks. We’ll take a look.");
+      });
+    }
+    if (action === "copy-post-link") {
+      const aid = el?.dataset?.activityId;
+      const url = `${location.origin}/dashboard#feed`;
+      navigator.clipboard?.writeText(url);
+      closePostSheet();
+      showToast("Link copied.");
+    }
     if (action === "retry-feed") loadFeed(true);
     if (action === "retry-explore") loadExplore(true);
     if (action === "retry-explore-search") runExploreSearch(state.explore.searchQ || "");
@@ -3091,6 +3375,18 @@
       if (e.target === els.activityModal) closeActivity();
     });
     document.getElementById("closePeopleModal").addEventListener("click", closePeopleModal);
+    const closeSheet = document.getElementById("closePostSheet");
+    if (closeSheet) closeSheet.addEventListener("click", closePostSheet);
+    if (els.postSheet) {
+      els.postSheet.addEventListener("click", (e) => {
+        if (e.target === els.postSheet) closePostSheet();
+        const actionEl = e.target.closest("[data-action]");
+        if (actionEl) {
+          e.preventDefault();
+          handleAction(actionEl.dataset.action, actionEl);
+        }
+      });
+    }
     els.peopleModal.addEventListener("click", (e) => {
       if (e.target === els.peopleModal) closePeopleModal();
       const actionEl = e.target.closest("[data-action]");

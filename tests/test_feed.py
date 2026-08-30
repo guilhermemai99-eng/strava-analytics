@@ -52,9 +52,8 @@ def test_feed_returns_own_activities_only(
     resp = client.get("/api/feed")
     assert resp.status_code == 200
     payload = resp.json()
-    assert payload["scope"] == "self"
+    assert payload["scope"] == "home"
     assert payload["count"] == 1
-    assert payload["message"]["eyebrow"]
     item = payload["items"][0]
     assert item["kind"] == "activity"
     assert item["author"]["athlete_id"] == 920001

@@ -80,7 +80,15 @@ def serialize_feed_author(athlete: Athlete) -> dict:
     }
 
 
-def serialize_feed_item(activity: Activity, athlete: Athlete) -> dict:
+def serialize_feed_item(
+    activity: Activity,
+    athlete: Athlete,
+    *,
+    viewer_id: int | None = None,
+    like_count: int | None = None,
+    comment_count: int | None = None,
+    is_liked: bool | None = None,
+) -> dict:
     distance_m = activity.distance_m
     moving_time_s = activity.moving_time_s
     title = pulse_title_for_activity(
@@ -93,6 +101,17 @@ def serialize_feed_item(activity: Activity, athlete: Athlete) -> dict:
     location = location_display_for(athlete)
     photo = proxied_media_url((activity.photo_url or "").strip() or None)
     polyline = (activity.summary_polyline or "").strip() or None
+    social = None
+    if viewer_id is not None:
+        social = {
+            "visibility": (getattr(activity, "visibility", None) or "public"),
+            "caption": (getattr(activity, "caption", None) or "").strip() or None,
+            "like_count": int(like_count or 0),
+            "comment_count": int(comment_count or 0),
+            "is_liked": bool(is_liked),
+            "is_own": activity.athlete_id == viewer_id,
+            "can_edit": activity.athlete_id == viewer_id,
+        }
 
     return {
         "id": f"activity:{activity.id}",
@@ -127,4 +146,5 @@ def serialize_feed_item(activity: Activity, athlete: Athlete) -> dict:
         "location": {
             "display_name": location,
         },
+        "social": social,
     }

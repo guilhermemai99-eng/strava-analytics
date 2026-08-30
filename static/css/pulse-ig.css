@@ -773,3 +773,146 @@
   color: var(--text);
   font-size: 18px;
 }
+
+.feed-media {
+  position: relative;
+  overflow: hidden;
+  background: #10150f;
+}
+
+.feed-media-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 48px 16px 16px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.12) 70%, transparent 100%);
+  pointer-events: none;
+  color: #fff;
+}
+
+.feed-ov-km {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.feed-ov-meta {
+  margin: 6px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  opacity: 0.92;
+}
+
+.feed-ov-loc {
+  margin: 6px 0 0;
+  font-size: 13px;
+  opacity: 0.78;
+}
+
+.ig-action-btn.is-liked {
+  color: #ff6b7a;
+}
+
+.ig-action-btn.is-liked svg {
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+.ig-like-count {
+  padding: 0 4px 4px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ig-like-count button {
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+}
+
+.feed-undo-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+}
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sheet-backdrop[hidden] {
+  display: none;
+}
+
+.sheet {
+  width: min(560px, 100%);
+  max-height: min(78dvh, 640px);
+  overflow: auto;
+  background: var(--bg-elevated, #121612);
+  border: 1px solid var(--line);
+  border-radius: 20px 20px 0 0;
+  padding: 8px 16px 24px;
+}
+
+.sheet-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--line-strong, #333);
+  margin: 8px auto 4px;
+}
+
+.sheet-menu-item,
+.comment-row {
+  display: flex;
+  width: 100%;
+  text-align: left;
+  gap: 10px;
+  padding: 14px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.comment-composer {
+  display: flex;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.comment-composer input {
+  flex: 1;
+}
+
+.ig-post-media .feed-media.has-photo,
+.ig-post-media .feed-media.is-fallback {
+  aspect-ratio: 4 / 5;
+}
+
+.ig-post-media .feed-media.is-fallback .feed-media-map {
+  position: absolute;
+  inset: 0;
+  opacity: 0.35;
+}
+
+.ig-post-metrics {
+  display: none;
+}
