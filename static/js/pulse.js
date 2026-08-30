@@ -1384,7 +1384,10 @@
     const action =
       item.kind === "message" && item.target_id
         ? "open-notification"
-        : item.kind === "run_join" || item.kind === "club_run"
+        : item.kind === "run_join" ||
+            item.kind === "run_invite" ||
+            item.kind === "run_cancelled" ||
+            item.kind === "club_run"
           ? "open-notification"
           : item.kind === "club_join" ||
               item.kind === "club_invite" ||
@@ -1399,7 +1402,11 @@
       item.kind === "message" && item.target_id
         ? `data-conversation-id="${escapeHtml(item.target_id)}"`
         : "",
-      (item.kind === "run_join" || item.kind === "club_run") && item.target_id
+      (item.kind === "run_join" ||
+        item.kind === "run_invite" ||
+        item.kind === "run_cancelled" ||
+        item.kind === "club_run") &&
+      item.target_id
         ? `data-run-id="${escapeHtml(item.target_id)}"`
         : "",
       (item.kind === "club_join" ||

@@ -121,6 +121,7 @@ from run_helpers import (
     can_view_run,
     create_run,
     get_run,
+    invite_to_run,
     join_run,
     leave_run,
     list_discover_runs,
@@ -2645,6 +2646,7 @@ class RunCreateRequest(BaseModel):
     visibility: str = "everyone"
     route_data: Optional[dict] = None
     club_id: Optional[int] = None
+    invite_athlete_ids: Optional[list[int]] = None
 
 
 class RunUpdateRequest(BaseModel):
@@ -2660,6 +2662,10 @@ class RunUpdateRequest(BaseModel):
     run_type: Optional[str] = None
     max_participants: Optional[int] = None
     visibility: Optional[str] = None
+
+
+class RunInviteRequest(BaseModel):
+    athlete_id: int
 
 
 def _run_http(exc: RunError) -> HTTPException:
@@ -2762,6 +2768,7 @@ def api_create_run(body: RunCreateRequest, request: Request):
             visibility=body.visibility,
             route_data=body.route_data,
             club_id=body.club_id,
+            invite_athlete_ids=body.invite_athlete_ids,
         )
         return serialize_run(
             db, run, viewer_id=viewer_id, include_participants=True
@@ -2852,6 +2859,30 @@ def api_leave_run(run_id: int, request: Request):
         if not run:
             raise HTTPException(status_code=404, detail="Run not found.")
         leave_run(db, run=run, athlete_id=viewer_id)
+        db.refresh(run)
+        return serialize_run(
+            db, run, viewer_id=viewer_id, include_participants=True
+        )
+    except RunError as exc:
+        raise _run_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.post("/api/runs/{run_id}/invite")
+def api_invite_to_run(run_id: int, body: RunInviteRequest, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        run = get_run(db, run_id)
+        if not run:
+            raise HTTPException(status_code=404, detail="Run not found.")
+        invite_to_run(
+            db,
+            run=run,
+            host_id=viewer_id,
+            invitee_id=int(body.athlete_id),
+        )
         db.refresh(run)
         return serialize_run(
             db, run, viewer_id=viewer_id, include_participants=True

@@ -28,8 +28,10 @@ Strava remains the activity data source. The product centre is real runs and peo
 - Follow, mutual follow, new message, likes, comments
 - Follow request + accepted request
 - **Run join** — host notified when someone joins
+- **Run invite** + **run cancelled** for invite-only flows
 - **Club join** — owners/admins notified
 - **Club run** — members notified when a club-hosted run is posted
+- **Club invite** + accepted invite + ownership transfer
 - Activity page + nav badge
 - Caption edit uses in-app sheet (no `window.prompt`)
 
@@ -48,7 +50,7 @@ Strava remains the activity data source. The product centre is real runs and peo
 ### Runs
 - Create / discover / join / leave / My Runs
 - Pace compatibility (Great / Possible / Challenging) — never blocks join
-- **Invite only** — host invites runners; open join blocked; out of Discover
+- **Invite only** — host invites runners (`POST /api/runs/{id}/invite`); open join blocked; out of Discover
 - **Run together** creates invite-only by default and invites the peer
 - **Host cancel** — Cancel run CTA + `run_cancelled` notifications
 

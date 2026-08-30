@@ -86,6 +86,30 @@ def test_host_can_cancel_run(client, make_session, make_athlete):
     assert any(item["id"] == run_id for item in hosting.json()["items"])
 
 
+def test_cancel_notifies_goers(client, make_session, make_athlete):
+    make_athlete(920012, firstname="Host", lastname="Cancel")
+    make_athlete(920013, firstname="Guest", lastname="Cancel")
+    _login(client, make_session, 920012)
+    run_id = client.post(
+        "/api/runs", json=_create_run_payload(title="Dawn Cancel")
+    ).json()["id"]
+
+    _login(client, make_session, 920013)
+    assert client.post(f"/api/runs/{run_id}/join").status_code == 200
+
+    _login(client, make_session, 920012)
+    cancel = client.delete(f"/api/runs/{run_id}")
+    assert cancel.status_code == 200
+
+    _login(client, make_session, 920013)
+    inbox = client.get("/api/notifications").json()
+    kinds = {item["kind"] for item in inbox["items"]}
+    assert "run_cancelled" in kinds
+    row = next(i for i in inbox["items"] if i["kind"] == "run_cancelled")
+    assert row["target_id"] == run_id
+    assert "cancelled" in row["body"].lower()
+
+
 def test_non_host_cannot_cancel(client, make_session, make_athlete):
     make_athlete(920020, firstname="Host", lastname="A")
     make_athlete(920021, firstname="Guest", lastname="B")
@@ -112,3 +136,76 @@ def test_running_profile_endpoint(client, make_session, make_athlete, make_activ
     body = profile.json()
     assert "easy_pace_label" in body
     assert "sample_activities" in body
+
+
+def test_invite_only_blocks_open_join(client, make_session, make_athlete):
+    make_athlete(920040, firstname="Host", lastname="Invite")
+    make_athlete(920041, firstname="Out", lastname="Sider")
+    _login(client, make_session, 920040)
+    run_id = client.post(
+        "/api/runs",
+        json=_create_run_payload(visibility="invite_only", title="Secret Miles"),
+    ).json()["id"]
+
+    discover = client.get("/api/runs?tab=discover")
+    assert all(item["id"] != run_id for item in discover.json()["items"])
+
+    _login(client, make_session, 920041)
+    assert client.get(f"/api/runs/{run_id}").status_code == 404
+    assert client.post(f"/api/runs/{run_id}/join").status_code in (403, 404)
+
+
+def test_host_invite_and_create_with_peer(client, make_session, make_athlete):
+    make_athlete(920050, firstname="Host", lastname="Peer")
+    make_athlete(920051, firstname="Peer", lastname="Runner")
+    make_athlete(920052, firstname="Later", lastname="Invite")
+    _login(client, make_session, 920050)
+
+    created = client.post(
+        "/api/runs",
+        json=_create_run_payload(
+            visibility="invite_only",
+            title="Run with Peer",
+            invite_athlete_ids=[920051],
+        ),
+    )
+    assert created.status_code == 200, created.text
+    run = created.json()
+    assert run["participant_count"] == 2
+    assert any(p["athlete_id"] == 920051 for p in run["participants"])
+    run_id = run["id"]
+
+    _login(client, make_session, 920051)
+    detail = client.get(f"/api/runs/{run_id}")
+    assert detail.status_code == 200
+    assert detail.json()["is_going"] is True
+    inbox = client.get("/api/notifications").json()
+    assert any(
+        n.get("kind") == "run_invite" and n.get("target_id") == run_id
+        for n in inbox["items"]
+    )
+
+    _login(client, make_session, 920050)
+    invited = client.post(
+        f"/api/runs/{run_id}/invite",
+        json={"athlete_id": 920052},
+    )
+    assert invited.status_code == 200, invited.text
+    assert invited.json()["participant_count"] == 3
+
+    _login(client, make_session, 920052)
+    assert client.get(f"/api/runs/{run_id}").json()["is_going"] is True
+
+
+def test_non_host_cannot_invite(client, make_session, make_athlete):
+    make_athlete(920060, firstname="Host", lastname="Gate")
+    make_athlete(920061, firstname="Guest", lastname="Gate")
+    make_athlete(920062, firstname="Target", lastname="Gate")
+    _login(client, make_session, 920060)
+    run_id = client.post("/api/runs", json=_create_run_payload()).json()["id"]
+    _login(client, make_session, 920061)
+    assert client.post(f"/api/runs/{run_id}/join").status_code == 200
+    denied = client.post(
+        f"/api/runs/{run_id}/invite", json={"athlete_id": 920062}
+    )
+    assert denied.status_code == 403

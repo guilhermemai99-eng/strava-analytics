@@ -66,6 +66,14 @@
   background: rgba(184, 242, 90, 0.04);
 }
 
+.run-card.is-cancelled {
+  opacity: 0.72;
+}
+
+.run-card.is-cancelled:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
 .run-card-top {
   display: flex;
   align-items: flex-start;
