@@ -86,6 +86,30 @@ def test_host_can_cancel_run(client, make_session, make_athlete):
     assert any(item["id"] == run_id for item in hosting.json()["items"])
 
 
+def test_cancel_notifies_goers(client, make_session, make_athlete):
+    make_athlete(920012, firstname="Host", lastname="Cancel")
+    make_athlete(920013, firstname="Guest", lastname="Cancel")
+    _login(client, make_session, 920012)
+    run_id = client.post(
+        "/api/runs", json=_create_run_payload(title="Dawn Cancel")
+    ).json()["id"]
+
+    _login(client, make_session, 920013)
+    assert client.post(f"/api/runs/{run_id}/join").status_code == 200
+
+    _login(client, make_session, 920012)
+    cancel = client.delete(f"/api/runs/{run_id}")
+    assert cancel.status_code == 200
+
+    _login(client, make_session, 920013)
+    inbox = client.get("/api/notifications").json()
+    kinds = {item["kind"] for item in inbox["items"]}
+    assert "run_cancelled" in kinds
+    row = next(i for i in inbox["items"] if i["kind"] == "run_cancelled")
+    assert row["target_id"] == run_id
+    assert "cancelled" in row["body"].lower()
+
+
 def test_non_host_cannot_cancel(client, make_session, make_athlete):
     make_athlete(920020, firstname="Host", lastname="A")
     make_athlete(920021, firstname="Guest", lastname="B")

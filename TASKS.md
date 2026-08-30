@@ -50,6 +50,7 @@ Strava remains the activity data source. The product centre is real runs and peo
 - Pace compatibility (Great / Possible / Challenging) — never blocks join
 - **Invite only** — host invites runners (`POST /api/runs/{id}/invite`); open join blocked
 - **Run together** creates invite-only by default and invites the peer
+- **Host cancel** — Cancel run CTA + `run_cancelled` notifications (replaces dead Leave)
 
 ### People matching
 - Match score + **Run together** prefill
@@ -62,9 +63,9 @@ Strava remains the activity data source. The product centre is real runs and peo
 
 | # | Phase | Status |
 |---|--------|--------|
-| 1 | Clubs polish (cover image, invites) | Later |
-| 2 | Production pass (privacy, mobile, dead UI) | Ongoing |
-| 3 | Club owner transfer / delete | Open PR |
+| 1 | Clubs polish (cover image, invites) | Open PR #35 |
+| 2 | Production pass (privacy, mobile, dead UI) | Open PR #34 |
+| 3 | Club owner transfer / delete | Open PR #37 |
 
 ## Do not ship
 
