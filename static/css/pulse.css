@@ -1694,6 +1694,23 @@ body {
   align-items: flex-end;
   padding: 16px;
   background: linear-gradient(145deg, #243328, #101612);
+  overflow: hidden;
+}
+
+.modal-hero.has-photo,
+.modal-hero.has-map {
+  padding: 0;
+  align-items: stretch;
+  height: 220px;
+}
+
+.modal-hero.has-photo img,
+.modal-hero.has-map svg,
+.modal-hero.has-map .feed-route-svg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .modal-metrics {

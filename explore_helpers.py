@@ -67,7 +67,11 @@ def _activity_aggregates(db: Session, athlete_ids: list[int]) -> dict[int, dict]
             func.coalesce(func.sum(Activity.distance_m), 0.0),
             func.max(Activity.start_date_local),
         )
-        .filter(Activity.athlete_id.in_(athlete_ids))
+        .filter(
+            Activity.athlete_id.in_(athlete_ids),
+            Activity.deleted_at.is_(None),
+            or_(Activity.visibility == "public", Activity.visibility.is_(None)),
+        )
         .group_by(Activity.athlete_id)
         .all()
     )

@@ -34,14 +34,45 @@ def resolve_profile_athlete(db: Session, handle: str) -> Athlete | None:
     return athlete
 
 
-def activity_stats_for(db: Session, athlete_id: int) -> dict:
+def activity_stats_for(
+    db: Session,
+    athlete_id: int,
+    *,
+    viewer_id: int | None = None,
+) -> dict:
+    """Aggregate runs the viewer is allowed to see (never deleted rows)."""
+    from follow_helpers import is_following
+    from sqlalchemy import or_
+
+    filters = [
+        Activity.athlete_id == athlete_id,
+        Activity.deleted_at.is_(None),
+    ]
+    if viewer_id is None:
+        # Public aggregates (Explore cards): public runs only.
+        filters.append(
+            or_(Activity.visibility == "public", Activity.visibility.is_(None))
+        )
+    elif viewer_id != athlete_id:
+        if is_following(db, follower_id=viewer_id, following_id=athlete_id):
+            filters.append(
+                or_(
+                    Activity.visibility.in_(("public", "followers")),
+                    Activity.visibility.is_(None),
+                )
+            )
+        else:
+            filters.append(
+                or_(Activity.visibility == "public", Activity.visibility.is_(None))
+            )
+
     row = (
         db.query(
             func.count(Activity.id),
             func.coalesce(func.sum(Activity.distance_m), 0.0),
             func.coalesce(func.sum(Activity.moving_time_s), 0),
         )
-        .filter(Activity.athlete_id == athlete_id)
+        .filter(*filters)
         .one()
     )
     count = int(row[0] or 0)
@@ -105,7 +136,7 @@ def serialize_public_profile(
     if is_self and not target.handle:
         target = ensure_handle(db, target)
 
-    stats = activity_stats_for(db, target.id)
+    stats = activity_stats_for(db, target.id, viewer_id=viewer.id)
     from activity_social_helpers import list_visible_profile_activities
 
     activities = [

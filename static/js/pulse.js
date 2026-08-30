@@ -316,15 +316,19 @@
       return;
     }
 
-    if (page === "feed" || page === "explore") {
-      if (els.mobileHeaderEnd) {
-        els.mobileHeaderEnd.innerHTML = `
-          <button type="button" class="ig-header-bell" data-nav="activity" aria-label="Notifications">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2 2 0 002-2H10a2 2 0 002 2zm6-6V11a6 6 0 00-5-5.91V4a1 1 0 00-2 0v1.09A6 6 0 006 11v5l-2 2v1h16v-1l-2-2z"/></svg>
-            <span class="nav-badge nav-badge--float" id="mobileNotifBadge" hidden>0</span>
-          </button>`;
-        updateNotificationBadges(state.notifications.unread_total);
-      }
+    // Messages + Notifications on every main mobile page (not buried only in More).
+    if (els.mobileHeaderEnd) {
+      els.mobileHeaderEnd.innerHTML = `
+        <button type="button" class="ig-header-bell" data-nav="messages" aria-label="Messages">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v10H8l-4 3V6z"/></svg>
+          <span class="nav-badge nav-badge--float" id="mobileDmBadge" hidden>0</span>
+        </button>
+        <button type="button" class="ig-header-bell" data-nav="activity" aria-label="Notifications">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2 2 0 002-2H10a2 2 0 002 2zm6-6V11a6 6 0 00-5-5.91V4a1 1 0 00-2 0v1.09A6 6 0 006 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+          <span class="nav-badge nav-badge--float" id="mobileNotifBadge" hidden>0</span>
+        </button>`;
+      updateDmBadges(state.inbox?.unread_total ?? 0);
+      updateNotificationBadges(state.notifications.unread_total);
     }
   }
 
@@ -1291,6 +1295,12 @@
     );
     const idAttr = athleteId ? `data-athlete-id="${escapeHtml(athleteId)}"` : "";
     const handleAttr = handle ? `data-handle="${escapeHtml(handle)}"` : "";
+    const locked = !!profile.is_private_locked;
+    const peopleBtns = locked
+      ? `<button type="button" class="ig-stat" disabled><strong>${escapeHtml(followers)}</strong><span>followers</span></button>
+            <button type="button" class="ig-stat" disabled><strong>${escapeHtml(following)}</strong><span>following</span></button>`
+      : `<button type="button" class="ig-stat profile-count" data-action="open-followers" ${idAttr} ${handleAttr}><strong>${escapeHtml(followers)}</strong><span>followers</span></button>
+            <button type="button" class="ig-stat profile-count" data-action="open-following" ${idAttr} ${handleAttr}><strong>${escapeHtml(following)}</strong><span>following</span></button>`;
 
     return `
       <section class="pulse-page pulse-page--wide ig-profile" data-page="${isSelf ? "profile" : "u"}">
@@ -1298,8 +1308,7 @@
           ${renderAvatarHtml(profile, "is-lg")}
           <div class="ig-profile-stats-row">
             <button type="button" class="ig-stat" disabled><strong>${escapeHtml(posts)}</strong><span>posts</span></button>
-            <button type="button" class="ig-stat profile-count" data-action="open-followers" ${idAttr} ${handleAttr}><strong>${escapeHtml(followers)}</strong><span>followers</span></button>
-            <button type="button" class="ig-stat profile-count" data-action="open-following" ${idAttr} ${handleAttr}><strong>${escapeHtml(following)}</strong><span>following</span></button>
+            ${peopleBtns}
           </div>
         </div>
         <div class="ig-profile-meta">
@@ -1604,7 +1613,7 @@
 
   function updateDmBadges(count) {
     const n = Number(count) || 0;
-    ["sidebarDmBadge", "bottomDmBadge"].forEach((id) => {
+    ["sidebarDmBadge", "bottomDmBadge", "mobileDmBadge"].forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
       if (n > 0) {
@@ -1994,6 +2003,18 @@
         handle: null,
         athleteId: null,
         conversationId: conversationId || null,
+      };
+    }
+    if (raw.startsWith("activity/")) {
+      const activityId = decodeURIComponent(raw.slice(9)).trim();
+      return {
+        page: "feed",
+        handle: null,
+        athleteId: null,
+        conversationId: null,
+        runId: null,
+        clubId: null,
+        activityId: activityId || null,
       };
     }
     const page = PAGES.includes(raw) ? raw : "feed";
@@ -2904,12 +2925,7 @@
       });
     });
 
-    els.viewRoot.querySelectorAll("[data-feed-activity-id]").forEach((post) => {
-      post.addEventListener("click", (event) => {
-        if (event.target.closest("a,button,[data-action]")) return;
-        openActivity(post.dataset.feedActivityId);
-      });
-    });
+    // Feed posts already show photo/map + actions — don't open the detail stub.
   }
 
   function feedItemById(activityId) {
@@ -3236,7 +3252,9 @@
     }
     if (action === "copy-post-link") {
       const aid = el?.dataset?.activityId;
-      const url = `${location.origin}/dashboard#feed`;
+      const url = aid
+        ? `${location.origin}/dashboard#activity/${encodeURIComponent(aid)}`
+        : `${location.origin}/dashboard#feed`;
       navigator.clipboard?.writeText(url);
       closePostSheet();
       showToast("Link copied.");
@@ -3352,22 +3370,29 @@
       (a) => String(a.id) === String(activityId)
     );
 
-    if (!activity) {
-      const feedItem = state.feed.items.find(
-        (item) => String(item.activity?.id) === String(activityId)
+    const feedItem = state.feed.items.find(
+      (item) => String(item.activity?.id) === String(activityId)
+    );
+    if (!activity && feedItem) {
+      activity = {
+        id: feedItem.activity.id,
+        name: feedItem.activity.original_name || feedItem.activity.title,
+        sport_type: feedItem.activity.sport_type,
+        distance_m: feedItem.activity.distance_m,
+        moving_time_s: feedItem.activity.moving_time_s,
+        elevation_gain_m: feedItem.activity.elevation_gain_m,
+        start_date_local: feedItem.activity.start_date_local,
+        start_date: feedItem.activity.start_date,
+        photo_url: feedItem.media?.primary_image_url,
+        summary_polyline: feedItem.media?.summary_polyline,
+      };
+    }
+
+    if (!activity && state.viewed?.data?.activities) {
+      const fromViewed = state.viewed.data.activities.find(
+        (a) => String(a.id) === String(activityId)
       );
-      if (feedItem) {
-        activity = {
-          id: feedItem.activity.id,
-          name: feedItem.activity.original_name,
-          sport_type: feedItem.activity.sport_type,
-          distance_m: feedItem.activity.distance_m,
-          moving_time_s: feedItem.activity.moving_time_s,
-          elevation_gain_m: feedItem.activity.elevation_gain_m,
-          start_date_local: feedItem.activity.start_date_local,
-          start_date: feedItem.activity.start_date,
-        };
-      }
+      if (fromViewed) activity = fromViewed;
     }
 
     if (!activity) {
@@ -3377,13 +3402,22 @@
 
     els.activityModalTitle.textContent = activity.name || "Run";
     const bg = tileBackground(activity, 0);
-    els.activityModalBody.innerHTML = `
-      <div class="modal-hero" style="background:${bg}">
+    const photo = proxiedMediaUrl(activity.photo_url || "");
+    const poly = activity.summary_polyline || "";
+    const mapSvg = poly ? polylineToSvg(poly, `modalRoute-${escapeHtml(activity.id)}`) : "";
+    const mediaBlock = photo
+      ? `<div class="modal-hero has-photo"><img src="${escapeHtml(photo)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"></div>`
+      : mapSvg
+        ? `<div class="modal-hero has-map">${mapSvg}</div>`
+        : `<div class="modal-hero" style="background:${bg}">
         <div>
           <div class="tile-label">${escapeHtml((activity.sport_type || "Run").toUpperCase())}</div>
           <div class="tile-distance" style="margin-top:8px">${escapeHtml(formatKm(activity.distance_m))} KM</div>
         </div>
-      </div>
+      </div>`;
+
+    els.activityModalBody.innerHTML = `
+      ${mediaBlock}
       <p class="form-hint">${escapeHtml(formatDate(activity.start_date_local || activity.start_date))}</p>
       <div class="modal-metrics">
         <div class="stat-pill"><span>Pace</span><strong>${escapeHtml(formatPace(activity.distance_m, activity.moving_time_s))}</strong></div>
@@ -3394,9 +3428,6 @@
             : "—"
         )}</strong></div>
       </div>
-      <p class="form-hint" style="margin-top:18px;">
-        Maps, AI notes, and photos land later. For now: the miles you actually ran.
-      </p>
     `;
 
     els.activityModal.hidden = false;
@@ -3539,6 +3570,7 @@
         const actionEl = e.target.closest("[data-action]");
         if (actionEl) {
           e.preventDefault();
+          e.stopPropagation();
           handleAction(actionEl.dataset.action, actionEl);
         }
       });
@@ -3548,6 +3580,7 @@
       const actionEl = e.target.closest("[data-action]");
       if (actionEl) {
         e.preventDefault();
+        e.stopPropagation();
         const action = actionEl.dataset.action;
         if (action === "open-user") {
           closePeopleModal();
@@ -3740,6 +3773,9 @@
       navigate("club", { replace: true, clubId: initial.clubId });
     } else {
       navigate(initial.page, { replace: true });
+      if (initial.activityId) {
+        loadFeed(true).then(() => openActivity(initial.activityId));
+      }
     }
 
     const params = new URLSearchParams(location.search);

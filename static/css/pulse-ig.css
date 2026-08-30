@@ -40,7 +40,7 @@
 .mobile-header-end {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
   min-width: 40px;
 }
 

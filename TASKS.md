@@ -61,7 +61,7 @@ Strava remains the activity data source. The product centre is real runs and peo
 | # | Phase | Status |
 |---|--------|--------|
 | 1 | Clubs polish (cover image, invites) | Later |
-| 2 | Production pass (privacy, mobile, dead UI) | Ongoing |
+| 2 | Production pass (privacy, mobile, dead UI) | In progress — this branch |
 
 ## Do not ship
 
