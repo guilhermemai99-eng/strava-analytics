@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pulse</title>
-  <link rel="stylesheet" href="/static/css/pulse.css?v=deploy-1">
-  <link rel="stylesheet" href="/static/css/pulse-ig.css?v=deploy-1">
-  <link rel="stylesheet" href="/static/css/pulse-runs.css?v=deploy-1">
+  <link rel="stylesheet" href="/static/css/pulse.css?v=deploy-2">
+  <link rel="stylesheet" href="/static/css/pulse-ig.css?v=deploy-2">
+  <link rel="stylesheet" href="/static/css/pulse-runs.css?v=deploy-2">
 </head>
 <body>
   <div class="sync-chip" id="syncChip" aria-live="polite">Syncing Strava…</div>
@@ -96,9 +96,10 @@
       <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
       <span>Create</span>
     </button>
-    <button type="button" data-nav="my-runs" aria-label="My Runs">
-      <svg viewBox="0 0 24 24"><path d="M6 4h12v4H6zM6 10h12v10H6z"/></svg>
-      <span>My Runs</span>
+    <button type="button" data-nav="messages" class="bottom-nav-messages" aria-label="Messages">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16v10H8l-4 3V6z"/></svg>
+      <span>Messages</span>
+      <span class="nav-badge nav-badge--float" id="bottomDmBadge" hidden>0</span>
     </button>
     <button type="button" data-nav="profile" aria-label="Profile">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 19c1.8-3.2 4-4.8 7-4.8s5.2 1.6 7 4.8"/></svg>
@@ -115,6 +116,7 @@
 
     <nav class="more-menu-links">
       <button type="button" class="more-menu-item" data-nav="explore">Find people</button>
+      <button type="button" class="more-menu-item" data-nav="my-runs">My runs</button>
       <button type="button" class="more-menu-item" data-nav="messages">Messages</button>
       <button type="button" class="more-menu-item" data-nav="activity">Notifications</button>
       <button type="button" class="more-menu-item" data-nav="coach">AI Coach</button>
@@ -223,7 +225,7 @@
   </div>
 
   <script src="/static/js/microcopy.js?v=personality-2"></script>
-  <script src="/static/js/pulse-runs.js?v=deploy-1"></script>
-  <script src="/static/js/pulse.js?v=deploy-1" defer></script>
+  <script src="/static/js/pulse-runs.js?v=deploy-2"></script>
+  <script src="/static/js/pulse.js?v=deploy-2" defer></script>
 </body>
 </html>

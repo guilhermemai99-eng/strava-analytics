@@ -1926,6 +1926,10 @@ body {
   position: relative;
 }
 
+.dm-inbox-page--mobile {
+  padding-top: 4px;
+}
+
 .pulse-avatar.is-dm {
   width: 56px;
   height: 56px;

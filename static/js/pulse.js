@@ -316,6 +316,18 @@
       return;
     }
 
+    if (page === "messages" || page === "dm") {
+      if (els.mobileHeaderEnd) {
+        els.mobileHeaderEnd.innerHTML = `
+          <button type="button" class="ig-header-bell" data-nav="activity" aria-label="Notifications">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2 2 0 002-2H10a2 2 0 002 2zm6-6V11a6 6 0 00-5-5.91V4a1 1 0 00-2 0v1.09A6 6 0 006 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+            <span class="nav-badge nav-badge--float" id="mobileNotifBadge" hidden>0</span>
+          </button>`;
+        updateNotificationBadges(state.notifications.unread_total);
+      }
+      return;
+    }
+
     // Messages + Notifications on every main mobile page (not buried only in More).
     if (els.mobileHeaderEnd) {
       els.mobileHeaderEnd.innerHTML = `
@@ -1764,8 +1776,7 @@
     }
 
     return `
-      <section class="pulse-page dm-page dm-inbox-page" data-page="messages">
-        <header class="dm-topbar"><h1 class="dm-title">Messages</h1></header>
+      <section class="pulse-page dm-page dm-inbox-page dm-inbox-page--mobile" data-page="messages">
         ${renderInboxBody()}
       </section>`;
   }
@@ -3401,6 +3412,7 @@
     els.settingsDrawer.setAttribute("aria-hidden", "true");
     setTimeout(() => {
       els.drawerBackdrop.hidden = true;
+      els.settingsDrawer.hidden = true;
     }, 250);
   }
 
@@ -3610,6 +3622,9 @@
     const nav = event.target.closest("[data-nav]");
     if (nav && nav.dataset.nav) {
       event.preventDefault();
+      if (els.settingsDrawer && els.settingsDrawer.classList.contains("is-open")) {
+        closeSettings();
+      }
       navigate(nav.dataset.nav);
       return;
     }
