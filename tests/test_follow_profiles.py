@@ -80,7 +80,13 @@ def test_public_profile_and_privacy(
     assert "start_lat" not in flat
     assert "summary_polyline" not in flat
 
-    assert client.get("/api/profiles/private_runner").status_code == 404
+    locked = client.get("/api/profiles/private_runner")
+    assert locked.status_code == 200
+    locked_body = locked.json()
+    assert locked_body["is_private_locked"] is True
+    assert locked_body["activities"] == []
+    assert locked_body["bio"] is None
+    assert locked_body["is_follow_requested"] is False
     assert client.get("/api/profiles/@public_runner").status_code == 200
 
 

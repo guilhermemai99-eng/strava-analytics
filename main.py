@@ -66,28 +66,34 @@ from media_helpers import fetch_remote_media, is_allowed_media_url
 from explore_helpers import (
     get_public_athlete,
     public_athlete_payload,
-    search_public_athletes,
+    search_athletes,
     suggest_nearby,
     suggest_new_faces,
     suggest_recently_active,
 )
 from follow_helpers import (
     FollowError,
-    create_follow,
+    accept_follow_request,
+    decline_follow_request,
     delete_follow,
     followed_athlete_ids,
     follower_count,
     following_count,
+    follow_or_request,
     get_athlete_by_handle,
     get_athlete_by_id,
-    is_following,
     list_followers,
     list_following,
+    list_incoming_follow_requests,
     relationship_payload,
     suggest_people,
 )
 from account_helpers import AccountDeleteError, delete_athlete_account
-from public_profile_helpers import can_view_profile, serialize_public_profile
+from public_profile_helpers import (
+    can_view_profile,
+    serialize_profile_for_viewer,
+    serialize_public_profile,
+)
 from dm_helpers import (
     DmError,
     get_conversation_for_viewer,
@@ -104,6 +110,8 @@ from notification_helpers import (
     list_notifications,
     mark_all_read,
     notify_follow,
+    notify_follow_accepted,
+    notify_follow_request,
     notify_message,
     unread_count as notification_unread_count,
 )
@@ -952,8 +960,6 @@ def get_athlete_avatar(athlete_id: int, request: Request):
         )
         if target is None:
             raise HTTPException(status_code=404, detail="Athlete not found")
-        if target.id != viewer_id and not bool(target.is_profile_public):
-            raise HTTPException(status_code=404, detail="Athlete not found")
         return _avatar_bytes_response(target)
     finally:
         db.close()
@@ -1160,7 +1166,7 @@ def strava_sync(
 # Also aliased under /api/users/{id} for Instagram-style clients.
 # ============================================================
 
-def _require_visible_profile(db, *, handle: str | None = None, athlete_id: int | None = None, viewer_id: int):
+def _resolve_profile(db, *, handle: str | None = None, athlete_id: int | None = None, viewer_id: int):
     if handle is not None:
         target = get_athlete_by_handle(db, handle)
     else:
@@ -1170,9 +1176,39 @@ def _require_visible_profile(db, *, handle: str | None = None, athlete_id: int |
     viewer = db.query(Athlete).filter(Athlete.id == viewer_id).one_or_none()
     if viewer is None:
         raise HTTPException(status_code=404, detail="Perfil não encontrado.")
-    if not can_view_profile(viewer, target):
+    return target, viewer
+
+
+def _require_visible_profile(db, *, handle: str | None = None, athlete_id: int | None = None, viewer_id: int):
+    target, viewer = _resolve_profile(
+        db, handle=handle, athlete_id=athlete_id, viewer_id=viewer_id
+    )
+    if not can_view_profile(viewer, target, db):
         raise HTTPException(status_code=404, detail="Profile not found")
     return target, viewer
+
+
+def _follow_target(db, *, viewer_id: int, target: Athlete) -> dict:
+    try:
+        result = follow_or_request(
+            db, follower_id=viewer_id, following_id=target.id
+        )
+    except FollowError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if result.get("created_follow"):
+        notify_follow(db, follower_id=viewer_id, following_id=target.id)
+    elif result.get("created_request"):
+        notify_follow_request(
+            db, requester_id=viewer_id, target_id=target.id
+        )
+    viewer = db.query(Athlete).filter(Athlete.id == viewer_id).one()
+    return serialize_profile_for_viewer(db, target=target, viewer=viewer)
+
+
+def _unfollow_target(db, *, viewer_id: int, target: Athlete) -> dict:
+    delete_follow(db, follower_id=viewer_id, following_id=target.id)
+    viewer = db.query(Athlete).filter(Athlete.id == viewer_id).one()
+    return serialize_profile_for_viewer(db, target=target, viewer=viewer)
 
 
 def _people_list_response(kind: str, target: Athlete, payload: dict) -> dict:
@@ -1204,10 +1240,10 @@ def get_public_profile(handle: str, request: Request):
     viewer_id = require_athlete_id(request)
     db = SessionLocal()
     try:
-        target, viewer = _require_visible_profile(
+        target, viewer = _resolve_profile(
             db, handle=handle, viewer_id=viewer_id
         )
-        return serialize_public_profile(db, target=target, viewer=viewer)
+        return serialize_profile_for_viewer(db, target=target, viewer=viewer)
     finally:
         db.close()
 
@@ -1217,7 +1253,7 @@ def get_profile_relationship(handle: str, request: Request):
     viewer_id = require_athlete_id(request)
     db = SessionLocal()
     try:
-        target, _viewer = _require_visible_profile(
+        target, _viewer = _resolve_profile(
             db, handle=handle, viewer_id=viewer_id
         )
         return relationship_payload(
@@ -1287,24 +1323,9 @@ def follow_profile(handle: str, request: Request):
     db = SessionLocal()
     try:
         target = get_athlete_by_handle(db, handle)
-        if target is None or (
-            target.id != viewer_id and not bool(target.is_profile_public)
-        ):
+        if target is None:
             raise HTTPException(status_code=404, detail="Profile not found")
-        try:
-            already = is_following(
-                db, follower_id=viewer_id, following_id=target.id
-            )
-            create_follow(db, follower_id=viewer_id, following_id=target.id)
-            if not already:
-                notify_follow(
-                    db, follower_id=viewer_id, following_id=target.id
-                )
-        except FollowError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-        viewer = db.query(Athlete).filter(Athlete.id == viewer_id).one()
-        return serialize_public_profile(db, target=target, viewer=viewer)
+        return _follow_target(db, viewer_id=viewer_id, target=target)
     finally:
         db.close()
 
@@ -1319,18 +1340,7 @@ def unfollow_profile(handle: str, request: Request):
             raise HTTPException(status_code=404, detail="Profile not found")
         delete_follow(db, follower_id=viewer_id, following_id=target.id)
         viewer = db.query(Athlete).filter(Athlete.id == viewer_id).one()
-        if not can_view_profile(viewer, target):
-            return {
-                "handle": target.handle,
-                "is_following": False,
-                "is_followed_by": False,
-                "is_mutual": False,
-                "follower_count": follower_count(db, target.id),
-                "following_count": following_count(db, target.id),
-                "followers_count": follower_count(db, target.id),
-                "is_self": False,
-            }
-        return serialize_public_profile(db, target=target, viewer=viewer)
+        return serialize_profile_for_viewer(db, target=target, viewer=viewer)
     finally:
         db.close()
 
@@ -1343,10 +1353,10 @@ def get_user_profile(athlete_id: int, request: Request):
     viewer_id = require_athlete_id(request)
     db = SessionLocal()
     try:
-        target, viewer = _require_visible_profile(
+        target, viewer = _resolve_profile(
             db, athlete_id=athlete_id, viewer_id=viewer_id
         )
-        return serialize_public_profile(db, target=target, viewer=viewer)
+        return serialize_profile_for_viewer(db, target=target, viewer=viewer)
     finally:
         db.close()
 
@@ -1356,7 +1366,7 @@ def get_user_relationship(athlete_id: int, request: Request):
     viewer_id = require_athlete_id(request)
     db = SessionLocal()
     try:
-        target, _viewer = _require_visible_profile(
+        target, _viewer = _resolve_profile(
             db, athlete_id=athlete_id, viewer_id=viewer_id
         )
         return relationship_payload(
@@ -1426,23 +1436,9 @@ def follow_user(athlete_id: int, request: Request):
     db = SessionLocal()
     try:
         target = get_athlete_by_id(db, athlete_id)
-        if target is None or (
-            target.id != viewer_id and not bool(target.is_profile_public)
-        ):
+        if target is None:
             raise HTTPException(status_code=404, detail="Profile not found")
-        try:
-            already = is_following(
-                db, follower_id=viewer_id, following_id=target.id
-            )
-            create_follow(db, follower_id=viewer_id, following_id=target.id)
-            if not already:
-                notify_follow(
-                    db, follower_id=viewer_id, following_id=target.id
-                )
-        except FollowError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        viewer = db.query(Athlete).filter(Athlete.id == viewer_id).one()
-        return serialize_public_profile(db, target=target, viewer=viewer)
+        return _follow_target(db, viewer_id=viewer_id, target=target)
     finally:
         db.close()
 
@@ -1455,20 +1451,63 @@ def unfollow_user(athlete_id: int, request: Request):
         target = get_athlete_by_id(db, athlete_id)
         if target is None:
             raise HTTPException(status_code=404, detail="Profile not found")
-        delete_follow(db, follower_id=viewer_id, following_id=target.id)
+        return _unfollow_target(db, viewer_id=viewer_id, target=target)
+    finally:
+        db.close()
+
+
+@app.get("/api/follow-requests")
+def get_follow_requests(request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        items = list_incoming_follow_requests(db, target_id=viewer_id, limit=40)
+        return {"items": items, "count": len(items)}
+    finally:
+        db.close()
+
+
+@app.post("/api/users/{athlete_id}/follow-request/accept")
+def accept_user_follow_request(athlete_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        requester = get_athlete_by_id(db, athlete_id)
+        if requester is None:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        try:
+            accept_follow_request(
+                db, target_id=viewer_id, requester_id=requester.id
+            )
+        except FollowError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        notify_follow_accepted(
+            db, target_id=viewer_id, requester_id=requester.id
+        )
         viewer = db.query(Athlete).filter(Athlete.id == viewer_id).one()
-        if not can_view_profile(viewer, target):
-            return {
-                "athlete_id": target.id,
-                "is_following": False,
-                "is_followed_by": False,
-                "is_mutual": False,
-                "follower_count": follower_count(db, target.id),
-                "followers_count": follower_count(db, target.id),
-                "following_count": following_count(db, target.id),
-                "is_self": False,
-            }
-        return serialize_public_profile(db, target=target, viewer=viewer)
+        return serialize_profile_for_viewer(
+            db, target=requester, viewer=viewer
+        )
+    finally:
+        db.close()
+
+
+@app.post("/api/users/{athlete_id}/follow-request/decline")
+def decline_user_follow_request(athlete_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        requester = get_athlete_by_id(db, athlete_id)
+        if requester is None:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        declined = decline_follow_request(
+            db, target_id=viewer_id, requester_id=requester.id
+        )
+        if not declined:
+            raise HTTPException(
+                status_code=404, detail="No follow request to decline."
+            )
+        return {"ok": True, "declined": True, "athlete_id": requester.id}
     finally:
         db.close()
 
@@ -1509,6 +1548,7 @@ def get_explore(request: Request):
         nearby = suggest_nearby(db, viewer=athlete, limit=8)
         recent = suggest_recently_active(db, viewer_id=athlete_id, limit=8)
         new_faces = suggest_new_faces(db, viewer_id=athlete_id, limit=6)
+        matches = list_people_matches(db, viewer_id=athlete_id, limit=8)
 
         return {
             "me": {
@@ -1518,6 +1558,7 @@ def get_explore(request: Request):
                 "city": athlete.city,
                 "country": athlete.country,
             },
+            "matches": matches,
             "sections": [
                 {
                     "id": "nearby",
@@ -1556,7 +1597,7 @@ def get_explore_search(request: Request, q: str = ""):
     athlete_id = require_athlete_id(request)
     db = SessionLocal()
     try:
-        results = search_public_athletes(
+        results = search_athletes(
             db,
             query=q,
             viewer_id=athlete_id,

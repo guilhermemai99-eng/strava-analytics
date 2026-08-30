@@ -24,7 +24,7 @@
 
   const runsState = {
     nearby: { status: "idle", items: [], error: null },
-    discover: { status: "idle", items: [], error: null, tab: "runs" },
+    discover: { status: "idle", items: [], error: null, tab: "people" },
     people: { status: "idle", items: [], error: null },
     myRuns: { status: "idle", items: [], error: null, tab: "upcoming" },
     detail: { status: "idle", run: null, error: null, runId: null },
@@ -179,8 +179,10 @@
   function renderPeopleCard(person) {
     const match = person.match || {};
     const followBtn = person.is_following
-      ? `<button type="button" class="btn btn-ghost btn-sm" data-action="confirm-unfollow" data-athlete-id="${h(person.athlete_id)}" data-handle="${h(person.handle || "")}">Following</button>`
-      : `<button type="button" class="btn btn-primary btn-sm" data-action="follow-user" data-athlete-id="${h(person.athlete_id)}" data-handle="${h(person.handle || "")}">Follow</button>`;
+      ? `<button type="button" class="btn btn-ghost btn-sm btn-follow is-following" data-action="confirm-unfollow" data-athlete-id="${h(person.athlete_id)}" data-handle="${h(person.handle || "")}">Following</button>`
+      : person.is_follow_requested
+        ? `<button type="button" class="btn btn-ghost btn-sm btn-follow is-requested" data-action="cancel-follow-request" data-athlete-id="${h(person.athlete_id)}" data-handle="${h(person.handle || "")}">Requested</button>`
+        : `<button type="button" class="btn btn-primary btn-sm btn-follow" data-action="follow-user" data-athlete-id="${h(person.athlete_id)}" data-handle="${h(person.handle || "")}">Follow</button>`;
     return `
       <article class="people-match-card">
         <button type="button" class="people-match-main" data-action="open-user" data-athlete-id="${h(person.athlete_id)}" data-handle="${h(person.handle || "")}">
@@ -409,24 +411,19 @@
   }
 
   function renderDiscover() {
-    const tab = runsState.discover.tab || "runs";
+    const tab = runsState.discover.tab || "people";
     const tabs = [
-      { id: "runs", label: "Runs" },
       { id: "people", label: "People" },
+      { id: "runs", label: "Runs" },
       { id: "clubs", label: "Clubs" },
-      { id: "routes", label: "Routes" },
     ];
     let body = "";
     if (tab === "people") {
-      body = renderPeopleMatches();
+      body = hooks.renderPeopleExplore
+        ? hooks.renderPeopleExplore()
+        : renderPeopleMatches();
     } else if (tab === "clubs") {
       body = renderClubsDiscover();
-    } else if (tab === "routes") {
-      body = `
-        <div class="coming-soon is-inline">
-          <h2>Routes</h2>
-          <p>Coming next. Save a loop, share it, show up.</p>
-        </div>`;
     } else {
       const d = runsState.discover;
       if (d.status === "loading") body = `<p class="runs-section-sub">Finding runs near you…</p>`;
@@ -440,7 +437,7 @@
       <section class="pulse-page runs-page" data-page="discover">
         <header class="runs-page-head">
           <h1>Discover</h1>
-          <p class="runs-tagline">Find your people. Find your pace. Run together.</p>
+          <p class="runs-tagline">Who can I run with?</p>
         </header>
         <div class="discover-tabs" role="tablist">
           ${tabs
@@ -1096,7 +1093,8 @@
     if (action === "discover-tab") {
       runsState.discover.tab = el?.dataset?.tab || "runs";
       if (runsState.discover.tab === "people") {
-        loadPeopleMatches(false).then(() => hooks.render());
+        if (hooks.loadExplore) hooks.loadExplore(false);
+        else loadPeopleMatches(false).then(() => hooks.render());
       } else if (runsState.discover.tab === "clubs") {
         loadClubs(false).then(() => hooks.render());
       } else if (runsState.discover.tab === "runs") {
@@ -1227,9 +1225,12 @@
     }
     if (page === "discover") {
       if (runsState.discover.tab === "people") {
-        loadPeopleMatches(false).then(() => {
-          if (hooks.getPage() === "discover") hooks.render();
-        });
+        if (hooks.loadExplore) hooks.loadExplore(false);
+        else {
+          loadPeopleMatches(false).then(() => {
+            if (hooks.getPage() === "discover") hooks.render();
+          });
+        }
       } else if (runsState.discover.tab === "clubs") {
         loadClubs(false).then(() => {
           if (hooks.getPage() === "discover") hooks.render();
@@ -1285,10 +1286,14 @@
     },
     renderHomeRunsStrip,
     renderPage,
+    renderPeopleCard,
     handleAction,
     onPageEnter,
     openRun,
     openClub,
+    setDiscoverTab(tab) {
+      runsState.discover.tab = tab || "people";
+    },
     getRunIdFromHash() {
       const raw = (location.hash || "").slice(1);
       if (raw.startsWith("run/")) return decodeURIComponent(raw.slice(4)).trim();

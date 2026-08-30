@@ -111,6 +111,15 @@ def test_explore_search_public_only(
     ids = [a["athlete_id"] for a in hit.json()["results"]]
     assert ids == [930011]
 
+    exact_private = client.get("/api/explore/search", params={"q": "mile_secret"})
+    assert exact_private.status_code == 200
+    exact_ids = [a["athlete_id"] for a in exact_private.json()["results"]]
+    assert 930012 in exact_ids
+    assert 930011 not in exact_ids
+    private_row = exact_private.json()["results"][0]
+    assert private_row["stats"]["activity_count"] is None
+    assert private_row["location"]["city"] is None
+
 
 def test_public_profile_and_avatar_gate(
     client,
@@ -149,7 +158,9 @@ def test_public_profile_and_avatar_gate(
     assert body["avatar_url"].startswith("/api/athletes/930021/avatar")
 
     assert client.get("/api/athletes/930022/profile").status_code == 404
-    assert client.get("/api/athletes/930022/avatar").status_code == 404
+    closed_avatar = client.get("/api/athletes/930022/avatar")
+    assert closed_avatar.status_code == 200
+    assert closed_avatar.headers["content-type"].startswith("image/jpeg")
 
     avatar = client.get("/api/athletes/930021/avatar")
     assert avatar.status_code == 200

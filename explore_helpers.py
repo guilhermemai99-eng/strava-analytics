@@ -27,8 +27,10 @@ def serialize_explore_athlete(
     activity_count: int | None = None,
     total_distance_km: float | None = None,
     is_following: bool = False,
+    is_follow_requested: bool = False,
 ) -> dict:
     handle = athlete.handle or athlete.username
+    public = bool(athlete.is_profile_public)
     return {
         "athlete_id": athlete.id,
         "id": athlete.id,
@@ -38,19 +40,20 @@ def serialize_explore_athlete(
         "handle": athlete.handle,
         "initials": initials_for(athlete),
         "avatar_url": public_avatar_url_for(athlete),
-        "bio": athlete.bio,
+        "bio": athlete.bio if public else None,
         "location": {
-            "display_name": location_display_for(athlete),
-            "city": athlete.city,
-            "country": athlete.country,
+            "display_name": location_display_for(athlete) if public else None,
+            "city": athlete.city if public else None,
+            "country": athlete.country if public else None,
         },
-        "last_activity_at": _iso_or_none(last_activity_at),
+        "last_activity_at": _iso_or_none(last_activity_at) if public else None,
         "stats": {
-            "activity_count": activity_count,
-            "total_distance_km": total_distance_km,
+            "activity_count": activity_count if public else None,
+            "total_distance_km": total_distance_km if public else None,
         },
-        "is_profile_public": bool(athlete.is_profile_public),
+        "is_profile_public": public,
         "is_following": bool(is_following),
+        "is_follow_requested": bool(is_follow_requested),
     }
 
 
@@ -92,13 +95,18 @@ def _with_stats(
 
     aggregates = _activity_aggregates(db, [a.id for a in athletes])
     follows: set[int] = set()
+    requested: set[int] = set()
     if viewer_id is not None and athletes:
-        from follow_helpers import following_set
+        from follow_helpers import following_set, outgoing_request_set
 
+        ids = [a.id for a in athletes]
         follows = following_set(
             db,
             viewer_id=viewer_id,
-            target_ids=[a.id for a in athletes],
+            target_ids=ids,
+        )
+        requested = outgoing_request_set(
+            db, requester_id=viewer_id, target_ids=ids
         )
     items = []
     for athlete in athletes:
@@ -110,6 +118,7 @@ def _with_stats(
                 activity_count=stats.get("activity_count"),
                 total_distance_km=stats.get("total_distance_km"),
                 is_following=athlete.id in follows,
+                is_follow_requested=athlete.id in requested,
             )
         )
     return items
@@ -147,6 +156,31 @@ def search_public_athletes(
         .all()
     )
     return _with_stats(db, athletes, viewer_id=viewer_id)
+
+
+def search_athletes(
+    db: Session,
+    *,
+    query: str,
+    viewer_id: int,
+    limit: int = 20,
+) -> list[dict]:
+    """Public runners by name/city, plus exact-handle private accounts."""
+    results = search_public_athletes(
+        db, query=query, viewer_id=viewer_id, limit=limit
+    )
+    q = (query or "").strip().lstrip("@").lower()
+    if len(q) < 2:
+        return results
+    if any((a.get("handle") or "").lower() == q for a in results):
+        return results
+    from follow_helpers import get_athlete_by_handle
+
+    exact = get_athlete_by_handle(db, q)
+    if exact is None or exact.id == viewer_id:
+        return results
+    extra = _with_stats(db, [exact], viewer_id=viewer_id)
+    return extra + results
 
 
 def suggest_nearby(

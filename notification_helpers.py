@@ -14,6 +14,8 @@ KIND_MUTUAL = "mutual"
 KIND_MESSAGE = "message"
 KIND_LIKE = "like"
 KIND_COMMENT = "comment"
+KIND_FOLLOW_REQUEST = "follow_request"
+KIND_FOLLOW_ACCEPTED = "follow_accepted"
 
 
 def _serialize_actor(athlete: Athlete | None) -> dict | None:
@@ -94,6 +96,59 @@ def notify_follow(db: Session, *, follower_id: int, following_id: int) -> None:
     db.commit()
 
 
+def notify_follow_request(db: Session, *, requester_id: int, target_id: int) -> None:
+    requester = db.query(Athlete).filter(Athlete.id == requester_id).one_or_none()
+    if requester is None:
+        return
+    name = display_name_for(requester)
+    create_notification(
+        db,
+        recipient_id=target_id,
+        actor_id=requester_id,
+        kind=KIND_FOLLOW_REQUEST,
+        body=f"{name} requested to follow you.",
+        target_type="athlete",
+        target_id=requester_id,
+    )
+    db.commit()
+
+
+def notify_follow_accepted(db: Session, *, target_id: int, requester_id: int) -> None:
+    target = db.query(Athlete).filter(Athlete.id == target_id).one_or_none()
+    if target is None:
+        return
+    name = display_name_for(target)
+    create_notification(
+        db,
+        recipient_id=requester_id,
+        actor_id=target_id,
+        kind=KIND_FOLLOW_ACCEPTED,
+        body=f"{name} accepted your follow request.",
+        target_type="athlete",
+        target_id=target_id,
+    )
+    if is_following(db, follower_id=target_id, following_id=requester_id):
+        create_notification(
+            db,
+            recipient_id=requester_id,
+            actor_id=target_id,
+            kind=KIND_MUTUAL,
+            body="You follow each other now. Say hi in Messages.",
+            target_type="athlete",
+            target_id=target_id,
+        )
+        create_notification(
+            db,
+            recipient_id=target_id,
+            actor_id=requester_id,
+            kind=KIND_MUTUAL,
+            body="You follow each other now. Say hi in Messages.",
+            target_type="athlete",
+            target_id=requester_id,
+        )
+    db.commit()
+
+
 def notify_message(
     db: Session,
     *,
@@ -156,7 +211,7 @@ def list_notifications(
     for row in rows:
         actor = actors.get(row.actor_id) if row.actor_id else None
         rel = None
-        if actor is not None and row.kind == KIND_FOLLOW:
+        if actor is not None and row.kind in (KIND_FOLLOW, KIND_FOLLOW_REQUEST):
             rel = relationship_payload(
                 db, viewer_id=recipient_id, target_id=actor.id
             )
@@ -171,7 +226,15 @@ def list_notifications(
                 "target_type": row.target_type,
                 "target_id": row.target_id,
                 "can_follow_back": bool(
-                    rel and not rel.get("is_following") and not rel.get("is_self")
+                    rel
+                    and row.kind == KIND_FOLLOW
+                    and not rel.get("is_following")
+                    and not rel.get("is_self")
+                ),
+                "can_accept_follow_request": bool(
+                    rel
+                    and row.kind == KIND_FOLLOW_REQUEST
+                    and rel.get("has_incoming_follow_request")
                 ),
             }
         )
