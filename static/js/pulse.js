@@ -133,6 +133,7 @@
       activityId: null,
       comments: [],
       status: "idle",
+      captionDraft: "",
     },
     feedUndo: { activityId: null, item: null },
   };
@@ -1338,7 +1339,7 @@
         <div class="ig-notif-empty">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2 2 0 002-2H10a2 2 0 002 2zm6-6V11a6 6 0 00-5-5.91V4a1 1 0 00-2 0v1.09A6 6 0 006 11v5l-2 2v1h16v-1l-2-2z"/></svg>
           <h2>Nothing yet</h2>
-          <p>When someone follows you or sends a message, you'll see it here.</p>
+          <p>When someone follows you, joins a run, or sends a message, you'll see it here.</p>
         </div>`;
     } else {
       body = `<div class="ig-notif-list">${n.items.map(renderNotificationRow).join("")}</div>`;
@@ -1369,13 +1370,23 @@
     const action =
       item.kind === "message" && item.target_id
         ? "open-notification"
-        : actor.athlete_id
+        : item.kind === "run_join" || item.kind === "club_run"
           ? "open-notification"
-          : "";
+          : item.kind === "club_join"
+            ? "open-notification"
+            : actor.athlete_id
+              ? "open-notification"
+              : "";
     const dataAttrs = [
       action ? `data-action="${action}"` : "",
       item.kind === "message" && item.target_id
         ? `data-conversation-id="${escapeHtml(item.target_id)}"`
+        : "",
+      (item.kind === "run_join" || item.kind === "club_run") && item.target_id
+        ? `data-run-id="${escapeHtml(item.target_id)}"`
+        : "",
+      item.kind === "club_join" && item.target_id
+        ? `data-club-id="${escapeHtml(item.target_id)}"`
         : "",
       actor.athlete_id
         ? `data-athlete-id="${escapeHtml(actor.athlete_id)}" data-handle="${escapeHtml(actor.handle || "")}"`
@@ -2915,6 +2926,7 @@
   function closePostSheet() {
     state.postSheet.open = false;
     state.postSheet.kind = null;
+    state.postSheet.captionDraft = "";
     if (!els.postSheet) return;
     els.postSheet.hidden = true;
   }
@@ -2946,6 +2958,27 @@
         : `<button type="button" class="sheet-menu-item" data-action="hide-post" data-activity-id="${escapeHtml(aid)}">Hide post</button>
            <button type="button" class="sheet-menu-item" data-action="report-post" data-activity-id="${escapeHtml(aid)}">Report</button>
            <button type="button" class="sheet-menu-item" data-action="copy-post-link" data-activity-id="${escapeHtml(aid)}">Copy link</button>`;
+      return;
+    }
+    if (kind === "caption") {
+      const current = state.postSheet.captionDraft || "";
+      els.postSheetTitle.textContent = "Edit caption";
+      els.postSheetBody.innerHTML = `
+        <label class="sheet-caption-field">
+          <span class="sr-only">Caption</span>
+          <textarea id="captionInput" maxlength="500" rows="5" placeholder="Add a caption…">${escapeHtml(current)}</textarea>
+        </label>
+        <p class="form-hint sheet-caption-hint">Keep it short. The miles do the talking.</p>
+        <div class="sheet-caption-actions">
+          <button type="button" class="btn btn-ghost" data-action="cancel-caption">Cancel</button>
+          <button type="button" class="btn btn-primary" data-action="save-caption" data-activity-id="${escapeHtml(aid)}">Save</button>
+        </div>`;
+      const input = document.getElementById("captionInput");
+      if (input) {
+        input.focus();
+        const len = input.value.length;
+        input.setSelectionRange(len, len);
+      }
       return;
     }
     if (kind === "comments") {
@@ -3154,19 +3187,32 @@
     if (action === "edit-caption") {
       const aid = el?.dataset?.activityId;
       const current = feedItemById(aid)?.social?.caption || "";
-      const next = window.prompt("Caption", current);
-      if (next == null) return;
+      state.postSheet.captionDraft = current;
+      openPostSheet("caption", aid);
+    }
+    if (action === "cancel-caption") {
+      closePostSheet();
+    }
+    if (action === "save-caption") {
+      const aid = el?.dataset?.activityId;
+      const input = document.getElementById("captionInput");
+      const next = input ? input.value : "";
       apiFetch(`/api/activities/${aid}/caption`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ caption: next }),
       }).then(async (res) => {
         const data = await res.json().catch(() => ({}));
-        if (res.ok) {
-          patchFeedSocial(aid, data);
-          closePostSheet();
-          render();
+        if (!res.ok) {
+          showToast(
+            typeof data.detail === "string" ? data.detail : "Could not save caption."
+          );
+          return;
         }
+        patchFeedSocial(aid, data);
+        closePostSheet();
+        render();
+        showToast("Caption saved.");
       });
     }
     if (action === "delete-post") {
@@ -3202,8 +3248,18 @@
     if (action === "retry-notifications") loadNotifications(true, false);
     if (action === "open-notification") {
       const cid = el?.dataset?.conversationId;
+      const runId = el?.dataset?.runId;
+      const clubId = el?.dataset?.clubId;
       if (cid) {
         navigateDm(cid);
+        return;
+      }
+      if (runId && window.PulseRuns) {
+        PulseRuns.openRun(runId);
+        return;
+      }
+      if (clubId && window.PulseRuns) {
+        PulseRuns.openClub(clubId);
         return;
       }
       openUserFromEl(el);

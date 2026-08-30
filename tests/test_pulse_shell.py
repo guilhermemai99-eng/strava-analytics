@@ -14,7 +14,7 @@ def test_dashboard_serves_pulse_shell(client, make_session, make_athlete):
     assert "/static/js/pulse.js" in body
     assert "/static/js/pulse-runs.js" in body
     assert "/static/css/pulse-runs.css" in body
-    assert "v=people-1" in body
+    assert "v=notifs-1" in body
     assert 'data-nav="feed"' in body
     assert 'data-nav="discover"' in body
     assert 'data-nav="my-runs"' in body
@@ -46,3 +46,12 @@ def test_dashboard_requires_auth(client):
     response = client.get("/dashboard", follow_redirects=False)
     assert response.status_code == 302
     assert response.headers.get("location") == "/"
+
+
+def test_caption_uses_sheet_not_prompt():
+    from pathlib import Path
+
+    js = (Path(__file__).resolve().parents[1] / "static/js/pulse.js").read_text()
+    assert "window.prompt" not in js
+    assert 'kind === "caption"' in js
+    assert 'data-action="save-caption"' in js
