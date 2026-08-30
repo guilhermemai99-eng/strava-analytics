@@ -1684,6 +1684,41 @@ class ActivityShareBody(BaseModel):
     athlete_ids: list[int]
 
 
+@app.get("/api/activities/{activity_id}")
+def api_get_activity(activity_id: int, request: Request):
+    """Single post for deep links (#activity/{id})."""
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        try:
+            activity = require_viewable_activity(
+                db, activity_id, viewer_id=viewer_id
+            )
+        except SocialError as exc:
+            raise _social_http(exc) from exc
+        author = (
+            db.query(Athlete)
+            .filter(Athlete.id == activity.athlete_id)
+            .one_or_none()
+        )
+        if author is None:
+            raise HTTPException(status_code=404, detail="Post not found.")
+        like_counts, comment_counts, _ = _counts_for(db, [activity.id])
+        liked = liked_ids_for_viewer(
+            db, viewer_id=viewer_id, activity_ids=[activity.id]
+        )
+        return serialize_feed_item(
+            activity,
+            author,
+            viewer_id=viewer_id,
+            like_count=like_counts.get(activity.id, 0),
+            comment_count=comment_counts.get(activity.id, 0),
+            is_liked=activity.id in liked,
+        )
+    finally:
+        db.close()
+
+
 @app.post("/api/activities/{activity_id}/like")
 def api_toggle_like(activity_id: int, request: Request):
     viewer_id = require_athlete_id(request)
@@ -1941,7 +1976,8 @@ def get_activities(
             .filter(
                 Activity.athlete_id
                 ==
-                athlete_id
+                athlete_id,
+                Activity.deleted_at.is_(None),
             )
 
             .order_by(

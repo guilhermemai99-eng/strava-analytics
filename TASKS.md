@@ -56,12 +56,20 @@ Strava remains the activity data source. The product centre is real runs and peo
 - Create, join, leave, discover, members, club runs
 - Host a run as a club (owner/admin)
 
+### Production pass
+- Dead activity stub removed; photo/map in activity detail
+- `#activity/{id}` deep links resolve via API
+- Soft-deleted runs stay out of `/activities` + analytics summary
+- Profile/Explore stats hide private + deleted from strangers
+- Locked profiles can’t open follower lists
+- Mobile Messages + Notifications on every main header page
+
 ## Next
 
 | # | Phase | Status |
 |---|--------|--------|
-| 1 | Clubs polish (cover image, invites) | Later |
-| 2 | Production pass (privacy, mobile, dead UI) | In progress — this branch |
+| 1 | Clubs polish (cover image, invites) | Ready (#35) |
+| 2 | Broader polish / production hardening | Later |
 
 ## Do not ship
 

@@ -10,6 +10,7 @@ PROTECTED = [
     ("GET", "/api/explore/search"),
     ("GET", "/api/athletes/1/profile"),
     ("GET", "/api/athletes/1/avatar"),
+    ("GET", "/api/activities/1"),
     ("GET", "/api/profiles/suggestions"),
     ("GET", "/api/profiles/demo"),
     ("GET", "/api/profiles/demo/relationship"),

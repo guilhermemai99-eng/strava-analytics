@@ -75,3 +75,68 @@ def test_explore_stats_count_public_only(
     match = next((r for r in rows if r.get("handle") == "shown_runner"), None)
     assert match is not None
     assert match["stats"]["activity_count"] == 1
+
+
+def test_followers_only_hidden_from_strangers(
+    client,
+    make_session,
+    make_athlete,
+    make_activity,
+    db_session,
+):
+    make_athlete(960020, firstname="Stranger", handle="stranger_x")
+    make_athlete(
+        960021,
+        firstname="Author",
+        handle="followers_only",
+        is_profile_public=True,
+    )
+    make_activity(960021, strava_id=96002101, name="Public")
+    followers = make_activity(960021, strava_id=96002102, name="Crew Only")
+    followers.visibility = "followers"
+    db_session.commit()
+
+    raw, cookie = make_session(960020)
+    client.cookies.set(cookie, raw)
+    body = client.get("/api/profiles/followers_only").json()
+    assert body["stats"]["activity_count"] == 1
+    assert body["posts_count"] == 1
+
+
+def test_own_activities_endpoint_skips_deleted(
+    client,
+    make_session,
+    make_athlete,
+    make_activity,
+    db_session,
+):
+    make_athlete(960030, firstname="Owner")
+    keep = make_activity(960030, strava_id=96003001, name="Keep")
+    gone = make_activity(960030, strava_id=96003002, name="Gone")
+    gone.deleted_at = datetime.now(timezone.utc)
+    db_session.commit()
+
+    raw, cookie = make_session(960030)
+    client.cookies.set(cookie, raw)
+    rows = client.get("/activities").json()
+    ids = {row["id"] for row in rows}
+    assert keep.id in ids
+    assert gone.id not in ids
+
+
+def test_activity_deep_link_api(
+    client,
+    make_session,
+    make_athlete,
+    make_activity,
+):
+    make_athlete(960040, firstname="Deep", is_profile_public=True)
+    make_athlete(960041, firstname="Viewer")
+    activity = make_activity(960040, strava_id=96004001, name="Deep Easy")
+    raw, cookie = make_session(960041)
+    client.cookies.set(cookie, raw)
+    res = client.get(f"/api/activities/{activity.id}")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["activity"]["id"] == activity.id
+    assert client.get("/api/activities/99999999").status_code == 404

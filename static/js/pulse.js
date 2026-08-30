@@ -3366,35 +3366,46 @@
   }
 
   function openActivity(activityId) {
+    openActivityById(activityId);
+  }
+
+  function activityFromFeedItem(feedItem) {
+    if (!feedItem?.activity) return null;
+    return {
+      id: feedItem.activity.id,
+      name: feedItem.activity.original_name || feedItem.activity.title,
+      sport_type: feedItem.activity.sport_type,
+      distance_m: feedItem.activity.distance_m,
+      moving_time_s: feedItem.activity.moving_time_s,
+      elevation_gain_m: feedItem.activity.elevation_gain_m,
+      start_date_local: feedItem.activity.start_date_local,
+      start_date: feedItem.activity.start_date,
+      photo_url: feedItem.media?.primary_image_url,
+      summary_polyline: feedItem.media?.summary_polyline,
+    };
+  }
+
+  function resolveActivityLocally(activityId) {
     let activity = state.activities.find(
       (a) => String(a.id) === String(activityId)
     );
+    if (activity) return activity;
 
     const feedItem = state.feed.items.find(
       (item) => String(item.activity?.id) === String(activityId)
     );
-    if (!activity && feedItem) {
-      activity = {
-        id: feedItem.activity.id,
-        name: feedItem.activity.original_name || feedItem.activity.title,
-        sport_type: feedItem.activity.sport_type,
-        distance_m: feedItem.activity.distance_m,
-        moving_time_s: feedItem.activity.moving_time_s,
-        elevation_gain_m: feedItem.activity.elevation_gain_m,
-        start_date_local: feedItem.activity.start_date_local,
-        start_date: feedItem.activity.start_date,
-        photo_url: feedItem.media?.primary_image_url,
-        summary_polyline: feedItem.media?.summary_polyline,
-      };
-    }
+    if (feedItem) return activityFromFeedItem(feedItem);
 
-    if (!activity && state.viewed?.data?.activities) {
+    if (state.viewed?.data?.activities) {
       const fromViewed = state.viewed.data.activities.find(
         (a) => String(a.id) === String(activityId)
       );
-      if (fromViewed) activity = fromViewed;
+      if (fromViewed) return fromViewed;
     }
+    return null;
+  }
 
+  function showActivityModal(activity) {
     if (!activity) {
       showToast("That run went missing.");
       return;
@@ -3433,6 +3444,31 @@
     els.activityModal.hidden = false;
     void els.activityModal.offsetWidth;
     els.activityModal.classList.add("is-open");
+  }
+
+  async function openActivityById(activityId) {
+    if (!activityId) return;
+    let activity = resolveActivityLocally(activityId);
+    if (!activity) {
+      try {
+        const res = await apiFetch(`/api/activities/${encodeURIComponent(activityId)}`);
+        if (res.ok) {
+          const item = await res.json();
+          activity = activityFromFeedItem(item);
+          if (
+            activity &&
+            !state.feed.items.some(
+              (it) => String(it.activity?.id) === String(activityId)
+            )
+          ) {
+            state.feed.items = [item, ...state.feed.items];
+          }
+        }
+      } catch (_err) {
+        /* fall through */
+      }
+    }
+    showActivityModal(activity);
   }
 
   function closeActivity() {
@@ -3737,6 +3773,14 @@
         navigate("run", { replace: true, runId: loc.runId });
       } else if (loc.page === "club" && loc.clubId) {
         navigate("club", { replace: true, clubId: loc.clubId });
+      } else if (loc.activityId) {
+        navigate("feed", { replace: true });
+        history.replaceState(
+          { page: "feed", activityId: loc.activityId },
+          "",
+          `#activity/${encodeURIComponent(loc.activityId)}`
+        );
+        openActivityById(loc.activityId);
       } else {
         navigate(loc.page, { replace: true });
       }
@@ -3771,11 +3815,16 @@
       navigate("run", { replace: true, runId: initial.runId });
     } else if (initial.page === "club" && initial.clubId) {
       navigate("club", { replace: true, clubId: initial.clubId });
+    } else if (initial.activityId) {
+      navigate("feed", { replace: true });
+      history.replaceState(
+        { page: "feed", activityId: initial.activityId },
+        "",
+        `#activity/${encodeURIComponent(initial.activityId)}`
+      );
+      openActivityById(initial.activityId);
     } else {
       navigate(initial.page, { replace: true });
-      if (initial.activityId) {
-        loadFeed(true).then(() => openActivity(initial.activityId));
-      }
     }
 
     const params = new URLSearchParams(location.search);

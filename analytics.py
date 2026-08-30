@@ -35,7 +35,7 @@ def _query_activities(db, athlete_id=None):
         mantém compatibilidade com o sistema antigo.
     """
 
-    query = db.query(Activity)
+    query = db.query(Activity).filter(Activity.deleted_at.is_(None))
 
     if athlete_id is not None:
         query = query.filter(
