@@ -16,6 +16,9 @@ KIND_LIKE = "like"
 KIND_COMMENT = "comment"
 KIND_FOLLOW_REQUEST = "follow_request"
 KIND_FOLLOW_ACCEPTED = "follow_accepted"
+KIND_RUN_JOIN = "run_join"
+KIND_CLUB_JOIN = "club_join"
+KIND_CLUB_RUN = "club_run"
 
 
 def _serialize_actor(athlete: Athlete | None) -> dict | None:
@@ -113,6 +116,29 @@ def notify_follow_request(db: Session, *, requester_id: int, target_id: int) -> 
     db.commit()
 
 
+def notify_run_join(db: Session, *, run_id: int, joiner_id: int, host_id: int, run_title: str) -> None:
+    """Tell the host someone joined their run."""
+    if host_id == joiner_id:
+        return
+    joiner = db.query(Athlete).filter(Athlete.id == joiner_id).one_or_none()
+    if joiner is None:
+        return
+    name = display_name_for(joiner)
+    title = (run_title or "your run").strip() or "your run"
+    if len(title) > 60:
+        title = title[:57] + "…"
+    create_notification(
+        db,
+        recipient_id=host_id,
+        actor_id=joiner_id,
+        kind=KIND_RUN_JOIN,
+        body=f"{name} joined {title}.",
+        target_type="run",
+        target_id=run_id,
+    )
+    db.commit()
+
+
 def notify_follow_accepted(db: Session, *, target_id: int, requester_id: int) -> None:
     target = db.query(Athlete).filter(Athlete.id == target_id).one_or_none()
     if target is None:
@@ -147,6 +173,74 @@ def notify_follow_accepted(db: Session, *, target_id: int, requester_id: int) ->
             target_id=requester_id,
         )
     db.commit()
+
+
+def notify_club_join(
+    db: Session, *, club_id: int, joiner_id: int, club_name: str, admin_ids: list[int]
+) -> None:
+    """Tell club owners/admins someone joined."""
+    joiner = db.query(Athlete).filter(Athlete.id == joiner_id).one_or_none()
+    if joiner is None:
+        return
+    name = display_name_for(joiner)
+    label = (club_name or "your club").strip() or "your club"
+    if len(label) > 60:
+        label = label[:57] + "…"
+    wrote = False
+    for admin_id in admin_ids:
+        if admin_id == joiner_id:
+            continue
+        create_notification(
+            db,
+            recipient_id=admin_id,
+            actor_id=joiner_id,
+            kind=KIND_CLUB_JOIN,
+            body=f"{name} joined {label}.",
+            target_type="club",
+            target_id=club_id,
+        )
+        wrote = True
+    if wrote:
+        db.commit()
+
+
+def notify_club_run(
+    db: Session,
+    *,
+    club_id: int,
+    run_id: int,
+    creator_id: int,
+    club_name: str,
+    run_title: str,
+    member_ids: list[int],
+) -> None:
+    """Tell club members a new club run was posted."""
+    creator = db.query(Athlete).filter(Athlete.id == creator_id).one_or_none()
+    if creator is None:
+        return
+    name = display_name_for(creator)
+    club_label = (club_name or "your club").strip() or "your club"
+    title = (run_title or "a run").strip() or "a run"
+    if len(title) > 40:
+        title = title[:37] + "…"
+    if len(club_label) > 40:
+        club_label = club_label[:37] + "…"
+    wrote = False
+    for member_id in member_ids:
+        if member_id == creator_id:
+            continue
+        create_notification(
+            db,
+            recipient_id=member_id,
+            actor_id=creator_id,
+            kind=KIND_CLUB_RUN,
+            body=f"{name} posted {title} in {club_label}.",
+            target_type="run",
+            target_id=run_id,
+        )
+        wrote = True
+    if wrote:
+        db.commit()
 
 
 def notify_message(

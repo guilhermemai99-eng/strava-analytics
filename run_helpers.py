@@ -301,6 +301,22 @@ def create_run(
     db.add(host_part)
     db.commit()
     db.refresh(run)
+
+    if resolved_club_id:
+        from club_helpers import get_club, list_member_ids
+        from notification_helpers import notify_club_run
+
+        club = get_club(db, resolved_club_id)
+        if club is not None:
+            notify_club_run(
+                db,
+                club_id=club.id,
+                run_id=run.id,
+                creator_id=creator_id,
+                club_name=club.name or "your club",
+                run_title=run.title or "a run",
+                member_ids=list_member_ids(db, club_id=club.id),
+            )
     return run
 
 
@@ -389,6 +405,7 @@ def join_run(db: Session, *, run: Run, athlete_id: int) -> RunParticipant:
         )
         .one_or_none()
     )
+    newly_joined = False
     if existing:
         if existing.status == "going":
             return existing
@@ -396,16 +413,29 @@ def join_run(db: Session, *, run: Run, athlete_id: int) -> RunParticipant:
         existing.joined_at = _utcnow()
         db.commit()
         db.refresh(existing)
-        return existing
+        newly_joined = True
+        part = existing
+    else:
+        part = RunParticipant(run_id=run.id, athlete_id=athlete_id, status="going")
+        db.add(part)
+        try:
+            db.commit()
+        except IntegrityError as exc:
+            db.rollback()
+            raise RunError("Already joined this run.") from exc
+        db.refresh(part)
+        newly_joined = True
 
-    part = RunParticipant(run_id=run.id, athlete_id=athlete_id, status="going")
-    db.add(part)
-    try:
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        raise RunError("Already joined this run.") from exc
-    db.refresh(part)
+    if newly_joined and run.creator_id != athlete_id:
+        from notification_helpers import notify_run_join
+
+        notify_run_join(
+            db,
+            run_id=run.id,
+            joiner_id=athlete_id,
+            host_id=run.creator_id,
+            run_title=run.title or "your run",
+        )
     return part
 
 

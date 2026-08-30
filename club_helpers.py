@@ -162,7 +162,38 @@ def join_club(db: Session, *, club: RunClub, athlete_id: int) -> ClubMember:
         db.rollback()
         raise ClubError("Already a member.") from exc
     db.refresh(member)
+
+    from notification_helpers import notify_club_join
+
+    notify_club_join(
+        db,
+        club_id=club.id,
+        joiner_id=athlete_id,
+        club_name=club.name or "your club",
+        admin_ids=list_admin_ids(db, club_id=club.id),
+    )
     return member
+
+
+def list_admin_ids(db: Session, *, club_id: int) -> list[int]:
+    rows = (
+        db.query(ClubMember.athlete_id)
+        .filter(
+            ClubMember.club_id == club_id,
+            ClubMember.role.in_(("owner", "admin")),
+        )
+        .all()
+    )
+    return [int(r[0]) for r in rows]
+
+
+def list_member_ids(db: Session, *, club_id: int) -> list[int]:
+    rows = (
+        db.query(ClubMember.athlete_id)
+        .filter(ClubMember.club_id == club_id)
+        .all()
+    )
+    return [int(r[0]) for r in rows]
 
 
 def leave_club(db: Session, *, club: RunClub, athlete_id: int) -> None:

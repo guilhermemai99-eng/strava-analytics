@@ -27,7 +27,11 @@ Strava remains the activity data source. The product centre is real runs and peo
 ### Notifications
 - Follow, mutual follow, new message, likes, comments
 - Follow request + accepted request
+- **Run join** — host notified when someone joins
+- **Club join** — owners/admins notified
+- **Club run** — members notified when a club-hosted run is posted
 - Activity page + nav badge
+- Caption edit uses in-app sheet (no `window.prompt`)
 
 ### Feed
 - Home feed: **your runs + people you follow**
@@ -57,13 +61,11 @@ Strava remains the activity data source. The product centre is real runs and peo
 | # | Phase | Status |
 |---|--------|--------|
 | 1 | Clubs polish (cover image, invites) | Later |
-| 2 | Notifications for run join / club events | Later |
-| 3 | Caption edit UX (replace `window.prompt`) | Later |
-| 4 | Production pass (privacy, mobile, dead UI) | Ongoing |
+| 2 | Production pass (privacy, mobile, dead UI) | Ongoing |
 
 ## Do not ship
 
-- Dead buttons (feed like/comment/share/menu)
+- Dead buttons
 - Explore as a dump of runs
 - Exact GPS on people cards
 - Follow-anyone DMs
