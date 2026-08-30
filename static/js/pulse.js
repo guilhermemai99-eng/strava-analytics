@@ -1506,6 +1506,9 @@
     const messageBtn = p.is_mutual
       ? `<button type="button" class="btn btn-primary btn-message" data-action="open-dm" ${idAttr} data-handle="${escapeHtml(p.handle || "")}">Message</button>`
       : `<span class="form-hint dm-mutual-hint">Follow each other to message.</span>`;
+    const runTogetherBtn = athleteId
+      ? `<button type="button" class="btn btn-primary" data-action="run-together" ${idAttr}>Run together</button>`
+      : "";
     const activities = Array.isArray(p.activities)
       ? p.activities.map((a) => ({
           id: a.id,
@@ -1525,7 +1528,7 @@
       summary: p.stats,
       isSelf: false,
       activeTab: state.viewedProfileTab,
-      actionsHtml: `${followBtn}${messageBtn}`,
+      actionsHtml: `${followBtn}${runTogetherBtn}${messageBtn}`,
       athleteId,
       handle: p.handle,
     });

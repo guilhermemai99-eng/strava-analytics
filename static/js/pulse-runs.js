@@ -25,6 +25,7 @@
   const runsState = {
     nearby: { status: "idle", items: [], error: null },
     discover: { status: "idle", items: [], error: null, tab: "runs" },
+    people: { status: "idle", items: [], error: null },
     myRuns: { status: "idle", items: [], error: null, tab: "upcoming" },
     detail: { status: "idle", run: null, error: null, runId: null },
     create: {
@@ -40,6 +41,7 @@
       description: "",
       max_participants: null,
       submitting: false,
+      peer: null,
     },
   };
 
@@ -128,6 +130,59 @@
       </section>`;
   }
 
+  function matchLevelClass(level) {
+    if (level === "great_match") return "is-great";
+    if (level === "good_match") return "is-maybe";
+    if (level === "possible_match") return "is-hard";
+    return "is-unknown";
+  }
+
+  function renderPeopleCard(person) {
+    const match = person.match || {};
+    const followBtn = person.is_following
+      ? `<button type="button" class="btn btn-ghost btn-sm" data-action="confirm-unfollow" data-athlete-id="${h(person.athlete_id)}" data-handle="${h(person.handle || "")}">Following</button>`
+      : `<button type="button" class="btn btn-primary btn-sm" data-action="follow-user" data-athlete-id="${h(person.athlete_id)}" data-handle="${h(person.handle || "")}">Follow</button>`;
+    return `
+      <article class="people-match-card">
+        <button type="button" class="people-match-main" data-action="open-user" data-athlete-id="${h(person.athlete_id)}" data-handle="${h(person.handle || "")}">
+          <span class="pulse-avatar is-md">${person.avatar_url ? `<img src="${h(person.avatar_url)}" alt="">` : h(person.initials || "P")}</span>
+          <div class="people-match-meta">
+            <strong>${h(person.name)}</strong>
+            <span class="people-match-handle">${person.handle ? `@${h(person.handle)}` : ""}</span>
+            <span class="people-match-score ${matchLevelClass(match.level)}">${h(match.emoji || "")} ${h(String(match.score ?? "—"))}% · ${h(match.label || "")}</span>
+          </div>
+        </button>
+        <div class="people-match-stats">
+          ${person.easy_pace_range ? `<span>Easy ${h(person.easy_pace_range)}</span>` : ""}
+          ${person.typical_distance ? `<span>Usually ${h(person.typical_distance)}</span>` : ""}
+          ${person.location_label ? `<span>📍 ${h(person.location_label)}</span>` : ""}
+        </div>
+        <div class="people-match-actions">
+          ${followBtn}
+          <button type="button" class="btn btn-primary btn-sm" data-action="run-together" data-athlete-id="${h(person.athlete_id)}">Run together</button>
+        </div>
+      </article>`;
+  }
+
+  function renderPeopleMatches() {
+    const p = runsState.people;
+    if (p.status === "loading" || p.status === "idle") {
+      return `<p class="runs-section-sub">Finding compatible runners…</p>`;
+    }
+    if (p.status === "error") {
+      return `<p class="runs-section-sub">${h(p.error)} <button type="button" class="btn btn-ghost btn-sm" data-action="retry-people-matches">Retry</button></p>`;
+    }
+    if (!p.items.length) {
+      return `
+        <div class="coming-soon is-inline">
+          <h2>No matches yet</h2>
+          <p>Make your profile public and sync Strava so we can find runners near your pace. Location stays approximate — never exact.</p>
+          <button type="button" class="btn btn-primary" data-action="open-settings">Open Settings</button>
+        </div>`;
+    }
+    return `<div class="people-match-list">${p.items.map(renderPeopleCard).join("")}</div>`;
+  }
+
   function renderDiscover() {
     const tab = runsState.discover.tab || "runs";
     const tabs = [
@@ -137,12 +192,13 @@
       { id: "routes", label: "Routes" },
     ];
     let body = "";
-    if (tab !== "runs") {
+    if (tab === "people") {
+      body = renderPeopleMatches();
+    } else if (tab !== "runs") {
       body = `
         <div class="coming-soon is-inline">
           <h2>${h(tabs.find((t) => t.id === tab)?.label || tab)}</h2>
-          <p>Coming in Phase 2–3. For now, find runners in Explore.</p>
-          <button type="button" class="btn btn-primary" data-nav="explore">Open Explore</button>
+          <p>Coming in Phase 3. Clubs and routes are next.</p>
         </div>`;
     } else {
       const d = runsState.discover;
@@ -348,6 +404,12 @@
     }
 
     const isLast = step >= 6;
+    const peerBanner = c.peer
+      ? `<div class="run-together-banner">
+           <span class="pulse-avatar">${c.peer.avatar_url ? `<img src="${h(c.peer.avatar_url)}" alt="">` : h(c.peer.initials || "P")}</span>
+           <div><strong>Running with ${h(c.peer.name)}</strong><span>Suggested match — tweak anything before creating.</span></div>
+         </div>`
+      : "";
     return `
       <section class="pulse-page runs-page create-run-page" data-page="create-run">
         <header class="runs-page-head">
@@ -356,6 +418,7 @@
           <span class="create-step-label">Step ${step}/6</span>
         </header>
         <div class="create-run-progress"><div class="create-run-progress-bar" style="width:${(step / 6) * 100}%"></div></div>
+        ${peerBanner}
         ${stepBody}
         <div class="create-run-nav">
           ${step > 1 ? `<button type="button" class="btn btn-ghost" data-action="create-run-prev">Back</button>` : ""}
@@ -395,6 +458,22 @@
     } catch (err) {
       runsState.discover.status = "error";
       runsState.discover.error = err.message || "Try again.";
+    }
+  }
+
+  async function loadPeopleMatches(force = false) {
+    if (runsState.people.status === "ready" && !force) return;
+    runsState.people.status = "loading";
+    try {
+      const res = await hooks.apiFetch("/api/people/matches?limit=24");
+      if (!res.ok) throw new Error("Could not load matches.");
+      const data = await res.json();
+      runsState.people.items = Array.isArray(data.items) ? data.items : [];
+      runsState.people.status = "ready";
+      runsState.people.error = null;
+    } catch (err) {
+      runsState.people.status = "error";
+      runsState.people.error = err.message || "Try again.";
     }
   }
 
@@ -545,6 +624,37 @@
     hooks.render();
   }
 
+  async function startRunTogether(athleteId) {
+    if (!athleteId) return;
+    try {
+      const res = await hooks.apiFetch(`/api/people/${encodeURIComponent(athleteId)}/run-together`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not prepare run.");
+      const c = runsState.create;
+      c.step = 1;
+      c.peer = data.peer || null;
+      c.title = data.suggested_title || "";
+      c.location_name = data.suggested_location || c.location_name || "";
+      if (data.suggested_distance_km) c.distance_km = data.suggested_distance_km;
+      if (data.suggested_pace_min) c.pace_min = data.suggested_pace_min;
+      if (data.suggested_pace_max) c.pace_max = data.suggested_pace_max;
+      if (!c.meeting_time) c.meeting_time = defaultMeetingTime();
+      if (c.peer?.name) {
+        c.description = `Run together with ${c.peer.name}. Suggested: ${
+          (data.match && data.match.suggested_pace) || "easy pace"
+        }.`;
+      }
+      hooks.navigate("create-run");
+      hooks.showToast(
+        data.match?.label
+          ? `${data.match.emoji || ""} ${data.match.score}% · ${data.match.label}`
+          : "Adjust the run and invite them."
+      );
+    } catch (err) {
+      hooks.showToast(err.message || "Try again.");
+    }
+  }
+
   function handleAction(action, el) {
     if (action === "open-run") {
       openRun(el?.dataset?.runId);
@@ -556,7 +666,19 @@
     }
     if (action === "discover-tab") {
       runsState.discover.tab = el?.dataset?.tab || "runs";
-      hooks.render();
+      if (runsState.discover.tab === "people") {
+        loadPeopleMatches(false).then(() => hooks.render());
+      } else {
+        hooks.render();
+      }
+      return true;
+    }
+    if (action === "retry-people-matches") {
+      loadPeopleMatches(true).then(() => hooks.render());
+      return true;
+    }
+    if (action === "run-together") {
+      startRunTogether(el?.dataset?.athleteId);
       return true;
     }
     if (action === "my-runs-tab") {
@@ -635,9 +757,15 @@
       });
     }
     if (page === "discover") {
-      loadDiscover(false).then(() => {
-        if (hooks.getPage() === "discover") hooks.render();
-      });
+      if (runsState.discover.tab === "people") {
+        loadPeopleMatches(false).then(() => {
+          if (hooks.getPage() === "discover") hooks.render();
+        });
+      } else {
+        loadDiscover(false).then(() => {
+          if (hooks.getPage() === "discover") hooks.render();
+        });
+      }
     }
     if (page === "my-runs") {
       loadMyRuns(false).then(() => {

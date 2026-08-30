@@ -424,6 +424,7 @@
   background: rgba(255, 255, 255, 0.04);
 }
 
+.coming-soon.is-inline {
   padding: 32px 16px;
   text-align: center;
 }
@@ -437,4 +438,90 @@
   .run-detail-actions {
     bottom: 24px;
   }
+}
+
+/* ——— People matching (Phase 2) ——— */
+
+.people-match-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0 24px;
+}
+
+.people-match-card {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.people-match-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 10px;
+}
+
+.people-match-meta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.people-match-meta strong {
+  font-size: 15px;
+}
+
+.people-match-handle {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.people-match-score {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.people-match-score.is-great { color: #8fd46a; }
+.people-match-score.is-maybe { color: #e8c547; }
+.people-match-score.is-hard { color: #e08b7a; }
+
+.people-match-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.people-match-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.run-together-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(184, 242, 90, 0.25);
+  background: rgba(184, 242, 90, 0.06);
+}
+
+.run-together-banner strong {
+  display: block;
+  font-size: 14px;
+}
+
+.run-together-banner span:last-child {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
 }

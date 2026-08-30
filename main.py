@@ -103,6 +103,11 @@ from run_helpers import (
     _participant_count,
 )
 from pace_compatibility import estimate_running_profile
+from people_match_helpers import (
+    get_compatibility_with,
+    list_people_matches,
+    run_together_suggestion,
+)
 from ai_coach_chat import (
     CoachChatError,
     build_coach_context,
@@ -2494,6 +2499,52 @@ def api_run_participants(run_id: int, request: Request, limit: int = 50):
             "items": list_participants(db, run_id=run_id, limit=limit),
             "total": _participant_count(db, run_id),
         }
+    finally:
+        db.close()
+
+
+# ============================================================
+# PEOPLE MATCHING — find runners at your pace (Phase 2)
+# ============================================================
+
+
+@app.get("/api/people/matches")
+def api_people_matches(request: Request, limit: int = 24):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        items = list_people_matches(db, viewer_id=viewer_id, limit=limit)
+        return {"items": items, "count": len(items)}
+    finally:
+        db.close()
+
+
+@app.get("/api/people/{athlete_id}/compatibility")
+def api_people_compatibility(athlete_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        card = get_compatibility_with(
+            db, viewer_id=viewer_id, target_id=athlete_id
+        )
+        if not card:
+            raise HTTPException(status_code=404, detail="Compatibility unavailable.")
+        return card
+    finally:
+        db.close()
+
+
+@app.get("/api/people/{athlete_id}/run-together")
+def api_run_together(athlete_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        suggestion = run_together_suggestion(
+            db, viewer_id=viewer_id, target_id=athlete_id
+        )
+        if not suggestion:
+            raise HTTPException(status_code=404, detail="Suggestion unavailable.")
+        return suggestion
     finally:
         db.close()
 
