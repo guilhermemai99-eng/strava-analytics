@@ -1366,13 +1366,20 @@
               <button type="button" class="btn btn-primary btn-sm" data-action="accept-follow-request" data-athlete-id="${escapeHtml(actor.athlete_id)}">Accept</button>
               <button type="button" class="btn btn-ghost btn-sm" data-action="decline-follow-request" data-athlete-id="${escapeHtml(actor.athlete_id)}">Decline</button>
             </div>`
-          : "";
+          : item.can_accept_club_invite && item.target_id
+            ? `<div class="ig-notif-request-actions">
+              <button type="button" class="btn btn-primary btn-sm" data-action="accept-club-invite-notif" data-club-id="${escapeHtml(item.target_id)}">Accept</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-action="decline-club-invite-notif" data-club-id="${escapeHtml(item.target_id)}">Decline</button>
+            </div>`
+            : "";
     const action =
       item.kind === "message" && item.target_id
         ? "open-notification"
         : item.kind === "run_join" || item.kind === "club_run"
           ? "open-notification"
-          : item.kind === "club_join"
+          : item.kind === "club_join" ||
+              item.kind === "club_invite" ||
+              item.kind === "club_invite_accepted"
             ? "open-notification"
             : actor.athlete_id
               ? "open-notification"
@@ -1385,7 +1392,10 @@
       (item.kind === "run_join" || item.kind === "club_run") && item.target_id
         ? `data-run-id="${escapeHtml(item.target_id)}"`
         : "",
-      item.kind === "club_join" && item.target_id
+      (item.kind === "club_join" ||
+        item.kind === "club_invite" ||
+        item.kind === "club_invite_accepted") &&
+      item.target_id
         ? `data-club-id="${escapeHtml(item.target_id)}"`
         : "",
       actor.athlete_id
@@ -3301,6 +3311,26 @@
     if (action === "decline-follow-request") {
       respondFollowRequest(el?.dataset?.athleteId, false);
     }
+    if (action === "accept-club-invite-notif" || action === "decline-club-invite-notif") {
+      const clubId = el?.dataset?.clubId;
+      apiFetch("/api/club-invites")
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          const items = Array.isArray(data.items) ? data.items : [];
+          const match = items.find((i) => String(i.club_id) === String(clubId));
+          if (!match) {
+            showToast("Invite not found.");
+            return;
+          }
+          if (action === "accept-club-invite-notif" && window.PulseRuns) {
+            await PulseRuns.acceptClubInvite(match.id);
+          } else if (window.PulseRuns) {
+            await PulseRuns.declineClubInvite(match.id);
+          }
+          loadNotifications(true, false);
+        })
+        .catch(() => showToast("Could not update invite."));
+    }
     if (action === "unfollow-user") {
       toggleFollow(
         { athleteId: el?.dataset?.athleteId, handle: el?.dataset?.handle },
@@ -3743,6 +3773,18 @@
     }
 
     const params = new URLSearchParams(location.search);
+    const clubInviteToken = params.get("club_invite");
+    if (clubInviteToken && window.PulseRuns?.redeemClubInviteToken) {
+      params.delete("club_invite");
+      const clean =
+        location.pathname +
+        (params.toString() ? `?${params}` : "") +
+        (location.hash || "");
+      history.replaceState({ page: state.page }, "", clean);
+      PulseRuns.redeemClubInviteToken(clubInviteToken).then((club) => {
+        if (club?.id) PulseRuns.openClub(club.id);
+      });
+    }
     if (params.get("boot") === "1") {
       params.delete("boot");
       const clean =

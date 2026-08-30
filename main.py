@@ -140,17 +140,28 @@ from people_match_helpers import (
 )
 from club_helpers import (
     ClubError,
+    accept_invite,
     can_view_club,
+    cancel_invite,
+    clear_club_cover,
     create_club,
+    create_direct_invite,
+    create_or_rotate_invite_link,
+    decline_invite,
     get_club,
     join_club,
     leave_club,
     list_admin_clubs,
     list_club_runs,
     list_discover_clubs,
+    list_incoming_club_invites,
     list_members,
     list_my_clubs,
+    list_pending_invites_for_club,
+    redeem_invite_token,
     serialize_club,
+    set_club_cover,
+    _serialize_invite,
 )
 from ai_coach_chat import (
     CoachChatError,
@@ -3019,6 +3030,215 @@ def api_club_members(club_id: int, request: Request, limit: int = 50):
         if not club or not can_view_club(db, club, viewer_id):
             raise HTTPException(status_code=404, detail="Club not found.")
         return {"items": list_members(db, club_id=club_id, limit=limit)}
+    finally:
+        db.close()
+
+
+class ClubInviteRequest(BaseModel):
+    athlete_id: Optional[int] = None
+    handle: Optional[str] = None
+
+
+class ClubRedeemInviteRequest(BaseModel):
+    token: str
+
+
+@app.get("/api/clubs/{club_id}/cover")
+def api_get_club_cover(club_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        club = get_club(db, club_id)
+        if not club or not can_view_club(db, club, viewer_id):
+            raise HTTPException(status_code=404, detail="Club not found.")
+        if not club.cover_data or not club.cover_content_type:
+            raise HTTPException(status_code=404, detail="No cover image.")
+        return Response(
+            content=bytes(club.cover_data),
+            media_type=club.cover_content_type,
+            headers={"Cache-Control": "private, max-age=3600"},
+        )
+    finally:
+        db.close()
+
+
+@app.post("/api/clubs/{club_id}/cover")
+async def api_upload_club_cover(
+    club_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+):
+    viewer_id = require_athlete_id(request)
+    raw = await file.read()
+    db = SessionLocal()
+    try:
+        club = get_club(db, club_id)
+        if not club:
+            raise HTTPException(status_code=404, detail="Club not found.")
+        try:
+            validate_avatar_upload(raw, file.content_type)
+            data, content_type = process_avatar_image(raw)
+            club = set_club_cover(
+                db,
+                club=club,
+                actor_id=viewer_id,
+                data=data,
+                content_type=content_type,
+            )
+        except AvatarValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ClubError as exc:
+            raise _club_http(exc) from exc
+        return serialize_club(db, club, viewer_id=viewer_id, include_members=True)
+    finally:
+        db.close()
+
+
+@app.delete("/api/clubs/{club_id}/cover")
+def api_delete_club_cover(club_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        club = get_club(db, club_id)
+        if not club:
+            raise HTTPException(status_code=404, detail="Club not found.")
+        try:
+            club = clear_club_cover(db, club=club, actor_id=viewer_id)
+        except ClubError as exc:
+            raise _club_http(exc) from exc
+        return serialize_club(db, club, viewer_id=viewer_id, include_members=True)
+    finally:
+        db.close()
+
+
+@app.post("/api/clubs/{club_id}/invites")
+def api_create_club_invite(
+    club_id: int, body: ClubInviteRequest, request: Request
+):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        club = get_club(db, club_id)
+        if not club:
+            raise HTTPException(status_code=404, detail="Club not found.")
+        try:
+            invite = create_direct_invite(
+                db,
+                club=club,
+                inviter_id=viewer_id,
+                athlete_id=body.athlete_id,
+                handle=body.handle,
+            )
+        except ClubError as exc:
+            raise _club_http(exc) from exc
+        return _serialize_invite(db, invite, club=club)
+    finally:
+        db.close()
+
+
+@app.get("/api/clubs/{club_id}/invites")
+def api_list_club_invites(club_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        try:
+            items = list_pending_invites_for_club(
+                db, club_id=club_id, actor_id=viewer_id
+            )
+        except ClubError as exc:
+            raise _club_http(exc) from exc
+        return {"items": items}
+    finally:
+        db.close()
+
+
+@app.post("/api/clubs/{club_id}/invites/{invite_id}/cancel")
+def api_cancel_club_invite(club_id: int, invite_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        club = get_club(db, club_id)
+        if not club:
+            raise HTTPException(status_code=404, detail="Club not found.")
+        try:
+            cancel_invite(
+                db, club=club, invite_id=invite_id, actor_id=viewer_id
+            )
+        except ClubError as exc:
+            raise _club_http(exc) from exc
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.post("/api/clubs/{club_id}/invite-link")
+def api_club_invite_link(club_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        club = get_club(db, club_id)
+        if not club:
+            raise HTTPException(status_code=404, detail="Club not found.")
+        try:
+            return create_or_rotate_invite_link(
+                db, club=club, inviter_id=viewer_id
+            )
+        except ClubError as exc:
+            raise _club_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.get("/api/club-invites")
+def api_list_incoming_club_invites(request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        return {"items": list_incoming_club_invites(db, invitee_id=viewer_id)}
+    finally:
+        db.close()
+
+
+@app.post("/api/club-invites/{invite_id}/accept")
+def api_accept_club_invite(invite_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        try:
+            club = accept_invite(db, invite_id=invite_id, athlete_id=viewer_id)
+        except ClubError as exc:
+            raise _club_http(exc) from exc
+        return serialize_club(db, club, viewer_id=viewer_id, include_members=True)
+    finally:
+        db.close()
+
+
+@app.post("/api/club-invites/{invite_id}/decline")
+def api_decline_club_invite(invite_id: int, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        try:
+            decline_invite(db, invite_id=invite_id, athlete_id=viewer_id)
+        except ClubError as exc:
+            raise _club_http(exc) from exc
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.post("/api/club-invites/redeem")
+def api_redeem_club_invite(body: ClubRedeemInviteRequest, request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        try:
+            club = redeem_invite_token(
+                db, token=body.token, athlete_id=viewer_id
+            )
+        except ClubError as exc:
+            raise _club_http(exc) from exc
+        return serialize_club(db, club, viewer_id=viewer_id, include_members=True)
     finally:
         db.close()
 

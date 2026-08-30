@@ -69,6 +69,16 @@ PROTECTED = [
     ("POST", "/api/clubs/1/leave"),
     ("GET", "/api/clubs/1/runs"),
     ("GET", "/api/clubs/1/members"),
+    ("GET", "/api/clubs/1/cover"),
+    ("DELETE", "/api/clubs/1/cover"),
+    ("GET", "/api/clubs/1/invites"),
+    ("POST", "/api/clubs/1/invites"),
+    ("POST", "/api/clubs/1/invites/1/cancel"),
+    ("POST", "/api/clubs/1/invite-link"),
+    ("GET", "/api/club-invites"),
+    ("POST", "/api/club-invites/1/accept"),
+    ("POST", "/api/club-invites/1/decline"),
+    ("POST", "/api/club-invites/redeem"),
     ("POST", "/strava/sync"),
     ("GET", "/analytics/summary"),
     ("GET", "/analytics/weekly"),
@@ -138,6 +148,10 @@ def test_protected_apis_return_401_without_session(client):
                 path,
                 json={"name": "Test Club", "visibility": "public"},
             )
+        elif method == "POST" and path.endswith("/invites"):
+            resp = client.post(path, json={"handle": "someone"})
+        elif method == "POST" and path == "/api/club-invites/redeem":
+            resp = client.post(path, json={"token": "x"})
         elif method == "POST" and path.endswith("/follow"):
             resp = client.post(path)
         else:

@@ -15,6 +15,7 @@ import dm  # noqa: F401
 import notification  # noqa: F401
 import run  # noqa: F401
 import club  # noqa: F401
+import club_invite  # noqa: F401
 import activity_social  # noqa: F401
 import follow_request  # noqa: F401
 
