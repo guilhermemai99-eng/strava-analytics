@@ -312,7 +312,9 @@
         <button type="button" class="btn btn-ghost" data-action="decline-club-invite" data-invite-id="${h(club.pending_invite_id)}">Decline</button>`;
     }
     if (club.is_owner) {
-      return `<span class="run-card-going">You're the owner</span>`;
+      return `
+        <span class="run-card-going">You're the owner</span>
+        <button type="button" class="btn btn-ghost" data-action="delete-club" data-club-id="${h(club.id)}">Delete club</button>`;
     }
     if (club.is_member) {
       return `<button type="button" class="btn btn-ghost" data-action="leave-club" data-club-id="${h(club.id)}">Leave Club</button>`;
@@ -356,6 +358,34 @@
       </div>`;
   }
 
+  function renderClubMemberRow(m, club) {
+    const isOwnerViewer = !!club.is_owner;
+    const isSelfOwner = m.role === "owner";
+    let actions = "";
+    if (isOwnerViewer && !isSelfOwner) {
+      const roleBtn =
+        m.role === "admin"
+          ? `<button type="button" class="btn btn-ghost btn-sm" data-action="demote-club-member" data-club-id="${h(club.id)}" data-athlete-id="${h(m.athlete_id)}">Remove admin</button>`
+          : `<button type="button" class="btn btn-ghost btn-sm" data-action="promote-club-member" data-club-id="${h(club.id)}" data-athlete-id="${h(m.athlete_id)}">Make admin</button>`;
+      actions = `
+        <div class="club-member-actions">
+          ${roleBtn}
+          <button type="button" class="btn btn-ghost btn-sm" data-action="transfer-club" data-club-id="${h(club.id)}" data-athlete-id="${h(m.athlete_id)}" data-name="${h(m.name || "this runner")}">Transfer ownership</button>
+        </div>`;
+    }
+    return `
+      <div class="club-member-row">
+        <button type="button" class="club-member-main" data-action="open-user" data-athlete-id="${h(m.athlete_id)}">
+          <span class="pulse-avatar">${m.avatar_url ? `<img src="${h(m.avatar_url)}" alt="">` : h(m.initials || "P")}</span>
+          <span class="club-member-meta">
+            <strong>${h(m.name || "Runner")}</strong>
+            <span>${h(roleLabel(m.role))}${m.handle ? ` · @${h(m.handle)}` : ""}</span>
+          </span>
+        </button>
+        ${actions}
+      </div>`;
+  }
+
   function renderClubPage() {
     const d = runsState.clubDetail;
     if (d.status === "loading" || d.status === "idle") {
@@ -387,16 +417,7 @@
         ${
           members.length
             ? `<div class="club-member-list">${members
-                .map(
-                  (m) => `
-            <button type="button" class="club-member-row" data-action="open-user" data-athlete-id="${h(m.athlete_id)}">
-              <span class="pulse-avatar">${m.avatar_url ? `<img src="${h(m.avatar_url)}" alt="">` : h(m.initials || "P")}</span>
-              <span class="club-member-meta">
-                <strong>${h(m.name || "Runner")}</strong>
-                <span>${h(roleLabel(m.role))}${m.handle ? ` · @${h(m.handle)}` : ""}</span>
-              </span>
-            </button>`
-                )
+                .map((m) => renderClubMemberRow(m, club))
                 .join("")}</div>`
             : `<p class="runs-section-sub">No members yet.</p>`
         }`;
@@ -980,6 +1001,91 @@
     hooks.render();
   }
 
+  async function deleteClub(clubId) {
+    if (hooks.openConfirmModal) {
+      const result = await hooks.openConfirmModal({
+        title: "Delete this club?",
+        body: "Members lose the club home. Past club runs stay, but the club is gone for good.",
+        actions: [
+          { label: "Keep club", role: "cancel" },
+          { label: "Delete club", role: "confirm", danger: true },
+        ],
+      });
+      if (!result?.confirmed) return;
+    } else if (!window.confirm("Delete this club?")) {
+      return;
+    }
+    const res = await hooks.apiFetch(`/api/clubs/${clubId}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      hooks.showToast(data.detail || "Could not delete.");
+      return;
+    }
+    runsState.clubDetail = {
+      status: "idle",
+      club: null,
+      error: null,
+      clubId: null,
+      tab: "upcoming",
+      runs: [],
+      runsStatus: "idle",
+    };
+    runsState.clubs.status = "idle";
+    hooks.showToast("Club deleted.");
+    hooks.navigate("discover");
+  }
+
+  async function setClubMemberRole(clubId, athleteId, role) {
+    const res = await hooks.apiFetch(
+      `/api/clubs/${clubId}/members/${athleteId}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      hooks.showToast(data.detail || "Could not update role.");
+      return;
+    }
+    await loadClubDetail(clubId, true);
+    hooks.showToast(role === "admin" ? "They're an admin now." : "Admin removed.");
+    hooks.render();
+  }
+
+  async function transferClub(clubId, athleteId, name) {
+    const label = name || "this runner";
+    if (hooks.openConfirmModal) {
+      const result = await hooks.openConfirmModal({
+        title: `Make ${label} the owner?`,
+        body: "You'll become an admin. Only they can transfer again or delete the club.",
+        actions: [
+          { label: "Keep ownership", role: "cancel" },
+          { label: "Transfer", role: "confirm", primary: true },
+        ],
+      });
+      if (!result?.confirmed) return;
+    } else if (!window.confirm(`Make ${label} the owner?`)) {
+      return;
+    }
+    const res = await hooks.apiFetch(`/api/clubs/${clubId}/transfer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ athlete_id: Number(athleteId) }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      hooks.showToast(data.detail || "Could not transfer.");
+      return;
+    }
+    runsState.clubDetail.club = data;
+    runsState.clubDetail.status = "ready";
+    runsState.clubs.status = "idle";
+    hooks.showToast(`${label} owns this club now.`);
+    hooks.render();
+  }
+
   async function loadClubInvites(force = false) {
     const clubId = runsState.clubDetail.clubId || runsState.clubDetail.club?.id;
     if (!clubId) return;
@@ -1428,6 +1534,26 @@
         };
         input.click();
       }
+      return true;
+    }
+    if (action === "delete-club") {
+      deleteClub(el?.dataset?.clubId);
+      return true;
+    }
+    if (action === "promote-club-member") {
+      setClubMemberRole(el?.dataset?.clubId, el?.dataset?.athleteId, "admin");
+      return true;
+    }
+    if (action === "demote-club-member") {
+      setClubMemberRole(el?.dataset?.clubId, el?.dataset?.athleteId, "member");
+      return true;
+    }
+    if (action === "transfer-club") {
+      transferClub(
+        el?.dataset?.clubId,
+        el?.dataset?.athleteId,
+        el?.dataset?.name
+      );
       return true;
     }
     if (action === "retry-people-matches") {

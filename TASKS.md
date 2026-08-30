@@ -48,6 +48,9 @@ Strava remains the activity data source. The product centre is real runs and peo
 ### Runs
 - Create / discover / join / leave / My Runs
 - Pace compatibility (Great / Possible / Challenging) — never blocks join
+- **Invite only** — host invites runners; open join blocked; out of Discover
+- **Run together** creates invite-only by default and invites the peer
+- **Host cancel** — Cancel run CTA + `run_cancelled` notifications
 
 ### People matching
 - Match score + **Run together** prefill
@@ -58,6 +61,7 @@ Strava remains the activity data source. The product centre is real runs and peo
 - Cover image upload (blob) on club hero/cards
 - Direct invites by handle + shareable invite links
 - Accept/decline in Notifications and on the club page
+- **Owner lifecycle** — transfer ownership, promote/demote admins, delete club
 
 ### Production pass
 - Dead activity stub removed; photo/map in activity detail
@@ -71,13 +75,7 @@ Strava remains the activity data source. The product centre is real runs and peo
 
 | # | Phase | Status |
 |---|--------|--------|
-<<<<<<< HEAD
-| 1 | Clubs polish (cover image, invites) | Ready (#35) |
-| 2 | Broader polish / production hardening | Later |
-=======
-| 1 | Production pass (privacy, mobile, dead UI) | Ongoing (#34) |
-| 2 | Broader polish | Later |
->>>>>>> origin/cursor/clubs-cover-invites-b3a3
+| 1 | Broader polish / hardening | Later |
 
 ## Do not ship
 

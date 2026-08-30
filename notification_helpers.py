@@ -21,6 +21,7 @@ KIND_CLUB_JOIN = "club_join"
 KIND_CLUB_RUN = "club_run"
 KIND_CLUB_INVITE = "club_invite"
 KIND_CLUB_INVITE_ACCEPTED = "club_invite_accepted"
+KIND_CLUB_OWNERSHIP = "club_ownership"
 
 
 def _serialize_actor(athlete: Athlete | None) -> dict | None:
@@ -298,6 +299,35 @@ def notify_club_invite_accepted(
         actor_id=invitee_id,
         kind=KIND_CLUB_INVITE_ACCEPTED,
         body=f"{name} accepted your invite to {label}.",
+        target_type="club",
+        target_id=club_id,
+    )
+    db.commit()
+
+
+def notify_club_ownership_transferred(
+    db: Session,
+    *,
+    club_id: int,
+    from_id: int,
+    to_id: int,
+    club_name: str,
+) -> None:
+    if from_id == to_id:
+        return
+    previous = db.query(Athlete).filter(Athlete.id == from_id).one_or_none()
+    if previous is None:
+        return
+    name = display_name_for(previous)
+    label = (club_name or "a club").strip() or "a club"
+    if len(label) > 60:
+        label = label[:57] + "…"
+    create_notification(
+        db,
+        recipient_id=to_id,
+        actor_id=from_id,
+        kind=KIND_CLUB_OWNERSHIP,
+        body=f"{name} made you the owner of {label}.",
         target_type="club",
         target_id=club_id,
     )

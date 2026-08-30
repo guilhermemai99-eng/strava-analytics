@@ -716,19 +716,31 @@
 
 .club-member-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
-  text-align: left;
-  padding: 10px 8px;
-  border: 0;
-  background: transparent;
-  color: inherit;
+  padding: 8px 4px;
   border-radius: var(--radius-sm);
 }
 
 .club-member-row:hover {
   background: rgba(255, 255, 255, 0.04);
+}
+
+.club-member-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 160px;
+  min-width: 0;
+  text-align: left;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
 }
 
 .club-member-meta {
@@ -744,4 +756,18 @@
 .club-member-meta span {
   font-size: 12px;
   color: var(--muted);
+}
+
+.club-member-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-start;
+  flex: 1 1 100%;
+  padding-left: 44px;
+}
+
+.club-member-actions .btn {
+  position: relative;
+  z-index: 1;
 }
