@@ -104,6 +104,12 @@
     },
     profileTab: "activities",
     viewedProfileTab: "activities",
+    notifications: {
+      status: "idle",
+      items: [],
+      unread_total: 0,
+      error: null,
+    },
   };
 
   const els = {
@@ -249,7 +255,7 @@
     feed: "Pulse",
     explore: "Explore",
     messages: "Messages",
-    activity: "Activity",
+    activity: "Notifications",
     profile: "Profile",
     coach: "AI Coach",
     u: "Profile",
@@ -271,6 +277,18 @@
       const peer = state.thread.peer;
       if (peer && els.mobileHeaderTitle) {
         els.mobileHeaderTitle.textContent = displayNameOf(peer);
+      }
+      return;
+    }
+
+    if (page === "feed" || page === "explore") {
+      if (els.mobileHeaderEnd) {
+        els.mobileHeaderEnd.innerHTML = `
+          <button type="button" class="ig-header-bell" data-nav="activity" aria-label="Notifications">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2 2 0 002-2H10a2 2 0 002 2zm6-6V11a6 6 0 00-5-5.91V4a1 1 0 00-2 0v1.09A6 6 0 006 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+            <span class="nav-badge nav-badge--float" id="mobileNotifBadge" hidden>0</span>
+          </button>`;
+        updateNotificationBadges(state.notifications.unread_total);
       }
     }
   }
@@ -1280,45 +1298,142 @@
   }
 
   function renderActivityPage() {
-    const items = [];
-    if (state.inbox.unread_total > 0) {
-      items.push({
-        text: `You have ${state.inbox.unread_total} unread message${state.inbox.unread_total === 1 ? "" : "s"}.`,
-        time: "Now",
-        action: "messages",
-      });
+    const n = state.notifications;
+    let body = "";
+
+    if (n.status === "loading" || n.status === "idle") {
+      body = `<div class="ig-notif-empty"><p>Loading notifications…</p></div>`;
+    } else if (n.status === "error") {
+      body = `
+        <div class="ig-notif-empty">
+          <p>${escapeHtml(n.error || errLine())}</p>
+          <button type="button" class="btn btn-primary" data-action="retry-notifications">Retry</button>
+        </div>`;
+    } else if (!n.items.length) {
+      body = `
+        <div class="ig-notif-empty">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2 2 0 002-2H10a2 2 0 002 2zm6-6V11a6 6 0 00-5-5.91V4a1 1 0 00-2 0v1.09A6 6 0 006 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+          <h2>Nothing yet</h2>
+          <p>When someone follows you or sends a message, you'll see it here.</p>
+        </div>`;
+    } else {
+      body = `<div class="ig-notif-list">${n.items.map(renderNotificationRow).join("")}</div>`;
     }
-    if (state.feed.items.length) {
-      const latest = state.feed.items[0];
-      items.push({
-        text: `${displayNameOf(latest.author)} posted a ${latest.activity?.type || "run"}.`,
-        time: relativeWhen(latest.activity?.start_date_local || latest.created_at) || "Recent",
-        action: "feed",
-      });
-    }
-    items.push({
-      text: "Sync Strava to refresh your feed and explore grid.",
-      time: "Tip",
-      action: "create",
-    });
 
     return `
-      <section class="pulse-page activity-page" data-page="activity">
-        <div class="activity-list">
-          ${items
-            .map(
-              (row) => `
-            <button type="button" class="activity-row" data-nav="${escapeHtml(row.action)}">
-              <div class="pulse-avatar is-sm">P</div>
-              <div>
-                <p>${escapeHtml(row.text)}</p>
-                <time>${escapeHtml(row.time)}</time>
-              </div>
-            </button>`
-            )
-            .join("")}
-        </div>
+      <section class="pulse-page ig-notif-page pulse-page--wide" data-page="activity">
+        <header class="ig-notif-header">
+          <h1>Notifications</h1>
+        </header>
+        ${body}
       </section>`;
+  }
+
+  function renderNotificationRow(item) {
+    const actor = item.actor || {};
+    const when = relativeWhen(item.created_at) || "";
+    const unread = !item.read;
+    const followBtn =
+      item.can_follow_back && actor.athlete_id
+        ? `<button type="button" class="btn btn-primary btn-sm ig-notif-follow" data-action="follow-user" data-athlete-id="${escapeHtml(actor.athlete_id)}" data-handle="${escapeHtml(actor.handle || "")}">Follow</button>`
+        : "";
+    const action =
+      item.kind === "message" && item.target_id
+        ? "open-notification"
+        : actor.athlete_id
+          ? "open-notification"
+          : "";
+    const dataAttrs = [
+      action ? `data-action="${action}"` : "",
+      item.kind === "message" && item.target_id
+        ? `data-conversation-id="${escapeHtml(item.target_id)}"`
+        : "",
+      actor.athlete_id
+        ? `data-athlete-id="${escapeHtml(actor.athlete_id)}" data-handle="${escapeHtml(actor.handle || "")}"`
+        : "",
+      `data-notification-id="${escapeHtml(item.id)}"`,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    const avatar = actor.avatar_url
+      ? renderAvatarHtml(actor, "is-sm")
+      : `<div class="pulse-avatar is-sm">${escapeHtml(actor.initials || "P")}</div>`;
+
+    return `
+      <div class="ig-notif-row ${unread ? "is-unread" : ""}" ${dataAttrs} role="button" tabindex="0">
+        ${avatar}
+        <div class="ig-notif-body">
+          <p>${escapeHtml(item.body || "")}</p>
+          <time>${escapeHtml(when)}</time>
+        </div>
+        ${followBtn}
+        ${unread ? '<span class="ig-notif-dot" aria-hidden="true"></span>' : ""}
+      </div>`;
+  }
+
+  async function loadNotifications(force = false, markRead = false) {
+    if (state.notifications.status === "ready" && !force) return;
+    state.notifications.status = "loading";
+    if (state.page === "activity") render();
+    try {
+      const res = await apiFetch("/api/notifications?limit=50");
+      if (!res.ok) throw new Error(errLine());
+      const data = await res.json();
+      state.notifications.items = Array.isArray(data.items) ? data.items : [];
+      state.notifications.unread_total = Number(data.unread_total || 0);
+      state.notifications.status = "ready";
+      state.notifications.error = null;
+      updateNotificationBadges(state.notifications.unread_total);
+      if (markRead && state.notifications.unread_total > 0) {
+        await markNotificationsRead();
+      }
+    } catch (err) {
+      state.notifications.status = "error";
+      state.notifications.error = err.message || errLine();
+    }
+    if (state.page === "activity") render();
+  }
+
+  async function refreshNotificationBadge() {
+    try {
+      const res = await apiFetch("/api/notifications/unread-count");
+      if (!res.ok) return;
+      const data = await res.json();
+      state.notifications.unread_total = Number(data.unread_total || 0);
+      updateNotificationBadges(state.notifications.unread_total);
+    } catch (_err) {
+      /* ignore */
+    }
+  }
+
+  async function markNotificationsRead() {
+    try {
+      await apiFetch("/api/notifications/read", { method: "POST" });
+      state.notifications.unread_total = 0;
+      state.notifications.items = state.notifications.items.map((n) => ({
+        ...n,
+        read: true,
+      }));
+      updateNotificationBadges(0);
+    } catch (_err) {
+      /* ignore */
+    }
+  }
+
+  function updateNotificationBadges(count) {
+    const n = Number(count || 0);
+    ["sidebarNotifBadge", "mobileNotifBadge"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (n > 0) {
+        el.hidden = false;
+        el.textContent = n > 99 ? "99+" : String(n);
+      } else {
+        el.hidden = true;
+        el.textContent = "0";
+      }
+    });
   }
 
   function renderProfile() {
@@ -1847,7 +1962,7 @@
     if (next === "explore") loadExplore(false);
     if (next === "messages") loadInbox(true);
     if (next === "coach") loadCoachMessages(false);
-    if (next === "activity") refreshUnreadBadge();
+    if (next === "activity") loadNotifications(true, true);
   }
 
   function openUserProfile(ref, { replace = false } = {}) {
@@ -2636,6 +2751,16 @@
     if (action === "retry-explore") loadExplore(true);
     if (action === "retry-explore-search") runExploreSearch(state.explore.searchQ || "");
     if (action === "retry-inbox") loadInbox(true);
+    if (action === "retry-notifications") loadNotifications(true, false);
+    if (action === "open-notification") {
+      const cid = el?.dataset?.conversationId;
+      if (cid) {
+        navigateDm(cid);
+        return;
+      }
+      openUserFromEl(el);
+      return;
+    }
     if (action === "clear-coach") clearCoachChat();
     if (action === "open-user" || action === "peek-athlete") openUserFromEl(el);
     if (action === "open-dm") {
@@ -3042,11 +3167,14 @@
     await loadProfileBundle(true);
     loadCoachMessages(false);
     refreshUnreadBadge();
+    refreshNotificationBadge();
 
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState !== "visible") return;
       refreshUnreadBadge();
+      refreshNotificationBadge();
       if (state.page === "messages") loadInbox(true);
+      if (state.page === "activity") loadNotifications(true, false);
     });
 
     const initial = parseLocationHash();

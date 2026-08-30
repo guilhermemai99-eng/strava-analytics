@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from athlete import Athlete
 from coach_message import CoachMessage
 from dm_helpers import delete_dms_for_athlete
+from notification_helpers import delete_notifications_for_athlete
 from follow import Follow
 from models import Activity
 from strava_auth import StravaAuth
@@ -81,6 +82,7 @@ def delete_athlete_account(db: Session, athlete_id: int) -> dict:
         .delete(synchronize_session=False)
     )
     dm_stats = delete_dms_for_athlete(db, athlete_id)
+    notifications_deleted = delete_notifications_for_athlete(db, athlete_id)
 
     db.delete(athlete)
     db.commit()
