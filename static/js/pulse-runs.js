@@ -15,13 +15,81 @@
     { id: "social", label: "Social" },
   ];
 
-  const DISTANCE_PRESETS = [5, 8, 10, 15, 20];
-  const PACE_PRESETS = [
-    { label: "Easy", min: "5:30", max: "6:30" },
-    { label: "4:30–5:00", min: "4:30", max: "5:00" },
-    { label: "5:00–5:30", min: "5:00", max: "5:30" },
-    { label: "5:30–6:00", min: "5:30", max: "6:00" },
-  ];
+  const DISTANCE_SLIDER = { min: 3, max: 42, step: 0.5 };
+  const PACE_SLIDER = { min: 210, max: 480, step: 5 }; // 3:30 – 8:00 /km
+
+  function paceToSec(pace) {
+    if (!pace) return PACE_SLIDER.min;
+    const parts = String(pace).trim().split(":");
+    const m = Number(parts[0]) || 0;
+    const s = Number(parts[1]) || 0;
+    return m * 60 + s;
+  }
+
+  function secToPace(sec) {
+    const clamped = Math.max(PACE_SLIDER.min, Math.min(PACE_SLIDER.max, Math.round(sec)));
+    const m = Math.floor(clamped / 60);
+    const s = clamped % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  }
+
+  function createDistanceBounds(c) {
+    let min = Number(c.distance_km_min);
+    let max = Number(c.distance_km_max);
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+      const center = Number(c.distance_km) || 10;
+      min = Math.max(DISTANCE_SLIDER.min, center - 1);
+      max = Math.min(DISTANCE_SLIDER.max, center + 1);
+    }
+    if (min > max) [min, max] = [max, min];
+    min = Math.max(DISTANCE_SLIDER.min, Math.min(DISTANCE_SLIDER.max, min));
+    max = Math.max(DISTANCE_SLIDER.min, Math.min(DISTANCE_SLIDER.max, max));
+    if (max - min < DISTANCE_SLIDER.step) max = Math.min(DISTANCE_SLIDER.max, min + DISTANCE_SLIDER.step);
+    return { min, max };
+  }
+
+  function createPaceBounds(c) {
+    let min = paceToSec(c.pace_min);
+    let max = paceToSec(c.pace_max);
+    if (min > max) [min, max] = [max, min];
+    min = Math.max(PACE_SLIDER.min, Math.min(PACE_SLIDER.max, min));
+    max = Math.max(PACE_SLIDER.min, Math.min(PACE_SLIDER.max, max));
+    if (max - min < PACE_SLIDER.step) max = Math.min(PACE_SLIDER.max, min + PACE_SLIDER.step);
+    return { min, max };
+  }
+
+  function renderDualRangeShell({
+    kind,
+    minAttr,
+    maxAttr,
+    step,
+    valueMin,
+    valueMax,
+    readoutId,
+    readoutMain,
+    readoutSub,
+    scaleLeft,
+    scaleRight,
+  }) {
+    const sliderMin = minAttr.startsWith("createRunPace") ? PACE_SLIDER.min : DISTANCE_SLIDER.min;
+    const sliderMax = minAttr.startsWith("createRunPace") ? PACE_SLIDER.max : DISTANCE_SLIDER.max;
+    return `
+      <div class="pulse-dual-range" data-range-kind="${h(kind)}">
+        <div class="pulse-dual-range__readout">
+          <span class="pulse-dual-range__readout-main" id="${h(readoutId)}">${h(readoutMain)}</span>
+          <span class="pulse-dual-range__readout-sub">${h(readoutSub)}</span>
+        </div>
+        <div class="pulse-dual-range__shell">
+          <div class="pulse-dual-range__track-bg"></div>
+          <div class="pulse-dual-range__fill" id="${h(kind)}RangeFill"></div>
+          <input type="range" id="${h(minAttr)}" class="pulse-dual-range__input pulse-dual-range__input--min"
+            min="${sliderMin}" max="${sliderMax}" step="${step}" value="${valueMin}" aria-label="${h(kind)} minimum">
+          <input type="range" id="${h(maxAttr)}" class="pulse-dual-range__input pulse-dual-range__input--max"
+            min="${sliderMin}" max="${sliderMax}" step="${step}" value="${valueMax}" aria-label="${h(kind)} maximum">
+        </div>
+        <div class="pulse-dual-range__scale"><span>${h(scaleLeft)}</span><span>${h(scaleRight)}</span></div>
+      </div>`;
+  }
 
   let hooks = null;
 
@@ -68,6 +136,8 @@
       location_name: "",
       meeting_time: "",
       distance_km: 10,
+      distance_km_min: 8,
+      distance_km_max: 12,
       pace_min: "5:00",
       pace_max: "5:30",
       run_type: "easy",
@@ -87,6 +157,8 @@
       location_name: "",
       meeting_time: "",
       distance_km: 10,
+      distance_km_min: 8,
+      distance_km_max: 12,
       pace_min: "5:00",
       pace_max: "5:30",
       run_type: "easy",
@@ -746,42 +818,61 @@
         </div>`;
     }
     if (step === 3) {
+      const dist = createDistanceBounds(c);
+      const avgKm = Math.round(((dist.min + dist.max) / 2) * 10) / 10;
       return `
         <div class="create-run-step">
           <p class="create-run-step-kicker">Step 3 of 5</p>
           <h2 class="create-run-step-title">How far?</h2>
-          <div class="run-chip-row">
-            ${DISTANCE_PRESETS.map(
-              (km) =>
-                `<button type="button" class="run-chip ${c.distance_km === km ? "is-active" : ""}" data-action="create-distance" data-km="${km}">${km} km</button>`
-            ).join("")}
-            <button type="button" class="run-chip ${!DISTANCE_PRESETS.includes(c.distance_km) ? "is-active" : ""}" data-action="create-distance" data-km="custom">Custom</button>
-          </div>
-          <label class="run-form-label">Distance (km)
-            <input type="number" id="createRunDistance" min="1" max="200" step="0.1" value="${h(c.distance_km)}">
-          </label>
+          <p class="create-run-step-hint">Drag both handles to set your distance window.</p>
+          ${renderDualRangeShell({
+            kind: "distance",
+            minAttr: "createRunDistanceMin",
+            maxAttr: "createRunDistanceMax",
+            step: DISTANCE_SLIDER.step,
+            valueMin: dist.min,
+            valueMax: dist.max,
+            readoutId: "createRunDistanceReadout",
+            readoutMain: `${dist.min} – ${dist.max} km`,
+            readoutSub: `~${avgKm} km planned`,
+            scaleLeft: "3 km",
+            scaleRight: "42 km",
+          })}
         </div>`;
     }
     if (step === 4) {
+      const pace = createPaceBounds(c);
+      const spread = pace.max - pace.min;
+      let paceHint = "Flexible pace";
+      if (spread <= 30) paceHint = "Tight group";
+      else if (spread >= 90) paceHint = "All paces welcome";
       return `
         <div class="create-run-step">
           <p class="create-run-step-kicker">Step 4 of 5</p>
           <h2 class="create-run-step-title">What pace?</h2>
-          <div class="run-chip-row">
-            ${PACE_PRESETS.map(
-              (p, i) =>
-                `<button type="button" class="run-chip ${c.pace_min === p.min && c.pace_max === p.max ? "is-active" : ""}" data-action="create-pace-preset" data-idx="${i}">${h(p.label)}</button>`
+          <p class="create-run-step-hint">Fastest on the left, slowest on the right.</p>
+          ${renderDualRangeShell({
+            kind: "pace",
+            minAttr: "createRunPaceMinRange",
+            maxAttr: "createRunPaceMaxRange",
+            step: PACE_SLIDER.step,
+            valueMin: pace.min,
+            valueMax: pace.max,
+            readoutId: "createRunPaceReadout",
+            readoutMain: `${secToPace(pace.min)} – ${secToPace(pace.max)} /km`,
+            readoutSub: paceHint,
+            scaleLeft: secToPace(PACE_SLIDER.min),
+            scaleRight: secToPace(PACE_SLIDER.max),
+          })}
+          <p class="run-form-label run-type-label">Run type</p>
+          <div class="run-type-rail" role="listbox" aria-label="Run type">
+            ${RUN_TYPES.map(
+              (t) =>
+                `<button type="button" role="option" aria-selected="${c.run_type === t.id ? "true" : "false"}"
+                  class="run-type-pill ${c.run_type === t.id ? "is-active" : ""}"
+                  data-action="create-run-type" data-type="${h(t.id)}">${h(t.label)}</button>`
             ).join("")}
           </div>
-          <div class="form-row-2">
-            <label>Min /km<input type="text" id="createRunPaceMin" value="${h(c.pace_min)}" placeholder="5:00"></label>
-            <label>Max /km<input type="text" id="createRunPaceMax" value="${h(c.pace_max)}" placeholder="5:30"></label>
-          </div>
-          <label class="run-form-label">Run type
-            <select id="createRunType">
-              ${RUN_TYPES.map((t) => `<option value="${h(t.id)}" ${c.run_type === t.id ? "selected" : ""}>${h(t.label)}</option>`).join("")}
-            </select>
-          </label>
         </div>`;
     }
     return `
@@ -1390,24 +1481,136 @@
     if (loc) c.location_name = loc.value.trim();
     const when = document.getElementById("createRunWhen");
     if (when) c.meeting_time = when.value ? new Date(when.value).toISOString() : c.meeting_time;
-    const dist = document.getElementById("createRunDistance");
-    if (dist) c.distance_km = Number(dist.value) || c.distance_km;
-    const pmin = document.getElementById("createRunPaceMin");
-    if (pmin) c.pace_min = pmin.value.trim();
-    const pmax = document.getElementById("createRunPaceMax");
-    if (pmax) c.pace_max = pmax.value.trim();
-    const rtype = document.getElementById("createRunType");
-    if (rtype) c.run_type = rtype.value;
+    const distMin = document.getElementById("createRunDistanceMin");
+    const distMax = document.getElementById("createRunDistanceMax");
+    if (distMin && distMax) {
+      c.distance_km_min = Number(distMin.value);
+      c.distance_km_max = Number(distMax.value);
+      c.distance_km = Math.round(((c.distance_km_min + c.distance_km_max) / 2) * 10) / 10;
+    }
+    const paceMinRange = document.getElementById("createRunPaceMinRange");
+    const paceMaxRange = document.getElementById("createRunPaceMaxRange");
+    if (paceMinRange && paceMaxRange) {
+      c.pace_min = secToPace(Number(paceMinRange.value));
+      c.pace_max = secToPace(Number(paceMaxRange.value));
+    }
     const title = document.getElementById("createRunTitle");
     if (title) c.title = title.value.trim();
     const desc = document.getElementById("createRunDesc");
     if (desc) c.description = desc.value.trim();
     const maxp = document.getElementById("createRunMax");
-    if (maxp && maxp.value) c.max_participants = Number(maxp.value);
+    if (maxp) c.max_participants = maxp.value ? Number(maxp.value) : null;
     const vis = document.querySelector('input[name="runVis"]:checked');
     if (vis) c.visibility = vis.value;
     const clubSel = document.getElementById("createRunClub");
     if (clubSel) c.club_id = clubSel.value ? Number(clubSel.value) : null;
+  }
+
+  function wireDualRange({ minInput, maxInput, fill, readout, readoutSub, formatMain, formatSub, onChange }) {
+    if (!minInput || !maxInput) return;
+    const root = minInput.closest(".pulse-dual-range");
+    const step = Number(minInput.step) || 1;
+    const boundMin = Number(minInput.min);
+    const boundMax = Number(minInput.max);
+
+    const update = () => {
+      let min = Number(minInput.value);
+      let max = Number(maxInput.value);
+      if (min > max) {
+        if (document.activeElement === minInput) {
+          max = min;
+          maxInput.value = String(max);
+        } else {
+          min = max;
+          minInput.value = String(min);
+        }
+      }
+      if (max - min < step) {
+        if (document.activeElement === minInput) {
+          max = Math.min(boundMax, min + step);
+          if (max - min < step) min = Math.max(boundMin, max - step);
+          minInput.value = String(min);
+          maxInput.value = String(max);
+        } else {
+          min = Math.max(boundMin, max - step);
+          if (max - min < step) max = Math.min(boundMax, min + step);
+          minInput.value = String(min);
+          maxInput.value = String(max);
+        }
+      }
+      const span = boundMax - boundMin || 1;
+      const leftPct = ((min - boundMin) / span) * 100;
+      const widthPct = ((max - min) / span) * 100;
+      if (fill) {
+        // Keep fill aligned with the inset track (14px each side).
+        fill.style.left = `calc(14px + (100% - 28px) * ${leftPct / 100})`;
+        fill.style.width = `calc((100% - 28px) * ${widthPct / 100})`;
+      }
+      if (readout) readout.textContent = formatMain(min, max);
+      if (readoutSub && formatSub) readoutSub.textContent = formatSub(min, max);
+      onChange?.(min, max);
+    };
+
+    const setDragging = (active) => {
+      root?.classList.toggle("is-dragging", active);
+    };
+
+    minInput.addEventListener("input", update);
+    maxInput.addEventListener("input", update);
+    [minInput, maxInput].forEach((inp) => {
+      inp.addEventListener("pointerdown", () => {
+        inp.classList.add("is-active");
+        setDragging(true);
+      });
+      const end = () => {
+        inp.classList.remove("is-active");
+        setDragging(false);
+      };
+      inp.addEventListener("pointerup", end);
+      inp.addEventListener("pointercancel", end);
+      inp.addEventListener("blur", end);
+    });
+    update();
+  }
+
+  function wireCreateRunSliders() {
+    wireDualRange({
+      minInput: document.getElementById("createRunDistanceMin"),
+      maxInput: document.getElementById("createRunDistanceMax"),
+      fill: document.getElementById("distanceRangeFill"),
+      readout: document.getElementById("createRunDistanceReadout"),
+      readoutSub: document.querySelector('.pulse-dual-range[data-range-kind="distance"] .pulse-dual-range__readout-sub'),
+      formatMain: (min, max) => `${min} – ${max} km`,
+      formatSub: (min, max) => `~${Math.round(((min + max) / 2) * 10) / 10} km planned`,
+      onChange: (min, max) => {
+        runsState.create.distance_km_min = min;
+        runsState.create.distance_km_max = max;
+        runsState.create.distance_km = Math.round(((min + max) / 2) * 10) / 10;
+      },
+    });
+
+    wireDualRange({
+      minInput: document.getElementById("createRunPaceMinRange"),
+      maxInput: document.getElementById("createRunPaceMaxRange"),
+      fill: document.getElementById("paceRangeFill"),
+      readout: document.getElementById("createRunPaceReadout"),
+      readoutSub: document.querySelector('.pulse-dual-range[data-range-kind="pace"] .pulse-dual-range__readout-sub'),
+      formatMain: (min, max) => `${secToPace(min)} – ${secToPace(max)} /km`,
+      formatSub: (min, max) => {
+        const spread = max - min;
+        if (spread <= 30) return "Tight group";
+        if (spread >= 90) return "All paces welcome";
+        return "Flexible pace";
+      },
+      onChange: (min, max) => {
+        runsState.create.pace_min = secToPace(min);
+        runsState.create.pace_max = secToPace(max);
+      },
+    });
+  }
+
+  function afterRender(page) {
+    if (page === "create-run") wireCreateRunSliders();
   }
 
   async function submitCreateRun() {
@@ -1740,23 +1943,9 @@
       hooks.render();
       return true;
     }
-    if (action === "create-distance") {
-      const km = el?.dataset?.km;
-      if (km === "custom") {
-        runsState.create.distance_km = 12;
-      } else {
-        runsState.create.distance_km = Number(km);
-      }
-      hooks.render();
-      return true;
-    }
-    if (action === "create-pace-preset") {
-      const idx = Number(el?.dataset?.idx);
-      const preset = PACE_PRESETS[idx];
-      if (preset) {
-        runsState.create.pace_min = preset.min;
-        runsState.create.pace_max = preset.max;
-      }
+    if (action === "create-run-type") {
+      const type = el?.dataset?.type;
+      if (type) runsState.create.run_type = type;
       hooks.render();
       return true;
     }
@@ -1877,6 +2066,7 @@
     renderPeopleCard,
     handleAction,
     onPageEnter,
+    afterRender,
     openRun,
     openClub,
     redeemClubInviteToken,
