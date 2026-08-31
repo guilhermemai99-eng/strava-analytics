@@ -303,7 +303,7 @@ async def lifespan(app: FastAPI):
 # ============================================================
 
 app = FastAPI(
-    title="Strava Analytics",
+    title="PULSE",
     lifespan=lifespan,
 )
 
@@ -2373,7 +2373,7 @@ def dashboard(
         )
 
     return FileResponse(
-        "static/pulse.html"
+        "static/app.html"
     )
 
 
@@ -2383,6 +2383,25 @@ def analytics_lab(
 ):
 
     """Legacy analytics dashboard — kept reachable from Settings."""
+
+    if not get_current_athlete_id(
+        request
+    ):
+
+        return RedirectResponse(
+            url="/",
+            status_code=302
+        )
+
+    return FileResponse(
+        "static/dashboard.html"
+    )
+
+
+@app.get("/performance")
+def performance(
+    request: Request
+):
 
     if not get_current_athlete_id(
         request
