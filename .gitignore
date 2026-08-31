@@ -9,3 +9,9 @@ strava_backup_antes_migracao.db
 cache/
 ai_insights_cache.json
 running_pr_cache.json
+
+# Expo mobile shell
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/.env

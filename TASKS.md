@@ -75,6 +75,10 @@ Strava remains the activity data source. The product centre is real runs and peo
 - Locked profiles can’t open follower lists
 - Mobile Messages + Notifications on every main header page
 
+### Mobile (Expo)
+- `mobile/` — Expo Go shell (WebView → Pulse `/dashboard`)
+- `npm run start:tunnel` in `mobile/` for iPhone testing via QR code
+
 ## Next
 
 | # | Phase | Status |
