@@ -63,7 +63,7 @@ Base.metadata.create_all(
 # ============================================================
 
 app = FastAPI(
-    title="Strava Analytics"
+    title="PULSE"
 )
 
 
@@ -1138,6 +1138,25 @@ def analytics_ai_insights(
 
 @app.get("/dashboard")
 def dashboard(
+    request: Request
+):
+
+    if not get_current_athlete_id(
+        request
+    ):
+
+        return RedirectResponse(
+            url="/",
+            status_code=302
+        )
+
+    return FileResponse(
+        "static/app.html"
+    )
+
+
+@app.get("/performance")
+def performance(
     request: Request
 ):
 

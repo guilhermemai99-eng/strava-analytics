@@ -1,49 +1,27 @@
 <!DOCTYPE html>
 <html lang="pt">
-
 <head>
-
     <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
-    <title>Strava Analytics</title>
-
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PULSE</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-
         :root {
-            --bg: #070707;
-            --surface: #111111;
-            --line: rgba(255, 255, 255, 0.06);
-            --text: #f3f1ec;
-            --muted: #8a8680;
-            --accent: #d7b56d;
+            --bg: #f5f3ee;
+            --black: #000;
+            --muted: #6e6c68;
+            --lime: #d6ff2e;
         }
-
-        * {
-            box-sizing: border-box;
-        }
-
+        * { box-sizing: border-box; }
         body {
             margin: 0;
             min-height: 100vh;
-            background:
-                radial-gradient(1200px 600px at 80% -10%, rgba(215, 181, 109, 0.08), transparent 50%),
-                var(--bg);
-            color: var(--text);
-            font-family:
-                Inter,
-                ui-sans-serif,
-                system-ui,
-                -apple-system,
-                "Segoe UI",
-                sans-serif;
+            background: var(--bg);
+            color: var(--black);
+            font-family: Inter, sans-serif;
         }
-
         .shell {
             min-height: 100vh;
             display: flex;
@@ -51,41 +29,44 @@
             justify-content: center;
             padding: 32px 20px;
         }
-
         .card {
-            width: min(520px, 100%);
-            background: var(--surface);
-            border: 1px solid var(--line);
-            border-radius: 24px;
-            padding: 40px 36px 36px;
-            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+            width: min(440px, 100%);
+            border: 1px solid var(--black);
+            padding: 40px 28px;
+            background: var(--bg);
         }
-
-        .eyebrow {
-            color: var(--accent);
-            font-size: 11px;
-            font-weight: 650;
-            letter-spacing: 0.22em;
-            text-transform: uppercase;
-            margin-bottom: 18px;
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: Archivo, sans-serif;
+            font-weight: 800;
+            font-size: 22px;
+            letter-spacing: -0.44px;
+            margin-bottom: 28px;
         }
-
+        .star {
+            width: 10px;
+            height: 10px;
+            background: var(--lime);
+            clip-path: polygon(50% 0%, 65% 35%, 100% 50%, 65% 65%, 50% 100%, 35% 65%, 0 50%, 35% 35%);
+            border: 1px solid var(--black);
+        }
         h1 {
             margin: 0;
-            font-size: clamp(36px, 7vw, 52px);
+            font-family: Archivo, sans-serif;
+            font-weight: 800;
+            font-size: clamp(32px, 7vw, 44px);
             line-height: 0.95;
-            font-weight: 620;
-            letter-spacing: -1.8px;
+            letter-spacing: -1px;
         }
-
         .subtitle {
             margin: 18px 0 0;
             color: var(--muted);
             font-size: 15px;
             line-height: 1.55;
-            max-width: 36ch;
+            max-width: 34ch;
         }
-
         .login-button {
             display: inline-flex;
             align-items: center;
@@ -93,60 +74,27 @@
             margin-top: 32px;
             min-height: 48px;
             padding: 0 22px;
-            background: var(--text);
-            color: #0b0b0b;
-            border-radius: 12px;
+            background: var(--lime);
+            color: var(--black);
+            border: 1px solid var(--black);
+            border-radius: 4px;
             text-decoration: none;
-            font-size: 14px;
-            font-weight: 650;
-            transition: transform 0.2s ease, opacity 0.2s ease;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.26px;
         }
-
-        .login-button:hover {
-            transform: translateY(-1px);
-        }
-
-        @media (max-width: 390px) {
-            .card {
-                padding: 28px 22px;
-            }
-        }
-
     </style>
-
 </head>
-
-
 <body>
-
 <div class="shell">
-
     <section class="card">
-
-        <div class="eyebrow">
-            Performance platform
-        </div>
-
-        <h1>
-            O teu treino,<br>
-            com clareza.
-        </h1>
-
+        <div class="brand"><span class="star"></span>PULSE</div>
+        <h1>RUN TOGETHER.<br>GET BETTER.</h1>
         <p class="subtitle">
-            Entra com a tua conta Strava para ver score, performance e o plano da semana.
+            Uma rede social para quem corre. Vê corridas, encontra pessoas, junta-te a um grupo.
         </p>
-
-        <a
-            class="login-button"
-            href="/auth/strava"
-        >
-            Entrar com Strava
-        </a>
-
+        <a class="login-button" href="/auth/strava">ENTRAR COM STRAVA</a>
     </section>
-
 </div>
-
 </body>
-
 </html>
