@@ -3217,6 +3217,7 @@
     bindViewInteractions();
     wireCoachDom(els.viewRoot);
     wireDmComposer();
+    if (window.PulseRuns?.afterRender) PulseRuns.afterRender(state.page);
     scrollCoachThreads();
     updateMobileHeader();
 
