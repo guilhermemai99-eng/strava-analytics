@@ -139,6 +139,15 @@ from people_match_helpers import (
     list_people_matches,
     run_together_suggestion,
 )
+from discovery_helpers import (
+    DiscoveryError,
+    get_next_person,
+    get_or_create_preferences,
+    list_matches,
+    record_swipe,
+    serialize_preferences,
+    update_preferences,
+)
 from club_helpers import (
     ClubError,
     accept_invite,
@@ -2962,6 +2971,125 @@ def api_run_together(athlete_id: int, request: Request):
         if not suggestion:
             raise HTTPException(status_code=404, detail="Suggestion unavailable.")
         return suggestion
+    finally:
+        db.close()
+
+
+# ============================================================
+# DISCOVERY — Tinder-style people discovery (like/pass/match)
+# ============================================================
+
+
+def _discovery_http(exc: DiscoveryError) -> HTTPException:
+    return HTTPException(status_code=exc.status_code, detail=str(exc))
+
+
+class DiscoveryPreferencesUpdate(BaseModel):
+    radius_km: Optional[int] = None
+    location_mode: Optional[str] = None
+    manual_city: Optional[str] = None
+    manual_country: Optional[str] = None
+    private_lat: Optional[float] = None
+    private_lng: Optional[float] = None
+    pace_min_sec: Optional[float] = None
+    pace_max_sec: Optional[float] = None
+    distance_min_km: Optional[float] = None
+    distance_max_km: Optional[float] = None
+    available_days: Optional[str] = None
+    goals: Optional[str] = None
+    show_goals: Optional[bool] = None
+    show_availability: Optional[bool] = None
+    discovery_bio: Optional[str] = None
+
+
+class DiscoverySwipeRequest(BaseModel):
+    target_id: int
+    action: str
+
+
+@app.get("/api/discovery/next")
+def api_discovery_next(request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        result = get_next_person(db, viewer_id=viewer_id)
+        if not result:
+            return {"person": None, "remaining": 0}
+        db.commit()
+        return result
+    except DiscoveryError as exc:
+        raise _discovery_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.post("/api/discovery/swipe")
+def api_discovery_swipe(request: Request, body: DiscoverySwipeRequest):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        result = record_swipe(
+            db,
+            from_id=viewer_id,
+            to_id=body.target_id,
+            action=body.action.strip().lower(),
+        )
+        db.commit()
+        return result
+    except DiscoveryError as exc:
+        db.rollback()
+        raise _discovery_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.get("/api/discovery/preferences")
+def api_discovery_preferences_get(request: Request):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        athlete = (
+            db.query(Athlete).filter(Athlete.id == viewer_id).one_or_none()
+        )
+        if not athlete:
+            raise HTTPException(status_code=404, detail="Profile not found.")
+        prefs = get_or_create_preferences(db, viewer_id)
+        db.commit()
+        return serialize_preferences(db, prefs, athlete)
+    finally:
+        db.close()
+
+
+@app.put("/api/discovery/preferences")
+def api_discovery_preferences_put(
+    request: Request, body: DiscoveryPreferencesUpdate
+):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        athlete = (
+            db.query(Athlete).filter(Athlete.id == viewer_id).one_or_none()
+        )
+        if not athlete:
+            raise HTTPException(status_code=404, detail="Profile not found.")
+        payload = body.model_dump(exclude_unset=True)
+        prefs = update_preferences(db, athlete_id=viewer_id, payload=payload)
+        db.commit()
+        return serialize_preferences(db, prefs, athlete)
+    except DiscoveryError as exc:
+        db.rollback()
+        raise _discovery_http(exc) from exc
+    finally:
+        db.close()
+
+
+@app.get("/api/discovery/matches")
+def api_discovery_matches(request: Request, limit: int = 30):
+    viewer_id = require_athlete_id(request)
+    db = SessionLocal()
+    try:
+        items = list_matches(db, viewer_id=viewer_id, limit=limit)
+        return {"items": items, "count": len(items)}
     finally:
         db.close()
 

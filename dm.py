@@ -28,6 +28,12 @@ class Conversation(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     pair_key = Column(String(64), nullable=False, unique=True, index=True)
+    conversation_type = Column(
+        String(16),
+        nullable=False,
+        default="direct",
+        server_default="direct",
+    )
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,

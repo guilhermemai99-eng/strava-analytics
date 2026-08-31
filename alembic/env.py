@@ -18,6 +18,7 @@ import club  # noqa: F401
 import club_invite  # noqa: F401
 import activity_social  # noqa: F401
 import follow_request  # noqa: F401
+import discovery  # noqa: F401
 
 
 config = context.config

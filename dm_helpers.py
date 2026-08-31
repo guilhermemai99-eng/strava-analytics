@@ -39,10 +39,19 @@ def are_mutual_followers(db: Session, user_a: int, user_b: int) -> bool:
     ) and is_following(db, follower_id=user_b, following_id=user_a)
 
 
+def can_message(db: Session, user_a: int, user_b: int) -> bool:
+    """Mutual follow or discovery match unlocks DMs."""
+    if are_mutual_followers(db, user_a, user_b):
+        return True
+    from discovery_helpers import has_discovery_match
+
+    return has_discovery_match(db, user_a, user_b)
+
+
 def require_mutual(db: Session, user_a: int, user_b: int) -> None:
-    if not are_mutual_followers(db, user_a, user_b):
+    if not can_message(db, user_a, user_b):
         raise DmError(
-            "Messages are available when you follow each other.",
+            "Messages are available when you follow each other or match.",
             status_code=403,
         )
 
@@ -245,9 +254,10 @@ def serialize_conversation_summary(
         viewer_id=viewer_id,
         last_read_at=me_part.last_read_at if me_part else None,
     )
-    can_send = bool(peer_id and are_mutual_followers(db, viewer_id, peer_id))
+    can_send = bool(peer_id and can_message(db, viewer_id, peer_id))
     return {
         "id": conversation.id,
+        "conversation_type": getattr(conversation, "conversation_type", "direct"),
         "peer": _serialize_person(peer) if peer else None,
         "last_message": serialize_message(last, viewer_id) if last else None,
         "last_message_at": (
