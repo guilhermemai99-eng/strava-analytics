@@ -38,23 +38,24 @@ img { display: block; max-width: 100%; }
 
 .login {
     min-height: 100dvh;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-rows: minmax(280px, 52dvh) auto;
 }
 
 .login-media {
     position: relative;
-    flex: 1 1 auto;
-    min-height: 240px;
-    max-height: 56dvh;
+    min-height: 280px;
     overflow: hidden;
     background: var(--color-bg-inverse);
     border-bottom: var(--stroke) solid var(--color-border);
 }
 
 .login-media img {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
+    max-width: none;
     object-fit: cover;
     object-position: 50% 28%;
 }
@@ -203,20 +204,18 @@ img { display: block; max-width: 100%; }
 
 @media (min-width: 900px) {
     .login {
-        flex-direction: row;
+        grid-template-rows: 1fr;
+        grid-template-columns: 1.2fr minmax(420px, 1fr);
         min-height: 100dvh;
     }
 
     .login-media {
-        flex: 1 1 58%;
-        max-height: none;
         min-height: 100dvh;
         border-bottom: 0;
         border-right: var(--stroke) solid var(--color-border);
     }
 
     .login-panel {
-        flex: 1 1 42%;
         display: flex;
         align-items: center;
         padding: 48px 56px;
