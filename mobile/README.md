@@ -12,11 +12,27 @@ Expo Go shell for the Pulse web app. Does **not** replace the FastAPI/static web
 ```bash
 cd mobile
 npm install
-npm run start          # LAN (same Wi‑Fi)
-npm run start:tunnel   # Tunnel — use this for physical iPhone on another network
+npm run start          # LAN (same Wi‑Fi as your Mac)
+npm run start:tunnel   # Expo ngrok tunnel (works on Mac; may fail on some cloud VMs)
 ```
 
-Scan the QR code with the iPhone Camera app or Expo Go.
+**iPhone (Expo Go):** use tunnel mode so Metro is reachable from your phone:
+
+```bash
+cd mobile && npm run start:tunnel
+```
+
+Scan the QR code with the iPhone Camera or Expo Go.
+
+If `--tunnel` fails (ngrok blocked), run Metro with a public reverse proxy hostname, e.g. [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/):
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:8081
+# copy the https://….trycloudflare.com host, then:
+REACT_NATIVE_PACKAGER_HOSTNAME=YOUR_HOST.trycloudflare.com \
+EXPO_PACKAGER_PROXY_URL=https://YOUR_HOST.trycloudflare.com \
+npx expo start --port 8081
+```
 
 ## Backend URL
 
