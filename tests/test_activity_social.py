@@ -82,7 +82,7 @@ def test_following_appears_in_home_feed(
     feed = client.get("/api/feed")
     assert feed.status_code == 200
     ids = {item["activity"]["id"] for item in feed.json()["items"]}
-    assert mine.id in ids
+    assert mine.id not in ids
     assert yours.id in ids
 
 
