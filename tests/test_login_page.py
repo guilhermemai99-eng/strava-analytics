@@ -19,6 +19,7 @@ def test_anonymous_home_serves_login_landing(client):
     assert "ENTRAR COM STRAVA" in body
     assert "/static/pulse/login.css" in body
     assert "/static/pulse/photos/login-hero.jpg" in body
+    assert "Saturday crew" in body
     assert "FEED" in body
     assert "RUNS" in body
     assert "DISCOVER" in body
