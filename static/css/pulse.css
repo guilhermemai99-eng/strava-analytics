@@ -49,9 +49,33 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
   color: inherit;
+}
+
+input,
+textarea,
+select {
+  color: #f5f5f5;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #8e8e8e;
+  opacity: 1;
+}
+
+.settings-location-block {
+  margin: 8px 0 16px;
+}
+
+.settings-location-label {
+  margin: 8px 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
 }
 
 button {
@@ -1515,13 +1539,19 @@ body {
   min-height: 44px;
   border-radius: 12px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.06);
   padding: 10px 12px;
   font-size: 15px;
   text-transform: none;
   letter-spacing: 0;
   font-weight: 500;
-  color: var(--text);
+  color: #f5f5f5;
+}
+
+.form-stack input::placeholder,
+.form-stack textarea::placeholder {
+  color: #8e8e8e;
+  opacity: 1;
 }
 
 .form-stack textarea {

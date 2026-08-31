@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pulse</title>
-  <link rel="stylesheet" href="/static/css/pulse.css?v=deploy-4">
-  <link rel="stylesheet" href="/static/css/pulse-ig.css?v=deploy-4">
-  <link rel="stylesheet" href="/static/css/pulse-runs.css?v=deploy-4">
-  <link rel="stylesheet" href="/static/css/pulse-discover.css?v=deploy-6">
+  <link rel="stylesheet" href="/static/css/pulse.css?v=deploy-7">
+  <link rel="stylesheet" href="/static/css/pulse-ig.css?v=deploy-7">
+  <link rel="stylesheet" href="/static/css/pulse-runs.css?v=deploy-7">
+  <link rel="stylesheet" href="/static/css/pulse-discover.css?v=deploy-7">
 </head>
 <body>
   <div class="sync-chip" id="syncChip" aria-live="polite">Syncing Strava…</div>
@@ -119,8 +119,6 @@
       <button type="button" class="more-menu-item" data-nav="my-runs">My runs</button>
       <button type="button" class="more-menu-item" data-nav="messages">Messages</button>
       <button type="button" class="more-menu-item" data-nav="activity">Notifications</button>
-      <button type="button" class="more-menu-item" data-nav="coach">AI Coach</button>
-      <a class="more-menu-item" href="/lab">Pulse Lab</a>
       <button type="button" class="more-menu-item" data-action="open-settings">Settings</button>
       <button type="button" class="more-menu-item" id="syncNowBtnDrawer">Sync Strava</button>
       <a class="more-menu-item" href="/auth/logout">Log out</a>
@@ -140,15 +138,12 @@
         Bio
         <textarea id="settingsBio" maxlength="500" placeholder="One line about you as an athlete"></textarea>
       </label>
-      <div class="form-row-2">
-        <label>
-          City
-          <input type="text" id="settingsCity" maxlength="80" autocomplete="address-level2">
-        </label>
-        <label>
-          Country
-          <input type="text" id="settingsCountry" maxlength="80" autocomplete="country-name">
-        </label>
+      <div class="settings-location-block">
+        <p class="form-hint">Your area is set from your device location. It is never shown as an exact address.</p>
+        <p class="settings-location-label" id="settingsLocationLabel">Location not set</p>
+        <button type="button" class="btn btn-ghost" id="settingsUseLocation">Update from location</button>
+        <input type="hidden" id="settingsCity">
+        <input type="hidden" id="settingsCountry">
       </div>
       <label class="toggle-row">
         <input type="checkbox" id="settingsPublicExplore">
@@ -225,7 +220,7 @@
   </div>
 
   <script src="/static/js/microcopy.js?v=personality-2"></script>
-  <script src="/static/js/pulse-runs.js?v=deploy-6"></script>
-  <script src="/static/js/pulse.js?v=deploy-6" defer></script>
+  <script src="/static/js/pulse-runs.js?v=deploy-7"></script>
+  <script src="/static/js/pulse.js?v=deploy-7" defer></script>
 </body>
 </html>

@@ -16,7 +16,7 @@
     "profile",
     "coach",
   ];
-  const PROFILE_TABS = ["activities", "media", "stats", "lab"];
+  const PROFILE_TABS = ["activities", "media", "stats"];
   const Copy = window.PulseCopy || null;
 
   const TILE_BACKGROUNDS = [
@@ -339,25 +339,14 @@
       return;
     }
 
-    // Messages + Notifications + My runs on main mobile pages.
+    if (page === "activity") return;
+
     if (els.mobileHeaderEnd) {
-      const myRunsBtn =
-        page === "feed" || page === "discover" || page === "profile"
-          ? `<button type="button" class="ig-header-bell" data-nav="my-runs" aria-label="My runs">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v4H6zM6 10h12v10H6z"/></svg>
-            </button>`
-          : "";
       els.mobileHeaderEnd.innerHTML = `
-        ${myRunsBtn}
-        <button type="button" class="ig-header-bell" data-nav="messages" aria-label="Messages">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v10H8l-4 3V6z"/></svg>
-          <span class="nav-badge nav-badge--float" id="mobileDmBadge" hidden>0</span>
-        </button>
         <button type="button" class="ig-header-bell" data-nav="activity" aria-label="Notifications">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2 2 0 002-2H10a2 2 0 002 2zm6-6V11a6 6 0 00-5-5.91V4a1 1 0 00-2 0v1.09A6 6 0 006 11v5l-2 2v1h16v-1l-2-2z"/></svg>
           <span class="nav-badge nav-badge--float" id="mobileNotifBadge" hidden>0</span>
         </button>`;
-      updateDmBadges(state.inbox?.unread_total ?? 0);
       updateNotificationBadges(state.notifications.unread_total);
     }
   }
@@ -1147,12 +1136,8 @@
         <div class="discover-prefs-body">
           <section>
             <h3>Location</h3>
-            <label class="run-form-label">City
-              <input type="text" id="discoverPrefCity" value="${escapeHtml(prefs.manual_city || state.profile?.city || "")}" placeholder="Porto">
-            </label>
-            <label class="run-form-label">Country
-              <input type="text" id="discoverPrefCountry" value="${escapeHtml(prefs.manual_country || state.profile?.country || "")}" placeholder="Portugal">
-            </label>
+            <p class="discover-prefs-note">City comes from your device location. Update it in Settings.</p>
+            <p class="settings-location-label">${escapeHtml(prefs.manual_city || state.profile?.city || "Not set")}${prefs.manual_country || state.profile?.country ? `, ${escapeHtml(prefs.manual_country || state.profile?.country || "")}` : ""}</p>
             <p class="discover-prefs-label">Radius</p>
             <div class="discover-radius-list">
               ${radii
@@ -1286,8 +1271,6 @@
     const payload = {
       radius_km: radiusEl ? Number(radiusEl.value) : 25,
       location_mode: modeEl ? modeEl.value : "city",
-      manual_city: document.getElementById("discoverPrefCity")?.value || "",
-      manual_country: document.getElementById("discoverPrefCountry")?.value || "",
       discovery_bio: document.getElementById("discoverPrefBio")?.value || "",
       available_days: document.getElementById("discoverPrefAvail")?.value || "",
       goals: document.getElementById("discoverPrefGoals")?.value || "",
@@ -1538,7 +1521,6 @@
       { id: "activities", label: "Activities", icon: '<svg viewBox="0 0 24 24"><path d="M4 6h7v7H4zM13 6h7v7h-7zM4 15h7v7H4zM13 15h7v7h-7z"/></svg>' },
       { id: "media", label: "Media", icon: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M4 16l5-5 4 4 3-3 4 4"/></svg>' },
       { id: "stats", label: "Stats", icon: '<svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 17V11M12 17V7M16 17v-4"/></svg>' },
-      { id: "lab", label: "Lab", icon: '<svg viewBox="0 0 24 24"><path d="M12 3l2.2 4.5L19 9l-3.5 3.4.8 4.8L12 15.2 7.7 17.2l.8-4.8L5 9l4.8-1.5L12 3z"/></svg>' },
     ];
     return `
       <div class="ig-profile-tabs" role="tablist">
@@ -1579,17 +1561,6 @@
           <div class="stat-pill"><span>Runs</span><strong>${escapeHtml(runs)}</strong></div>
           <div class="stat-pill"><span>Time</span><strong>${escapeHtml(timeLabel)}</strong></div>
           <div class="stat-pill"><span>Followers</span><strong>${escapeHtml(Number(profile.follower_count || 0))}</strong></div>
-        </div>`;
-    }
-    if (tab === "lab") {
-      return `
-        <div class="ig-tab-panel ig-lab-panel">
-          <p>Deep analytics live in Pulse Lab — scores, training load, and AI insights without cluttering your social feed.</p>
-          <div class="profile-actions" style="margin-top:16px">
-            <a class="btn btn-primary" href="/lab">Open Pulse Lab</a>
-            <button type="button" class="btn btn-ghost" data-nav="coach">AI Coach</button>
-          </div>
-          ${renderCoachChat({ compact: false })}
         </div>`;
     }
     if (tab === "media") {
@@ -2384,6 +2355,12 @@
       if (window.PulseRuns) PulseRuns.setDiscoverTab("people");
       page = "discover";
     }
+    if (page === "coach") {
+      page = "messages";
+    }
+    if ((page === "club" || page === "create-club") && window.PulseRuns && !PulseRuns.showClubsUi()) {
+      page = "discover";
+    }
 
     const next = PAGES.includes(page) ? page : "feed";
     state.page = next;
@@ -2437,7 +2414,6 @@
       }
     }
     if (next === "messages") loadInbox(true);
-    if (next === "coach") loadCoachMessages(false);
     if (next === "activity") loadNotifications(true, true);
   }
 
@@ -3237,7 +3213,7 @@
     else if (state.page === "messages") html = renderMessagesInbox();
     else if (state.page === "dm") html = renderDmThread();
     else if (state.page === "activity") html = renderActivityPage();
-    else if (state.page === "coach") html = renderCoachPage();
+    else if (state.page === "coach") html = renderMessagesPage();
     else if (state.page === "u") html = renderViewedProfile();
     else html = renderProfile();
 
@@ -3304,6 +3280,7 @@
     state.postSheet.captionDraft = "";
     if (!els.postSheet) return;
     els.postSheet.hidden = true;
+    els.postSheet.classList.remove("is-comments");
   }
 
   function openPostSheet(kind, activityId) {
@@ -3312,6 +3289,7 @@
     state.postSheet.activityId = activityId;
     if (!els.postSheet) return;
     els.postSheet.hidden = false;
+    els.postSheet.classList.toggle("is-comments", kind === "comments");
     paintPostSheet();
   }
 
@@ -3358,23 +3336,42 @@
     }
     if (kind === "comments") {
       els.postSheetTitle.textContent = "Comments";
+      if (els.postSheet) {
+        els.postSheet.classList.add("is-comments");
+        const sheet = els.postSheet.querySelector(".sheet");
+        if (sheet) sheet.classList.add("is-comments");
+      }
       const rows = (state.postSheet.comments || [])
         .map((c) => {
           const a = c.author || {};
-          const del = c.is_own
-            ? `<button type="button" class="btn btn-ghost btn-sm" data-action="delete-comment" data-activity-id="${escapeHtml(aid)}" data-comment-id="${escapeHtml(c.id)}">Delete</button>`
+          const handle = a.handle ? `@${a.handle}` : a.name || "runner";
+          const when = c.created_at
+            ? new Date(c.created_at).toLocaleDateString([], { month: "short", day: "numeric" })
             : "";
-          return `<div class="comment-row">
-            <span class="pulse-avatar">${a.avatar_url ? `<img src="${escapeHtml(a.avatar_url)}" alt="">` : escapeHtml(a.initials || "P")}</span>
-            <div><strong>${escapeHtml(a.name || "Runner")}</strong> ${escapeHtml(c.body || "")}${del}</div>
+          return `<div class="ig-comment">
+            <button type="button" class="ig-comment-avatar pulse-avatar is-sm" data-action="open-user" data-athlete-id="${escapeHtml(a.athlete_id || "")}" data-handle="${escapeHtml(a.handle || "")}">
+              ${a.avatar_url ? `<img src="${escapeHtml(a.avatar_url)}" alt="">` : escapeHtml(a.initials || "P")}
+            </button>
+            <div class="ig-comment-body">
+              <p class="ig-comment-text"><strong>${escapeHtml(handle)}</strong> ${escapeHtml(c.body || "")}</p>
+              ${when ? `<span class="ig-comment-time">${escapeHtml(when)}</span>` : ""}
+              ${c.is_own ? `<button type="button" class="ig-comment-delete" data-action="delete-comment" data-activity-id="${escapeHtml(aid)}" data-comment-id="${escapeHtml(c.id)}">Delete</button>` : ""}
+            </div>
           </div>`;
         })
         .join("");
-      els.postSheetBody.innerHTML = `${rows || `<p class="runs-section-sub">Be the first to comment.</p>`}
-        <div class="comment-composer">
-          <input type="text" id="commentInput" maxlength="500" placeholder="Say something about the run">
-          <button type="button" class="btn btn-primary" data-action="send-comment" data-activity-id="${escapeHtml(aid)}">Send</button>
+      els.postSheetBody.innerHTML = `
+        <div class="ig-comments-list">${rows || `<p class="ig-comments-empty">No comments yet.</p>`}</div>
+        <div class="ig-comment-composer">
+          <input type="text" id="commentInput" maxlength="500" placeholder="Add a comment…" autocomplete="off">
+          <button type="button" class="ig-comment-post" data-action="send-comment" data-activity-id="${escapeHtml(aid)}">Post</button>
         </div>`;
+      return;
+    }
+    if (els.postSheet) {
+      els.postSheet.classList.remove("is-comments");
+      const sheet = els.postSheet.querySelector(".sheet");
+      if (sheet) sheet.classList.remove("is-comments");
     }
   }
 
@@ -3953,7 +3950,95 @@
     document.getElementById("settingsBio").value = profile.bio || "";
     document.getElementById("settingsCity").value = profile.location?.city || "";
     document.getElementById("settingsCountry").value = profile.location?.country || "";
+    updateSettingsLocationLabel(profile.location?.city, profile.location?.country);
     document.getElementById("settingsPublicExplore").checked = !!profile.is_profile_public;
+  }
+
+  function updateSettingsLocationLabel(city, country) {
+    const el = document.getElementById("settingsLocationLabel");
+    if (!el) return;
+    if (city && country) el.textContent = `${city}, ${country}`;
+    else if (city) el.textContent = city;
+    else if (country) el.textContent = country;
+    else el.textContent = "Location not set";
+  }
+
+  async function reverseGeocode(lat, lng) {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&format=json`,
+      { headers: { Accept: "application/json" } }
+    );
+    if (!res.ok) throw new Error("Could not resolve location.");
+    const data = await res.json();
+    const addr = data.address || {};
+    const city =
+      addr.city ||
+      addr.town ||
+      addr.village ||
+      addr.municipality ||
+      addr.suburb ||
+      "";
+    const country = addr.country || "";
+    return { city, country };
+  }
+
+  function useDeviceLocation({ saveProfile = false } = {}) {
+    if (!navigator.geolocation) {
+      showToast("Location is not available on this device.");
+      return Promise.reject(new Error("unavailable"));
+    }
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          try {
+            const geo = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+            const cityEl = document.getElementById("settingsCity");
+            const countryEl = document.getElementById("settingsCountry");
+            if (cityEl) cityEl.value = geo.city;
+            if (countryEl) countryEl.value = geo.country;
+            updateSettingsLocationLabel(geo.city, geo.country);
+            await apiFetch("/api/discovery/preferences", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                private_lat: pos.coords.latitude,
+                private_lng: pos.coords.longitude,
+                manual_city: geo.city,
+                manual_country: geo.country,
+                location_mode: "near_me",
+              }),
+            });
+            if (saveProfile) {
+              const res = await apiFetch("/api/me/profile", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  display_name: document.getElementById("settingsDisplayName").value,
+                  handle: document.getElementById("settingsHandle").value,
+                  bio: document.getElementById("settingsBio").value,
+                  city: geo.city,
+                  country: geo.country,
+                  is_profile_public: document.getElementById("settingsPublicExplore").checked,
+                }),
+              });
+              if (res.ok) {
+                state.profile = await res.json();
+                applyProfileChrome(state.profile);
+                showToast("Location updated.");
+              }
+            }
+            resolve(geo);
+          } catch (err) {
+            showToast(err.message || "Could not update location.");
+            reject(err);
+          }
+        },
+        () => {
+          showToast("Location permission denied.");
+          reject(new Error("denied"));
+        }
+      );
+    });
   }
 
   async function loadProfileBundle(force = false) {
@@ -4117,6 +4202,15 @@
     });
 
     document.getElementById("syncNowBtn").addEventListener("click", () => syncStrava(false));
+    const locBtn = document.getElementById("settingsUseLocation");
+    if (locBtn) {
+      locBtn.addEventListener("click", () => {
+        locBtn.disabled = true;
+        useDeviceLocation({ saveProfile: true }).finally(() => {
+          locBtn.disabled = false;
+        });
+      });
+    }
     const syncDrawerBtn = document.getElementById("syncNowBtnDrawer");
     if (syncDrawerBtn) {
       syncDrawerBtn.addEventListener("click", () => syncStrava(false));

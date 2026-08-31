@@ -399,10 +399,67 @@
   overflow: hidden;
 }
 
-.create-run-progress-bar {
+.create-run-progress > span {
+  display: block;
   height: 100%;
   background: var(--accent);
+  border-radius: 999px;
   transition: width 0.25s var(--ease);
+}
+
+.create-run-step-kicker {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.create-run-step-title {
+  margin: 0 0 8px;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.create-run-step-hint {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.create-run-step-indicator {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.create-run-nav--sticky {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.create-run-nav--sticky .btn-primary {
+  flex: 1;
+}
+
+.run-form-label input,
+.run-form-label textarea,
+.run-form-label select,
+.form-row-2 input {
+  color: #f5f5f5;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.run-form-label input::placeholder,
+.run-form-label textarea::placeholder,
+.form-row-2 input::placeholder {
+  color: #8e8e8e;
+  opacity: 1;
 }
 
 .run-form-label {

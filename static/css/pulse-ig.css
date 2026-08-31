@@ -964,3 +964,124 @@
 .ig-post-metrics {
   display: none;
 }
+
+/* Instagram-style comments sheet */
+.sheet-backdrop.is-comments .sheet,
+.sheet.is-comments {
+  max-height: min(92dvh, 780px);
+  display: flex;
+  flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.sheet-backdrop.is-comments #postSheetBody,
+#postSheet.is-comments #postSheetBody {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+}
+
+.ig-comments-list {
+  flex: 1;
+  overflow: auto;
+  padding: 8px 16px 12px;
+}
+
+.ig-comments-empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 24px 12px;
+  font-size: 14px;
+}
+
+.ig-comment {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 0;
+}
+
+.ig-comment-avatar {
+  flex-shrink: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.ig-comment-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ig-comment-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.ig-comment-text strong {
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.ig-comment-time {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #737373;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.ig-comment-delete {
+  display: inline-block;
+  margin-top: 4px;
+  border: 0;
+  background: none;
+  color: #737373;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+  cursor: pointer;
+}
+
+.ig-comment-composer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-elevated, #121612);
+}
+
+.ig-comment-composer input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: #f5f5f5;
+  font-size: 14px;
+  padding: 8px 0;
+}
+
+.ig-comment-composer input::placeholder {
+  color: #737373;
+  opacity: 1;
+}
+
+.ig-comment-post {
+  border: 0;
+  background: none;
+  color: #0095f6;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 0;
+  cursor: pointer;
+}
+
+.ig-comment-post:disabled {
+  opacity: 0.35;
+}

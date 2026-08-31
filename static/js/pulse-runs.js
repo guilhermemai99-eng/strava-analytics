@@ -2,6 +2,9 @@
 (() => {
   "use strict";
 
+  /** Backend stays; hide Run Club UI until the product is ready. */
+  const SHOW_CLUBS_UI = false;
+
   const RUN_TYPES = [
     { id: "easy", label: "Easy Run" },
     { id: "long", label: "Long Run" },
@@ -144,7 +147,7 @@
         </div>
         <p class="run-card-when">📅 ${h(formatRunWhen(run.meeting_time))}</p>
         <p class="run-card-loc">📍 ${h(run.location_name)}</p>
-        ${run.club && run.club.name ? `<p class="run-card-club">Hosted by ${h(run.club.name)}</p>` : ""}
+        ${SHOW_CLUBS_UI && run.club && run.club.name ? `<p class="run-card-club">Hosted by ${h(run.club.name)}</p>` : ""}
         <div class="run-card-metrics">
           <span>${h(String(run.distance_km))} km</span>
           ${run.pace_range ? `<span>${h(run.pace_range)}</span>` : ""}
@@ -524,8 +527,8 @@
     const tabs = [
       { id: "people", label: "People" },
       { id: "runs", label: "Runs" },
-      { id: "clubs", label: "Clubs" },
     ];
+    if (SHOW_CLUBS_UI) tabs.push({ id: "clubs", label: "Clubs" });
     let body = "";
     if (tab === "people") {
       body = hooks.renderPeopleExplore
@@ -695,7 +698,7 @@
         <section class="run-detail-block">
           <h2>Hosted by</h2>
           ${
-            run.club && run.club.id
+            SHOW_CLUBS_UI && run.club && run.club.id
               ? `<button type="button" class="run-host-row" data-action="open-club" data-club-id="${h(run.club.id)}">
                    <span class="pulse-avatar club-mini-mark">${h((run.club.name || "C").slice(0, 1).toUpperCase())}</span>
                    <strong>${h(run.club.name)}</strong>
@@ -719,36 +722,34 @@
     return d.toISOString().slice(0, 16);
   }
 
-  function renderCreateRun() {
-    const c = runsState.create;
-    const whenValue = c.meeting_time || defaultMeetingTime();
-    const peerBanner = c.peer
-      ? `<div class="run-together-banner">
-           <span class="pulse-avatar">${c.peer.avatar_url ? `<img src="${h(c.peer.avatar_url)}" alt="">` : h(c.peer.initials || "P")}</span>
-           <div><strong>Running with ${h(c.peer.name)}</strong><span>We'll invite them when you create — invite-only by default.</span></div>
-         </div>`
-      : "";
-    const defaultVis = c.peer ? "invite_only" : c.visibility;
-    return `
-      <section class="pulse-page runs-page create-run-page" data-page="create-run">
-        <header class="runs-page-head create-run-head">
-          <button type="button" class="ig-action-btn" data-action="create-run-back" aria-label="Back">←</button>
-          <h1>Plan a run</h1>
-          <span></span>
-        </header>
-        <p class="runs-tagline">Where, when, and how far. The rest is optional.</p>
-        ${peerBanner}
-
-        <div class="create-run-section">
-          <h2 class="create-run-section-title">The basics</h2>
+  function renderCreateRunStep(c, whenValue, defaultVis) {
+    const step = c.step || 1;
+    if (step === 1) {
+      return `
+        <div class="create-run-step">
+          <p class="create-run-step-kicker">Step 1 of 5</p>
+          <h2 class="create-run-step-title">Where?</h2>
+          <p class="create-run-step-hint">Pick a public meeting spot.</p>
           <label class="run-form-label">Meeting point
             <input type="text" id="createRunLocation" value="${h(c.location_name)}" placeholder="Park, café, bridge…" autocomplete="off">
           </label>
-          <p class="form-hint">Use a public spot — no exact home addresses.</p>
-          <label class="run-form-label">When
+        </div>`;
+    }
+    if (step === 2) {
+      return `
+        <div class="create-run-step">
+          <p class="create-run-step-kicker">Step 2 of 5</p>
+          <h2 class="create-run-step-title">When?</h2>
+          <label class="run-form-label">Date & time
             <input type="datetime-local" id="createRunWhen" value="${h(whenValue.slice(0, 16))}">
           </label>
-          <p class="run-form-label">Distance</p>
+        </div>`;
+    }
+    if (step === 3) {
+      return `
+        <div class="create-run-step">
+          <p class="create-run-step-kicker">Step 3 of 5</p>
+          <h2 class="create-run-step-title">How far?</h2>
           <div class="run-chip-row">
             ${DISTANCE_PRESETS.map(
               (km) =>
@@ -756,10 +757,16 @@
             ).join("")}
             <button type="button" class="run-chip ${!DISTANCE_PRESETS.includes(c.distance_km) ? "is-active" : ""}" data-action="create-distance" data-km="custom">Custom</button>
           </div>
-          <label class="run-form-label">Custom km
+          <label class="run-form-label">Distance (km)
             <input type="number" id="createRunDistance" min="1" max="200" step="0.1" value="${h(c.distance_km)}">
           </label>
-          <p class="run-form-label">Pace</p>
+        </div>`;
+    }
+    if (step === 4) {
+      return `
+        <div class="create-run-step">
+          <p class="create-run-step-kicker">Step 4 of 5</p>
+          <h2 class="create-run-step-title">What pace?</h2>
           <div class="run-chip-row">
             ${PACE_PRESETS.map(
               (p, i) =>
@@ -775,45 +782,56 @@
               ${RUN_TYPES.map((t) => `<option value="${h(t.id)}" ${c.run_type === t.id ? "selected" : ""}>${h(t.label)}</option>`).join("")}
             </select>
           </label>
+        </div>`;
+    }
+    return `
+      <div class="create-run-step">
+        <p class="create-run-step-kicker">Step 5 of 5</p>
+        <h2 class="create-run-step-title">Final details</h2>
+        <label class="run-form-label">Title
+          <input type="text" id="createRunTitle" value="${h(c.title)}" placeholder="Sunday long run">
+        </label>
+        <label class="run-form-label">Description (optional)
+          <textarea id="createRunDesc" rows="3" placeholder="Easy pace, all welcome.">${h(c.description)}</textarea>
+        </label>
+        <p class="run-form-label">Who can join?</p>
+        <div class="run-visibility-list">
+          <label><input type="radio" name="runVis" value="everyone" ${defaultVis === "everyone" ? "checked" : ""}> 🌍 Everyone</label>
+          <label><input type="radio" name="runVis" value="followers" ${defaultVis === "followers" ? "checked" : ""}> 👥 Followers</label>
+          <label><input type="radio" name="runVis" value="invite_only" ${defaultVis === "invite_only" ? "checked" : ""}> 🔒 Invite only</label>
         </div>
+        <label class="run-form-label">Max runners (optional)
+          <input type="number" id="createRunMax" min="2" max="500" value="${c.max_participants || ""}" placeholder="No limit">
+        </label>
+      </div>`;
+  }
 
-        <div class="create-run-section">
-          <h2 class="create-run-section-title">Details</h2>
-          <label class="run-form-label">Title
-            <input type="text" id="createRunTitle" value="${h(c.title)}" placeholder="Sunday long run">
-          </label>
-          <label class="run-form-label">Description (optional)
-            <textarea id="createRunDesc" rows="3" placeholder="Meeting at the statue. Easy pace, all welcome.">${h(c.description)}</textarea>
-          </label>
-          <p class="run-form-label">Who can join?</p>
-          <div class="run-visibility-list">
-            <label><input type="radio" name="runVis" value="everyone" ${defaultVis === "everyone" ? "checked" : ""}> 🌍 Everyone</label>
-            <label><input type="radio" name="runVis" value="followers" ${defaultVis === "followers" ? "checked" : ""}> 👥 Followers</label>
-            <label><input type="radio" name="runVis" value="invite_only" ${defaultVis === "invite_only" ? "checked" : ""}> 🔒 Invite only</label>
-          </div>
-          <label class="run-form-label">Max runners (optional)
-            <input type="number" id="createRunMax" min="2" max="500" value="${c.max_participants || ""}" placeholder="No limit">
-          </label>
-          ${
-            runsState.adminClubs.items.length
-              ? `<label class="run-form-label">Host as
-                  <select id="createRunClub">
-                    <option value="">Just me</option>
-                    ${runsState.adminClubs.items
-                      .map(
-                        (club) =>
-                          `<option value="${h(club.id)}" ${Number(c.club_id) === Number(club.id) ? "selected" : ""}>${h(club.name)}</option>`
-                      )
-                      .join("")}
-                  </select>
-                </label>`
-              : ""
-          }
-        </div>
-
+  function renderCreateRun() {
+    const c = runsState.create;
+    const whenValue = c.meeting_time || defaultMeetingTime();
+    const peerBanner = c.peer
+      ? `<div class="run-together-banner">
+           <span class="pulse-avatar">${c.peer.avatar_url ? `<img src="${h(c.peer.avatar_url)}" alt="">` : h(c.peer.initials || "P")}</span>
+           <div><strong>Running with ${h(c.peer.name)}</strong><span>Invite-only by default.</span></div>
+         </div>`
+      : "";
+    const defaultVis = c.peer ? "invite_only" : c.visibility;
+    const step = c.step || 1;
+    const isLast = step >= 5;
+    return `
+      <section class="pulse-page runs-page create-run-page" data-page="create-run">
+        <header class="runs-page-head create-run-head">
+          <button type="button" class="ig-action-btn" data-action="create-run-back" aria-label="Back">←</button>
+          <h1>Plan a run</h1>
+          <span class="create-run-step-indicator">${step}/5</span>
+        </header>
+        ${peerBanner}
+        <div class="create-run-progress"><span style="width:${(step / 5) * 100}%"></span></div>
+        ${renderCreateRunStep(c, whenValue, defaultVis)}
         <div class="create-run-nav create-run-nav--sticky">
-          <button type="button" class="btn btn-primary" data-action="create-run-submit" ${c.submitting ? "disabled" : ""}>
-            ${c.submitting ? "Creating…" : "Create run"}
+          ${step > 1 ? `<button type="button" class="btn btn-ghost" data-action="create-run-prev">Back</button>` : ""}
+          <button type="button" class="btn btn-primary" data-action="${isLast ? "create-run-submit" : "create-run-next"}" ${c.submitting ? "disabled" : ""}>
+            ${c.submitting ? "Creating…" : isLast ? "Create run" : "Next"}
           </button>
         </div>
       </section>`;
@@ -1692,7 +1710,34 @@
       return true;
     }
     if (action === "create-run-back") {
-      hooks.navigate("discover");
+      if ((runsState.create.step || 1) > 1) {
+        syncCreateFormFromDom();
+        runsState.create.step -= 1;
+        hooks.render();
+      } else {
+        hooks.navigate("discover");
+      }
+      return true;
+    }
+    if (action === "create-run-prev") {
+      syncCreateFormFromDom();
+      runsState.create.step = Math.max(1, (runsState.create.step || 1) - 1);
+      hooks.render();
+      return true;
+    }
+    if (action === "create-run-next") {
+      syncCreateFormFromDom();
+      const step = runsState.create.step || 1;
+      if (step === 1 && !runsState.create.location_name.trim()) {
+        hooks.showToast("Add a meeting point.");
+        return true;
+      }
+      if (step === 2 && !runsState.create.meeting_time) {
+        hooks.showToast("Pick a date and time.");
+        return true;
+      }
+      runsState.create.step = Math.min(5, step + 1);
+      hooks.render();
       return true;
     }
     if (action === "create-distance") {
@@ -1781,9 +1826,14 @@
     }
     if (page === "create-run") {
       if (!runsState.create.meeting_time) runsState.create.meeting_time = defaultMeetingTime();
-      loadAdminClubs(false).then(() => {
-        if (hooks.getPage() === "create-run") hooks.render();
-      });
+      if (!runsState.create.peer) runsState.create.step = 1;
+      if (SHOW_CLUBS_UI) {
+        loadAdminClubs(false).then(() => {
+          if (hooks.getPage() === "create-run") hooks.render();
+        });
+      } else if (hooks.getPage() === "create-run") {
+        hooks.render();
+      }
     }
     if (page === "run" && opts.runId) {
       loadRunDetail(opts.runId, true).then(() => {
@@ -1837,6 +1887,9 @@
     },
     getDiscoverTab() {
       return runsState.discover.tab || "people";
+    },
+    showClubsUi() {
+      return SHOW_CLUBS_UI;
     },
     getRunIdFromHash() {
       const raw = (location.hash || "").slice(1);
