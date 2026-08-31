@@ -683,9 +683,6 @@
   function renderFeedMedia(item) {
     const media = item.media || {};
     const activity = item.activity || {};
-    const polyline = media.summary_polyline || "";
-    const gradientId = `routeGlow-${escapeHtml(activity.id || "x")}`;
-    const mapSvg = polyline ? polylineToSvg(polyline, gradientId) : "";
     const stats = feedOverlayStats(item);
     const overlay = `
       <div class="feed-media-overlay">
@@ -712,7 +709,6 @@
     }
     return `
       <div class="feed-media is-fallback" style="background:${bg}">
-        ${mapSvg ? `<div class="feed-media-map" data-feed-map>${mapSvg}</div>` : ""}
         ${overlay}
       </div>`;
   }
@@ -3865,13 +3861,9 @@
     els.activityModalTitle.textContent = activity.name || "Run";
     const bg = tileBackground(activity, 0);
     const photo = proxiedMediaUrl(activity.photo_url || "");
-    const poly = activity.summary_polyline || "";
-    const mapSvg = poly ? polylineToSvg(poly, `modalRoute-${escapeHtml(activity.id)}`) : "";
     const mediaBlock = photo
       ? `<div class="modal-hero has-photo"><img src="${escapeHtml(photo)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"></div>`
-      : mapSvg
-        ? `<div class="modal-hero has-map">${mapSvg}</div>`
-        : `<div class="modal-hero" style="background:${bg}">
+      : `<div class="modal-hero" style="background:${bg}">
         <div>
           <div class="tile-label">${escapeHtml((activity.sport_type || "Run").toUpperCase())}</div>
           <div class="tile-distance" style="margin-top:8px">${escapeHtml(formatKm(activity.distance_m))} KM</div>

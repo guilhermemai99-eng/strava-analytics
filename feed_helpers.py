@@ -100,7 +100,6 @@ def serialize_feed_item(
     )
     location = location_display_for(athlete)
     photo = proxied_media_url((activity.photo_url or "").strip() or None)
-    polyline = (activity.summary_polyline or "").strip() or None
     social = None
     if viewer_id is not None:
         social = {
@@ -138,9 +137,8 @@ def serialize_feed_item(
         },
         "media": {
             "primary_image_url": photo,
-            "summary_polyline": polyline,
             "has_photo": bool(photo),
-            "has_map": bool(polyline),
+            "has_map": False,
             "photo_count": activity.photo_count or (1 if photo else 0),
         },
         "location": {

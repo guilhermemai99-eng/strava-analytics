@@ -151,6 +151,6 @@ def test_feed_photo_and_map_fallback_fields(
 
     map_item = items["Map Run"]
     assert map_item["media"]["has_photo"] is False
-    assert map_item["media"]["has_map"] is True
-    assert map_item["media"]["summary_polyline"]
+    assert map_item["media"]["has_map"] is False
+    assert "summary_polyline" not in map_item["media"]
     assert "start_lat" not in _flatten_keys(resp.json())

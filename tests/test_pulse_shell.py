@@ -14,7 +14,7 @@ def test_dashboard_serves_pulse_shell(client, make_session, make_athlete):
     assert "/static/js/pulse.js" in body
     assert "/static/js/pulse-runs.js" in body
     assert "/static/css/pulse-runs.css" in body
-    assert "v=deploy-7" in body
+    assert "v=deploy-8" in body
     assert 'data-nav="feed"' in body
     assert 'data-nav="discover"' in body
     assert 'data-nav="my-runs"' in body
