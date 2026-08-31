@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from feed_titles import pulse_title_for_activity
+from follow import Follow
 from models import Activity
 
 
@@ -34,7 +35,7 @@ def test_feed_requires_auth(client):
     assert client.get("/api/feed").status_code == 401
 
 
-def test_feed_returns_own_activities_only(
+def test_feed_excludes_own_activities(
     client,
     make_session,
     make_athlete,
@@ -43,8 +44,8 @@ def test_feed_returns_own_activities_only(
 ):
     make_athlete(920001, firstname="Feed", lastname="Owner", city="Porto", country="Portugal")
     make_athlete(920002, firstname="Other", lastname="Runner")
-    make_activity(920001, strava_id=92000101, name="Morning Run")
-    make_activity(920002, strava_id=92000201, name="Should Not Appear")
+    make_activity(920001, strava_id=92000101, name="My Morning Run")
+    make_activity(920002, strava_id=92000201, name="Friend Run")
 
     raw, cookie = make_session(920001)
     client.cookies.set(cookie, raw)
@@ -53,16 +54,22 @@ def test_feed_returns_own_activities_only(
     assert resp.status_code == 200
     payload = resp.json()
     assert payload["scope"] == "home"
-    assert payload["count"] == 1
-    item = payload["items"][0]
-    assert item["kind"] == "activity"
-    assert item["author"]["athlete_id"] == 920001
-    assert item["author"]["name"] == "Feed Owner"
-    assert item["activity"]["original_name"] == "Morning Run"
-    assert item["activity"]["title"]
-    assert item["location"]["display_name"] == "Porto, Portugal"
-    assert "start_lat" not in _flatten_keys(payload)
-    assert SENSITIVE_KEYS.isdisjoint(_flatten_keys(payload))
+    assert payload["count"] == 0
+    assert payload["items"] == []
+
+    db_session.add(
+        Follow(follower_id=920001, following_id=920002)
+    )
+    db_session.commit()
+
+    resp2 = client.get("/api/feed")
+    assert resp2.status_code == 200
+    payload2 = resp2.json()
+    assert payload2["count"] == 1
+    item = payload2["items"][0]
+    assert item["author"]["athlete_id"] == 920002
+    assert item["activity"]["original_name"] == "Friend Run"
+    assert all(i["author"]["athlete_id"] != 920001 for i in payload2["items"])
 
 
 def test_feed_title_is_deterministic():
@@ -89,7 +96,6 @@ def test_feed_title_is_deterministic():
     )
     assert a == b
     assert a  # non-empty
-    # Different ids may collide rarely; just ensure function returns str.
     assert isinstance(c, str)
 
 
@@ -100,6 +106,7 @@ def test_feed_photo_and_map_fallback_fields(
     db_session,
 ):
     make_athlete(920010, firstname="Media", lastname="Runner")
+    make_athlete(920011, firstname="Viewer", lastname="One")
     with_photo = Activity(
         athlete_id=920010,
         strava_id=92001001,
@@ -113,6 +120,7 @@ def test_feed_photo_and_map_fallback_fields(
         summary_polyline=None,
         start_lat=41.15,
         start_lng=-8.61,
+        visibility="public",
     )
     with_map = Activity(
         athlete_id=920010,
@@ -124,11 +132,13 @@ def test_feed_photo_and_map_fallback_fields(
         start_date_local="2026-08-09T07:00:00Z",
         photo_url=None,
         summary_polyline="_p~iF~ps|U_ulLnnqC_mqNvxq`@",
+        visibility="public",
     )
     db_session.add_all([with_photo, with_map])
+    db_session.add(Follow(follower_id=920011, following_id=920010))
     db_session.commit()
 
-    raw, cookie = make_session(920010)
+    raw, cookie = make_session(920011)
     client.cookies.set(cookie, raw)
     resp = client.get("/api/feed")
     assert resp.status_code == 200

@@ -1645,7 +1645,7 @@ def get_feed(
     request: Request,
     limit: int = 30,
 ):
-    """Home feed: your runs plus people you follow, with privacy + hidden posts."""
+    """Home feed: people you follow (not your own runs)."""
 
     athlete_id = require_athlete_id(request)
     safe_limit = max(1, min(int(limit), 50))
@@ -1676,10 +1676,7 @@ def get_feed(
             "scope": "home",
             "message": None if items else {
                 "eyebrow": "Too quiet out here.",
-                "body": (
-                    "Follow runners you want to see — or go for a run "
-                    "and take the first post."
-                ),
+                "body": "Follow runners you want to see here.",
             },
             "items": items,
             "count": len(items),

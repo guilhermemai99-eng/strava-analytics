@@ -162,7 +162,9 @@ def list_home_feed_activities(
     db: Session, *, viewer_id: int, limit: int = 30
 ) -> list[tuple[Activity, Athlete]]:
     following = followed_athlete_ids(db, viewer_id)
-    author_ids = list({viewer_id, *following})
+    if not following:
+        return []
+    author_ids = list(following)
     hidden_ids = [
         int(r[0])
         for r in db.query(HiddenActivity.activity_id)
@@ -172,11 +174,7 @@ def list_home_feed_activities(
     filters = [
         Activity.athlete_id.in_(author_ids),
         Activity.deleted_at.is_(None),
-        or_(
-            Activity.athlete_id == viewer_id,
-            Activity.visibility == "public",
-            Activity.visibility == "followers",
-        ),
+        Activity.visibility.in_(("public", "followers")),
     ]
     if hidden_ids:
         filters.append(~Activity.id.in_(hidden_ids))
