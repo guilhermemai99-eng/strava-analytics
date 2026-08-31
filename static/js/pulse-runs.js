@@ -1500,6 +1500,7 @@
     }
     if (action === "discover-tab") {
       runsState.discover.tab = el?.dataset?.tab || "runs";
+      hooks.render();
       if (runsState.discover.tab === "people") {
         if (hooks.loadExplore) hooks.loadExplore(false);
         else loadPeopleMatches(false).then(() => hooks.render());
@@ -1507,8 +1508,6 @@
         loadClubs(false).then(() => hooks.render());
       } else if (runsState.discover.tab === "runs") {
         loadDiscover(false).then(() => hooks.render());
-      } else {
-        hooks.render();
       }
       return true;
     }
@@ -1619,6 +1618,7 @@
     }
     if (action === "my-runs-tab") {
       runsState.myRuns.tab = el?.dataset?.tab || "upcoming";
+      hooks.render();
       loadMyRuns(true).then(() => hooks.render());
       return true;
     }

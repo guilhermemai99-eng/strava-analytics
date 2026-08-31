@@ -1192,7 +1192,7 @@
     const url = proxiedMediaUrl(profile?.avatar_url);
     const initials = escapeHtml(profile?.initials || "P");
     if (url) {
-      return `<div class="pulse-avatar ${extraClass}"><img src="${escapeHtml(url)}" alt=""></div>`;
+      return `<div class="pulse-avatar ${extraClass}"><img src="${escapeHtml(url)}" alt="" loading="lazy" onerror="this.remove();this.parentElement.textContent='${initials}'"></div>`;
     }
     return `<div class="pulse-avatar ${extraClass}">${initials}</div>`;
   }
@@ -1527,7 +1527,8 @@
     }
 
     const actions = `
-      <button type="button" class="btn btn-primary" data-action="edit-profile">Edit profile</button>
+      <button type="button" class="btn btn-primary" data-nav="my-runs">My runs</button>
+      <button type="button" class="btn btn-ghost" data-action="edit-profile">Edit profile</button>
       <button type="button" class="btn btn-ghost" data-action="open-settings">Settings</button>
     `;
 
@@ -2094,6 +2095,7 @@
       history.pushState({ page: next, runId: state.runId, clubId: state.clubId }, "", hash);
     }
     render();
+    wireNav();
     if (next === "feed") {
       loadFeed(false);
       if (window.PulseRuns) PulseRuns.onPageEnter("feed");
@@ -3619,16 +3621,6 @@
   /* ——— Events ——— */
 
   function onClick(event) {
-    const nav = event.target.closest("[data-nav]");
-    if (nav && nav.dataset.nav) {
-      event.preventDefault();
-      if (els.settingsDrawer && els.settingsDrawer.classList.contains("is-open")) {
-        closeSettings();
-      }
-      navigate(nav.dataset.nav);
-      return;
-    }
-
     const actionEl = event.target.closest("[data-action]");
     if (actionEl) {
       event.preventDefault();
@@ -3641,6 +3633,22 @@
     if (tile) {
       openActivity(tile.dataset.activityId);
     }
+  }
+
+  function wireNav() {
+    document.querySelectorAll("[data-nav]").forEach((btn) => {
+      if (btn._pulseNavWired) return;
+      btn._pulseNavWired = true;
+      btn.addEventListener("click", (event) => {
+        const page = btn.dataset.nav;
+        if (!page) return;
+        event.preventDefault();
+        if (els.settingsDrawer && els.settingsDrawer.classList.contains("is-open")) {
+          closeSettings();
+        }
+        navigate(page);
+      });
+    });
   }
 
   function wireSettingsForm() {
@@ -3840,9 +3848,22 @@
         navigate(loc.page, { replace: true });
       }
     });
+    window.addEventListener("hashchange", () => {
+      const loc = parseLocationHash();
+      if (loc.page === "run" && loc.runId) {
+        navigate("run", { replace: true, runId: loc.runId });
+      } else if (loc.page === "club" && loc.clubId) {
+        navigate("club", { replace: true, clubId: loc.clubId });
+      } else if (loc.conversationId && (loc.page === "dm" || loc.page === "messages")) {
+        navigateDm(loc.conversationId, { replace: true });
+      } else if (!loc.activityId && loc.page !== "u") {
+        navigate(loc.page, { replace: true });
+      }
+    });
 
     wireSettingsForm();
     wireExploreSearch();
+    wireNav();
 
     await ensureAuth();
     await loadProfileBundle(true);
