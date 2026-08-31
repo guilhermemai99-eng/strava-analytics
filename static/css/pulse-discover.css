@@ -191,6 +191,22 @@
   font-size: 13px;
 }
 
+.discover-location-banner {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(184, 242, 90, 0.08);
+  border: 1px solid rgba(184, 242, 90, 0.2);
+  font-size: 13px;
+}
+
+.discover-location-actions.is-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .discover-location-prompt {
   text-align: center;
   padding: 32px 20px;

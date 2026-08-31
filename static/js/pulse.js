@@ -1060,28 +1060,27 @@
         </div>`
       : "";
 
-    if (d.locationPrompt) {
-      return `${privacyHint}
-        <div class="discover-location-prompt">
-          <h2>Find runners near you</h2>
-          <p>We use your location to show runners and runs nearby. Your exact location is never shown publicly.</p>
-          <div class="discover-location-actions">
-            <button type="button" class="btn btn-primary" data-action="discovery-location-allow">Use my location</button>
-            <button type="button" class="btn btn-ghost" data-action="discovery-location-skip">Choose city manually</button>
+    const locationBanner = d.locationPrompt
+      ? `<div class="discover-location-banner">
+          <p>Find runners near you — exact location is never shown publicly.</p>
+          <div class="discover-location-actions is-inline">
+            <button type="button" class="btn btn-primary btn-sm" data-action="discovery-location-allow">Use location</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-action="discovery-location-skip">Set city</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-action="discovery-location-dismiss">Not now</button>
           </div>
-        </div>`;
-    }
+        </div>`
+      : "";
 
     if (d.status === "loading" || d.status === "idle") {
-      return `${privacyHint}<p class="discover-loading">Finding someone to run with…</p>`;
+      return `${privacyHint}${locationBanner}<p class="discover-loading">Finding someone to run with…</p>`;
     }
     if (d.status === "error") {
-      return `${privacyHint}
+      return `${privacyHint}${locationBanner}
         <p class="discover-empty">${escapeHtml(d.error || "Try again.")}</p>
         <button type="button" class="btn btn-primary" data-action="retry-discovery">Retry</button>`;
     }
     if (d.status === "empty" || !d.current) {
-      return `${privacyHint}
+      return `${privacyHint}${locationBanner}
         <div class="discover-empty-block">
           <h2>No one new right now</h2>
           <p>Check back later or widen your discovery radius in preferences.</p>
@@ -1105,7 +1104,7 @@
       ? `<p class="discover-card-avail">${escapeHtml(p.availability)}</p>`
       : "";
 
-    return `${privacyHint}
+    return `${privacyHint}${locationBanner}
       <div class="discover-stack-wrap">
         <div class="discover-stack-toolbar">
           <button type="button" class="discover-prefs-btn" data-action="discovery-prefs" aria-label="Preferences">⚙</button>
@@ -3662,6 +3661,10 @@
       state.discovery.locationPrompt = false;
       state.discovery.prefsOpen = true;
       loadDiscoveryPrefs().then(() => render());
+    }
+    if (action === "discovery-location-dismiss") {
+      state.discovery.locationPrompt = false;
+      render();
     }
     if (action === "discovery-location-allow") {
       if (!navigator.geolocation) {
