@@ -1315,6 +1315,7 @@
     if (state.discovery.locationPromptShown) return;
     const prefs = state.discovery.preferences;
     if (prefs?.has_private_location || prefs?.manual_city) return;
+    if ((state.profile?.city || "").trim()) return;
     if (!navigator.geolocation) return;
     state.discovery.locationPrompt = true;
     state.discovery.locationPromptShown = true;
