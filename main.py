@@ -2665,7 +2665,8 @@ class RunUpdateRequest(BaseModel):
 
 
 class RunInviteRequest(BaseModel):
-    athlete_id: int
+    athlete_id: Optional[int] = None
+    handle: Optional[str] = None
 
 
 def _run_http(exc: RunError) -> HTTPException:
@@ -2872,16 +2873,26 @@ def api_leave_run(run_id: int, request: Request):
 @app.post("/api/runs/{run_id}/invite")
 def api_invite_to_run(run_id: int, body: RunInviteRequest, request: Request):
     viewer_id = require_athlete_id(request)
+    if not body.athlete_id and not (body.handle or "").strip():
+        raise HTTPException(status_code=400, detail="Provide athlete_id or handle.")
     db = SessionLocal()
     try:
         run = get_run(db, run_id)
         if not run:
             raise HTTPException(status_code=404, detail="Run not found.")
+        from club_helpers import resolve_invitee
+
+        try:
+            invitee = resolve_invitee(
+                db, athlete_id=body.athlete_id, handle=body.handle
+            )
+        except ClubError as exc:
+            raise _run_http(RunError(str(exc), status_code=exc.status_code)) from exc
         invite_to_run(
             db,
             run=run,
             host_id=viewer_id,
-            invitee_id=int(body.athlete_id),
+            invitee_id=int(invitee.id),
         )
         db.refresh(run)
         return serialize_run(

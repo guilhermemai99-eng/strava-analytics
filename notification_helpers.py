@@ -18,6 +18,7 @@ KIND_FOLLOW_REQUEST = "follow_request"
 KIND_FOLLOW_ACCEPTED = "follow_accepted"
 KIND_RUN_JOIN = "run_join"
 KIND_RUN_INVITE = "run_invite"
+KIND_RUN_LEAVE = "run_leave"
 KIND_RUN_CANCELLED = "run_cancelled"
 KIND_CLUB_JOIN = "club_join"
 KIND_CLUB_RUN = "club_run"
@@ -138,6 +139,36 @@ def notify_run_join(db: Session, *, run_id: int, joiner_id: int, host_id: int, r
         actor_id=joiner_id,
         kind=KIND_RUN_JOIN,
         body=f"{name} joined {title}.",
+        target_type="run",
+        target_id=run_id,
+    )
+    db.commit()
+
+
+def notify_run_leave(
+    db: Session,
+    *,
+    run_id: int,
+    leaver_id: int,
+    host_id: int,
+    run_title: str,
+) -> None:
+    """Tell the host someone left their run."""
+    if host_id == leaver_id:
+        return
+    leaver = db.query(Athlete).filter(Athlete.id == leaver_id).one_or_none()
+    if leaver is None:
+        return
+    name = display_name_for(leaver)
+    title = (run_title or "your run").strip() or "your run"
+    if len(title) > 60:
+        title = title[:57] + "…"
+    create_notification(
+        db,
+        recipient_id=host_id,
+        actor_id=leaver_id,
+        kind=KIND_RUN_LEAVE,
+        body=f"{name} left {title}.",
         target_type="run",
         target_id=run_id,
     )

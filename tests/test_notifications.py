@@ -111,6 +111,39 @@ def test_run_join_notifies_host(client, make_session, make_athlete):
     assert after == before
 
 
+def test_run_leave_notifies_host(client, make_session, make_athlete):
+    from datetime import datetime, timedelta, timezone
+
+    make_athlete(981030, handle="host_leave", firstname="Host")
+    make_athlete(981031, handle="guest_leave", firstname="Guest")
+    raw_h, cookie_h = make_session(981030)
+    raw_g, cookie_g = make_session(981031)
+
+    meeting = datetime.now(timezone.utc) + timedelta(days=2)
+    created = client.post(
+        "/api/runs",
+        cookies={cookie_h: raw_h},
+        json={
+            "title": "Leave Test Run",
+            "location_name": "Foz",
+            "meeting_time": meeting.replace(microsecond=0).isoformat(),
+            "distance_km": 8,
+            "visibility": "everyone",
+        },
+    )
+    assert created.status_code == 200
+    run_id = created.json()["id"]
+
+    assert client.post(f"/api/runs/{run_id}/join", cookies={cookie_g: raw_g}).status_code == 200
+    assert client.post(f"/api/runs/{run_id}/leave", cookies={cookie_g: raw_g}).status_code == 200
+
+    inbox = client.get("/api/notifications", cookies={cookie_h: raw_h}).json()
+    row = next((i for i in inbox["items"] if i["kind"] == "run_leave"), None)
+    assert row is not None
+    assert row["target_id"] == run_id
+    assert "left" in row["body"].lower()
+
+
 def test_club_join_and_club_run_notify(client, make_session, make_athlete):
     from datetime import datetime, timedelta, timezone
 

@@ -1,6 +1,6 @@
 # Pulse — project status
 
-Last updated: 2026-08-30
+Last updated: 2026-08-31
 
 Pulse is a social running app: find people, find a pace, run together.
 Strava remains the activity data source. The product centre is real runs and people.
@@ -28,6 +28,7 @@ Strava remains the activity data source. The product centre is real runs and peo
 - Follow, mutual follow, new message, likes, comments
 - Follow request + accepted request
 - **Run join** — host notified when someone joins
+- **Run leave** — host notified when someone leaves
 - **Run invite** + **run cancelled** for invite-only flows
 - **Club join** — owners/admins notified
 - **Club run** — members notified when a club-hosted run is posted
@@ -53,6 +54,7 @@ Strava remains the activity data source. The product centre is real runs and peo
 - **Invite only** — host invites runners (`POST /api/runs/{id}/invite`); open join blocked; out of Discover
 - **Run together** creates invite-only by default and invites the peer
 - **Host cancel** — Cancel run CTA + `run_cancelled` notifications
+- **Host invite UI** — invite runners by `@handle` on run detail
 
 ### People matching
 - Match score + **Run together** prefill

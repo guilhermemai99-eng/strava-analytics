@@ -14,7 +14,7 @@ def test_dashboard_serves_pulse_shell(client, make_session, make_athlete):
     assert "/static/js/pulse.js" in body
     assert "/static/js/pulse-runs.js" in body
     assert "/static/css/pulse-runs.css" in body
-    assert "v=deploy-3" in body
+    assert "v=deploy-4" in body
     assert 'data-nav="feed"' in body
     assert 'data-nav="discover"' in body
     assert 'data-nav="my-runs"' in body
@@ -24,6 +24,15 @@ def test_dashboard_serves_pulse_shell(client, make_session, make_athlete):
     assert 'sidebarNotifBadge' in body
     assert 'Notifications' in body
     assert 'pulse-mobile-header' in body
+
+
+def test_pulse_shell_has_run_host_actions():
+    from pathlib import Path
+
+    js = (Path(__file__).resolve().parents[1] / "static/js/pulse-runs.js").read_text()
+    assert 'data-action="cancel-run"' in js
+    assert 'data-action="send-run-invite"' in js
+    assert 'data-action="open-run-invite"' in js
 
 
 def test_lab_keeps_legacy_analytics(client, make_session, make_athlete):

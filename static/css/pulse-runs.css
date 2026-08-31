@@ -716,6 +716,19 @@
   margin-bottom: 10px;
 }
 
+.run-detail-invite-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.run-invite-panel {
+  margin-bottom: 12px;
+}
+
 .club-invite-panel {
   margin: 0 0 16px;
   padding: 14px;

@@ -328,9 +328,16 @@
       return;
     }
 
-    // Messages + Notifications on every main mobile page (not buried only in More).
+    // Messages + Notifications + My runs on main mobile pages.
     if (els.mobileHeaderEnd) {
+      const myRunsBtn =
+        page === "feed" || page === "discover" || page === "profile"
+          ? `<button type="button" class="ig-header-bell" data-nav="my-runs" aria-label="My runs">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v4H6zM6 10h12v10H6z"/></svg>
+            </button>`
+          : "";
       els.mobileHeaderEnd.innerHTML = `
+        ${myRunsBtn}
         <button type="button" class="ig-header-bell" data-nav="messages" aria-label="Messages">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v10H8l-4 3V6z"/></svg>
           <span class="nav-badge nav-badge--float" id="mobileDmBadge" hidden>0</span>
@@ -1398,6 +1405,7 @@
         ? "open-notification"
         : item.kind === "run_join" ||
             item.kind === "run_invite" ||
+            item.kind === "run_leave" ||
             item.kind === "run_cancelled" ||
             item.kind === "club_run"
           ? "open-notification"
@@ -1416,6 +1424,7 @@
         : "",
       (item.kind === "run_join" ||
         item.kind === "run_invite" ||
+        item.kind === "run_leave" ||
         item.kind === "run_cancelled" ||
         item.kind === "club_run") &&
       item.target_id

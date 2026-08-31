@@ -27,7 +27,15 @@
     discover: { status: "idle", items: [], error: null, tab: "people" },
     people: { status: "idle", items: [], error: null },
     myRuns: { status: "idle", items: [], error: null, tab: "upcoming" },
-    detail: { status: "idle", run: null, error: null, runId: null },
+    detail: {
+      status: "idle",
+      run: null,
+      error: null,
+      runId: null,
+      inviteOpen: false,
+      inviteHandle: "",
+      inviteBusy: false,
+    },
     clubs: { status: "idle", items: [], error: null, subtab: "discover" },
     clubDetail: {
       status: "idle",
@@ -584,6 +592,23 @@
       </section>`;
   }
 
+  function renderRunInvitePanel(run) {
+    const d = runsState.detail;
+    if (!run.is_host || run.status === "cancelled" || !d.inviteOpen) return "";
+    return `
+      <div class="club-invite-panel run-invite-panel">
+        <h3>Invite runners</h3>
+        <p class="runs-section-sub">Type a handle — they'll get a notification and join automatically.</p>
+        <div class="club-invite-row">
+          <input type="text" id="runInviteHandle" value="${h(d.inviteHandle || "")}" placeholder="@handle" maxlength="32" autocomplete="off">
+          <button type="button" class="btn btn-primary btn-sm" data-action="send-run-invite" data-run-id="${h(run.id)}" ${d.inviteBusy ? "disabled" : ""}>Send</button>
+        </div>
+        <div class="club-invite-row">
+          <button type="button" class="btn btn-ghost btn-sm" data-action="close-run-invite">Close</button>
+        </div>
+      </div>`;
+  }
+
   function renderRunDetail() {
     const d = runsState.detail;
     if (d.status === "loading" || d.status === "idle") {
@@ -625,8 +650,11 @@
         </footer>`;
     }
     const inviteNote =
-      !cancelled && run.visibility === "invite_only" && run.is_host
-        ? `<p class="runs-section-sub">Invite only — people you invite show up here automatically.</p>`
+      !cancelled && run.is_host
+        ? `<div class="run-detail-invite-head">
+            <p class="runs-section-sub">${run.visibility === "invite_only" ? "Invite only — only people you invite can join." : "Invite specific runners by handle."}</p>
+            ${d.inviteOpen ? "" : `<button type="button" class="btn btn-primary btn-sm" data-action="open-run-invite">Invite runners</button>`}
+          </div>`
         : "";
 
     return `
@@ -653,6 +681,7 @@
         <section class="run-detail-block">
           <h2>${h(run.participant_count || 0)} going</h2>
           ${inviteNote}
+          ${renderRunInvitePanel(run)}
           <div class="run-participant-avatars">
             ${participants
               .slice(0, 6)
@@ -1285,8 +1314,43 @@
     }
   }
 
+  async function sendRunInvite(runId) {
+    const input = document.getElementById("runInviteHandle");
+    const handle = (input ? input.value : runsState.detail.inviteHandle || "").trim();
+    runsState.detail.inviteHandle = handle;
+    if (!handle) {
+      hooks.showToast("Enter a handle to invite.");
+      return;
+    }
+    runsState.detail.inviteBusy = true;
+    hooks.render();
+    try {
+      const res = await hooks.apiFetch(`/api/runs/${encodeURIComponent(runId)}/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ handle }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not send invite.");
+      runsState.detail.run = data;
+      runsState.detail.status = "ready";
+      runsState.detail.inviteHandle = "";
+      hooks.showToast("Invite sent — they're on the run.");
+    } catch (err) {
+      hooks.showToast(err.message || "Could not send invite.");
+    } finally {
+      runsState.detail.inviteBusy = false;
+      hooks.render();
+    }
+  }
+
   async function loadRunDetail(runId, force = false) {
     if (!force && runsState.detail.runId === runId && runsState.detail.status === "ready") return;
+    if (runsState.detail.runId !== runId) {
+      runsState.detail.inviteOpen = false;
+      runsState.detail.inviteHandle = "";
+      runsState.detail.inviteBusy = false;
+    }
     runsState.detail.runId = runId;
     runsState.detail.status = "loading";
     try {
@@ -1664,6 +1728,21 @@
     }
     if (action === "cancel-run") {
       cancelRun(el?.dataset?.runId);
+      return true;
+    }
+    if (action === "open-run-invite") {
+      runsState.detail.inviteOpen = true;
+      hooks.render();
+      return true;
+    }
+    if (action === "close-run-invite") {
+      runsState.detail.inviteOpen = false;
+      runsState.detail.inviteHandle = "";
+      hooks.render();
+      return true;
+    }
+    if (action === "send-run-invite") {
+      sendRunInvite(el?.dataset?.runId);
       return true;
     }
     return false;

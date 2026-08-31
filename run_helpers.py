@@ -503,6 +503,15 @@ def leave_run(db: Session, *, run: Run, athlete_id: int) -> None:
         raise RunError("You are not on this run.", status_code=404)
     row.status = "left"
     db.commit()
+    from notification_helpers import notify_run_leave
+
+    notify_run_leave(
+        db,
+        run_id=run.id,
+        leaver_id=athlete_id,
+        host_id=run.creator_id,
+        run_title=run.title or "your run",
+    )
 
 
 def invite_to_run(

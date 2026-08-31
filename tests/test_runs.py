@@ -197,6 +197,26 @@ def test_host_invite_and_create_with_peer(client, make_session, make_athlete):
     assert client.get(f"/api/runs/{run_id}").json()["is_going"] is True
 
 
+def test_host_invite_by_handle(client, make_session, make_athlete):
+    make_athlete(920070, firstname="Host", lastname="Handle", handle="runhost")
+    make_athlete(920071, firstname="Invitee", lastname="Handle", handle="runinvitee")
+    _login(client, make_session, 920070)
+    run_id = client.post(
+        "/api/runs",
+        json=_create_run_payload(visibility="invite_only", title="Handle Invite Run"),
+    ).json()["id"]
+
+    invited = client.post(
+        f"/api/runs/{run_id}/invite",
+        json={"handle": "runinvitee"},
+    )
+    assert invited.status_code == 200, invited.text
+    assert invited.json()["participant_count"] == 2
+
+    _login(client, make_session, 920071)
+    assert client.get(f"/api/runs/{run_id}").json()["is_going"] is True
+
+
 def test_non_host_cannot_invite(client, make_session, make_athlete):
     make_athlete(920060, firstname="Host", lastname="Gate")
     make_athlete(920061, firstname="Guest", lastname="Gate")
