@@ -101,6 +101,17 @@
       suggestions: [],
       matches: [],
     },
+    discovery: {
+      status: "idle",
+      current: null,
+      remaining: 0,
+      preferences: null,
+      prefsOpen: false,
+      locationPrompt: false,
+      matchModal: null,
+      swiping: false,
+      error: null,
+    },
     inbox: {
       status: "idle",
       items: [],
@@ -1036,7 +1047,309 @@
   }
 
   function renderPeopleExplore() {
-    return `${renderExploreSearchBar()}${renderExploreBody()}`;
+    return `${renderDiscoveryStack()}${renderDiscoveryPrefsSheet()}${renderDiscoveryMatchModal()}`;
+  }
+
+  function renderDiscoveryStack() {
+    const d = state.discovery;
+    const me = state.profile || state.explore.me || {};
+    const privacyHint = !me.is_profile_public
+      ? `<div class="discover-privacy-hint">
+          <p>Turn on <strong>Show me in Explore</strong> in Settings so others can find you.</p>
+          <button type="button" class="btn btn-ghost btn-sm" data-action="open-settings">Settings</button>
+        </div>`
+      : "";
+
+    if (d.locationPrompt) {
+      return `${privacyHint}
+        <div class="discover-location-prompt">
+          <h2>Find runners near you</h2>
+          <p>We use your location to show runners and runs nearby. Your exact location is never shown publicly.</p>
+          <div class="discover-location-actions">
+            <button type="button" class="btn btn-primary" data-action="discovery-location-allow">Use my location</button>
+            <button type="button" class="btn btn-ghost" data-action="discovery-location-skip">Choose city manually</button>
+          </div>
+        </div>`;
+    }
+
+    if (d.status === "loading" || d.status === "idle") {
+      return `${privacyHint}<p class="discover-loading">Finding someone to run with…</p>`;
+    }
+    if (d.status === "error") {
+      return `${privacyHint}
+        <p class="discover-empty">${escapeHtml(d.error || "Try again.")}</p>
+        <button type="button" class="btn btn-primary" data-action="retry-discovery">Retry</button>`;
+    }
+    if (d.status === "empty" || !d.current) {
+      return `${privacyHint}
+        <div class="discover-empty-block">
+          <h2>No one new right now</h2>
+          <p>Check back later or widen your discovery radius in preferences.</p>
+          <button type="button" class="btn btn-primary" data-action="discovery-prefs">Preferences</button>
+        </div>`;
+    }
+
+    const p = d.current;
+    const match = p.match || {};
+    const avatar = p.avatar_url
+      ? `<img src="${escapeHtml(p.avatar_url)}" alt="">`
+      : escapeHtml(p.initials || "P");
+    const paceLine = p.easy_pace_range ? escapeHtml(p.easy_pace_range) : "—";
+    const distLine = p.typical_distance ? escapeHtml(p.typical_distance) : "—";
+    const loc = escapeHtml(p.location_public || p.location_label || "Nearby");
+    const hint = escapeHtml(p.compatibility_hint || match.label || "Worth a look");
+    const bio = p.discovery_bio
+      ? `<p class="discover-card-bio">"${escapeHtml(p.discovery_bio)}"</p>`
+      : "";
+    const avail = p.availability
+      ? `<p class="discover-card-avail">${escapeHtml(p.availability)}</p>`
+      : "";
+
+    return `${privacyHint}
+      <div class="discover-stack-wrap">
+        <div class="discover-stack-toolbar">
+          <button type="button" class="discover-prefs-btn" data-action="discovery-prefs" aria-label="Preferences">⚙</button>
+          ${d.remaining > 0 ? `<span class="discover-remaining">${escapeHtml(String(d.remaining))} more</span>` : ""}
+        </div>
+        <article class="discover-card" data-discovery-card data-athlete-id="${escapeHtml(p.athlete_id)}">
+          <button type="button" class="discover-card-photo" data-action="discovery-view-profile" data-athlete-id="${escapeHtml(p.athlete_id)}" data-handle="${escapeHtml(p.handle || "")}">
+            <span class="discover-card-avatar">${avatar}</span>
+            <span class="discover-card-gradient"></span>
+            <span class="discover-card-info">
+              <strong class="discover-card-name">${escapeHtml(p.name)}</strong>
+              <span class="discover-card-loc">📍 ${loc}</span>
+              <span class="discover-card-metrics">${paceLine} · ${distLine}</span>
+              <span class="discover-card-compat">${hint}</span>
+            </span>
+          </button>
+          ${bio}${avail}
+        </article>
+        <div class="discover-actions">
+          <button type="button" class="discover-action discover-action--pass" data-action="discovery-pass" data-athlete-id="${escapeHtml(p.athlete_id)}" aria-label="Pass">Pass</button>
+          <button type="button" class="discover-action discover-action--profile" data-action="discovery-view-profile" data-athlete-id="${escapeHtml(p.athlete_id)}" data-handle="${escapeHtml(p.handle || "")}" aria-label="View profile">Profile</button>
+          <button type="button" class="discover-action discover-action--like" data-action="discovery-like" data-athlete-id="${escapeHtml(p.athlete_id)}" aria-label="Like">Like</button>
+        </div>
+      </div>`;
+  }
+
+  function renderDiscoveryPrefsSheet() {
+    if (!state.discovery.prefsOpen) return "";
+    const prefs = state.discovery.preferences || {};
+    const radius = prefs.radius_km || 25;
+    const radii = [5, 10, 25, 50];
+    const mode = prefs.location_mode || "city";
+    return `
+      <div class="discover-prefs-backdrop" data-action="discovery-prefs-close"></div>
+      <aside class="discover-prefs-sheet" role="dialog" aria-label="Discovery preferences">
+        <header class="discover-prefs-head">
+          <h2>Preferences</h2>
+          <button type="button" class="ig-action-btn" data-action="discovery-prefs-close" aria-label="Close">×</button>
+        </header>
+        <div class="discover-prefs-body">
+          <section>
+            <h3>Location</h3>
+            <label class="run-form-label">City
+              <input type="text" id="discoverPrefCity" value="${escapeHtml(prefs.manual_city || state.profile?.city || "")}" placeholder="Porto">
+            </label>
+            <label class="run-form-label">Country
+              <input type="text" id="discoverPrefCountry" value="${escapeHtml(prefs.manual_country || state.profile?.country || "")}" placeholder="Portugal">
+            </label>
+            <p class="discover-prefs-label">Radius</p>
+            <div class="discover-radius-list">
+              ${radii
+                .map(
+                  (r) =>
+                    `<label><input type="radio" name="discoverRadius" value="${r}" ${radius === r ? "checked" : ""}> ${r} km</label>`
+                )
+                .join("")}
+            </div>
+            <div class="discover-mode-list">
+              <label><input type="radio" name="discoverMode" value="near_me" ${mode === "near_me" ? "checked" : ""}> Near me</label>
+              <label><input type="radio" name="discoverMode" value="city" ${mode === "city" ? "checked" : ""}> My city</label>
+              <label><input type="radio" name="discoverMode" value="anywhere" ${mode === "anywhere" ? "checked" : ""}> Anywhere</label>
+            </div>
+          </section>
+          <section>
+            <h3>About you in Discover</h3>
+            <label class="run-form-label">Short intro
+              <textarea id="discoverPrefBio" rows="2" maxlength="280" placeholder="Looking for company to run 2–3 times per week">${escapeHtml(prefs.discovery_bio || "")}</textarea>
+            </label>
+            <label class="run-form-label">Availability
+              <input type="text" id="discoverPrefAvail" value="${escapeHtml(prefs.available_days || "")}" placeholder="Mon, Wed, Sat mornings">
+            </label>
+            <label class="run-form-label">Goals
+              <input type="text" id="discoverPrefGoals" value="${escapeHtml(prefs.goals || "")}" placeholder="Easy runs, train for a race…">
+            </label>
+          </section>
+        </div>
+        <footer class="discover-prefs-foot">
+          <button type="button" class="btn btn-primary" data-action="discovery-prefs-save">Save</button>
+        </footer>
+      </aside>`;
+  }
+
+  function renderDiscoveryMatchModal() {
+    const m = state.discovery.matchModal;
+    if (!m) return "";
+    const p = m.person || {};
+    const avatar = p.avatar_url
+      ? `<img src="${escapeHtml(p.avatar_url)}" alt="">`
+      : escapeHtml(p.initials || "P");
+    return `
+      <div class="discover-match-backdrop" data-action="discovery-match-continue"></div>
+      <div class="discover-match-modal" role="dialog">
+        <p class="discover-match-kicker">It's a Match!</p>
+        <h2>You seem compatible to run together.</h2>
+        <div class="discover-match-avatar">${avatar}</div>
+        <p class="discover-match-name">${escapeHtml(p.name || "Runner")}</p>
+        <div class="discover-match-actions">
+          <button type="button" class="btn btn-primary" data-action="discovery-match-message" data-athlete-id="${escapeHtml(p.athlete_id)}" data-handle="${escapeHtml(p.handle || "")}">Send message</button>
+          <button type="button" class="btn btn-ghost" data-action="discovery-view-profile" data-athlete-id="${escapeHtml(p.athlete_id)}" data-handle="${escapeHtml(p.handle || "")}">View profile</button>
+          <button type="button" class="btn btn-ghost" data-action="discovery-match-continue">Keep discovering</button>
+        </div>
+      </div>`;
+  }
+
+  async function loadDiscoveryPrefs() {
+    try {
+      const res = await apiFetch("/api/discovery/preferences");
+      if (!res.ok) throw new Error("Could not load preferences.");
+      state.discovery.preferences = await res.json();
+    } catch (_err) {
+      state.discovery.preferences = state.discovery.preferences || {};
+    }
+  }
+
+  async function loadDiscovery(force = false) {
+    if (!force && (state.discovery.status === "loading" || state.discovery.swiping)) {
+      return;
+    }
+    if (!force && state.discovery.status === "ready" && state.discovery.current) {
+      if (state.page === "discover") render();
+      return;
+    }
+    state.discovery.status = "loading";
+    state.discovery.error = null;
+    if (state.page === "discover") render();
+
+    try {
+      if (!state.discovery.preferences) await loadDiscoveryPrefs();
+      const res = await apiFetch("/api/discovery/next");
+      if (!res.ok) throw new Error("Could not load discovery.");
+      const data = await res.json();
+      state.discovery.current = data.person || null;
+      state.discovery.remaining = data.remaining || 0;
+      state.discovery.status = data.person ? "ready" : "empty";
+      state.discovery.error = null;
+    } catch (err) {
+      state.discovery.status = "error";
+      state.discovery.error = err.message || "Try again.";
+    }
+    if (state.page === "discover") {
+      render();
+      wireDiscoveryGestures();
+    }
+  }
+
+  async function discoverySwipe(action, athleteId) {
+    if (!athleteId || state.discovery.swiping) return;
+    state.discovery.swiping = true;
+    const card = document.querySelector("[data-discovery-card]");
+    if (card) {
+      card.classList.add(action === "like" ? "is-swipe-right" : "is-swipe-left");
+    }
+    try {
+      const res = await apiFetch("/api/discovery/swipe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target_id: Number(athleteId), action }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not swipe.");
+      state.discovery.current = null;
+      state.discovery.status = "idle";
+      if (data.is_match && data.match) {
+        state.discovery.matchModal = data.match;
+      }
+      await new Promise((r) => setTimeout(r, action === "like" ? 220 : 180));
+      await loadDiscovery(true);
+    } catch (err) {
+      showToast(err.message || errLine());
+      if (card) card.classList.remove("is-swipe-left", "is-swipe-right");
+    } finally {
+      state.discovery.swiping = false;
+    }
+  }
+
+  async function saveDiscoveryPrefs() {
+    const radiusEl = document.querySelector('input[name="discoverRadius"]:checked');
+    const modeEl = document.querySelector('input[name="discoverMode"]:checked');
+    const payload = {
+      radius_km: radiusEl ? Number(radiusEl.value) : 25,
+      location_mode: modeEl ? modeEl.value : "city",
+      manual_city: document.getElementById("discoverPrefCity")?.value || "",
+      manual_country: document.getElementById("discoverPrefCountry")?.value || "",
+      discovery_bio: document.getElementById("discoverPrefBio")?.value || "",
+      available_days: document.getElementById("discoverPrefAvail")?.value || "",
+      goals: document.getElementById("discoverPrefGoals")?.value || "",
+    };
+    const res = await apiFetch("/api/discovery/preferences", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(typeof err.detail === "string" ? err.detail : "Could not save.");
+      return;
+    }
+    state.discovery.preferences = await res.json();
+    state.discovery.prefsOpen = false;
+    state.discovery.status = "idle";
+    state.discovery.current = null;
+    showToast("Preferences saved.");
+    await loadDiscovery(true);
+  }
+
+  function maybeShowLocationPrompt() {
+    if (state.discovery.locationPromptShown) return;
+    const prefs = state.discovery.preferences;
+    if (prefs?.has_private_location || prefs?.manual_city) return;
+    if (!navigator.geolocation) return;
+    state.discovery.locationPrompt = true;
+    state.discovery.locationPromptShown = true;
+  }
+
+  function wireDiscoveryGestures() {
+    const card = document.querySelector("[data-discovery-card]");
+    if (!card || card._discoverWired) return;
+    card._discoverWired = true;
+    let startX = 0;
+    let startY = 0;
+    card.addEventListener(
+      "touchstart",
+      (e) => {
+        if (state.discovery.swiping) return;
+        const t = e.changedTouches[0];
+        startX = t.clientX;
+        startY = t.clientY;
+      },
+      { passive: true }
+    );
+    card.addEventListener(
+      "touchend",
+      (e) => {
+        if (state.discovery.swiping) return;
+        const t = e.changedTouches[0];
+        const dx = t.clientX - startX;
+        const dy = t.clientY - startY;
+        if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) return;
+        const id = card.dataset.athleteId;
+        if (dx > 0) discoverySwipe("like", id);
+        else discoverySwipe("pass", id);
+      },
+      { passive: true }
+    );
   }
 
   function renderExplore() {
@@ -2111,7 +2424,12 @@
     }
     if (next === "explore") loadExplore(false);
     if (next === "discover" || next === "explore") {
-      /* Discover People tab loads via PulseRuns.onPageEnter + loadExplore hook. */
+      if (next === "discover" && window.PulseRuns?.getDiscoverTab?.() === "people") {
+        loadDiscoveryPrefs().then(() => {
+          maybeShowLocationPrompt();
+          loadDiscovery(false);
+        });
+      }
     }
     if (["discover", "my-runs", "create-run", "run", "club", "create-club"].includes(next)) {
       if (window.PulseRuns) {
@@ -3303,6 +3621,76 @@
     if (action === "retry-feed") loadFeed(true);
     if (action === "retry-explore") loadExplore(true);
     if (action === "retry-explore-search") runExploreSearch(state.explore.searchQ || "");
+    if (action === "retry-discovery") loadDiscovery(true);
+    if (action === "discovery-pass") discoverySwipe("pass", el?.dataset?.athleteId);
+    if (action === "discovery-like") discoverySwipe("like", el?.dataset?.athleteId);
+    if (action === "discovery-view-profile") {
+      state.discovery.matchModal = null;
+      openUserFromEl(el);
+    }
+    if (action === "discovery-prefs") {
+      loadDiscoveryPrefs().then(() => {
+        state.discovery.prefsOpen = true;
+        render();
+      });
+    }
+    if (action === "discovery-prefs-close") {
+      state.discovery.prefsOpen = false;
+      render();
+    }
+    if (action === "discovery-prefs-save") saveDiscoveryPrefs();
+    if (action === "discovery-match-continue") {
+      state.discovery.matchModal = null;
+      render();
+    }
+    if (action === "discovery-match-message") {
+      state.discovery.matchModal = null;
+      openUserFromEl(el);
+      const peerId = el?.dataset?.athleteId;
+      if (peerId) {
+        apiFetch(`/api/dms/with/${peerId}`, { method: "POST" })
+          .then(async (res) => {
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.id) navigateDm(String(data.id));
+            else navigate("messages");
+          })
+          .catch(() => navigate("messages"));
+      }
+    }
+    if (action === "discovery-location-skip") {
+      state.discovery.locationPrompt = false;
+      state.discovery.prefsOpen = true;
+      loadDiscoveryPrefs().then(() => render());
+    }
+    if (action === "discovery-location-allow") {
+      if (!navigator.geolocation) {
+        state.discovery.locationPrompt = false;
+        render();
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          await apiFetch("/api/discovery/preferences", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              private_lat: pos.coords.latitude,
+              private_lng: pos.coords.longitude,
+              location_mode: "near_me",
+            }),
+          });
+          state.discovery.locationPrompt = false;
+          await loadDiscoveryPrefs();
+          await loadDiscovery(true);
+        },
+        () => {
+          state.discovery.locationPrompt = false;
+          state.discovery.prefsOpen = true;
+          showToast("Location denied. You can set your city manually.");
+          render();
+        }
+      );
+    }
     if (action === "retry-inbox") loadInbox(true);
     if (action === "retry-notifications") loadNotifications(true, false);
     if (action === "open-notification") {
@@ -3826,6 +4214,7 @@
         navigate,
         getPage: () => state.page,
         loadExplore: (force) => loadExplore(!!force),
+        loadDiscovery: (force) => loadDiscovery(!!force),
         renderPeopleExplore,
         openConfirmModal,
       });

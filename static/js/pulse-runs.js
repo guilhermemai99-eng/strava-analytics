@@ -546,7 +546,7 @@
       <section class="pulse-page runs-page" data-page="discover">
         <header class="runs-page-head">
           <h1>Discover</h1>
-          <p class="runs-tagline">Who can I run with?</p>
+          <p class="runs-tagline">${tab === "people" ? "Find someone to run with" : "Who can I run with?"}</p>
         </header>
         <div class="discover-tabs" role="tablist">
           ${tabs
@@ -1566,7 +1566,8 @@
       runsState.discover.tab = el?.dataset?.tab || "runs";
       hooks.render();
       if (runsState.discover.tab === "people") {
-        if (hooks.loadExplore) hooks.loadExplore(false);
+        if (hooks.loadDiscovery) hooks.loadDiscovery(true);
+        else if (hooks.loadExplore) hooks.loadExplore(false);
         else loadPeopleMatches(false).then(() => hooks.render());
       } else if (runsState.discover.tab === "clubs") {
         loadClubs(false).then(() => hooks.render());
@@ -1756,7 +1757,8 @@
     }
     if (page === "discover") {
       if (runsState.discover.tab === "people") {
-        if (hooks.loadExplore) hooks.loadExplore(false);
+        if (hooks.loadDiscovery) hooks.loadDiscovery(false);
+        else if (hooks.loadExplore) hooks.loadExplore(false);
         else {
           loadPeopleMatches(false).then(() => {
             if (hooks.getPage() === "discover") hooks.render();
@@ -1832,6 +1834,9 @@
     declineClubInvite,
     setDiscoverTab(tab) {
       runsState.discover.tab = tab || "people";
+    },
+    getDiscoverTab() {
+      return runsState.discover.tab || "people";
     },
     getRunIdFromHash() {
       const raw = (location.hash || "").slice(1);

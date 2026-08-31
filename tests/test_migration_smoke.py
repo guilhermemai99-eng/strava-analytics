@@ -137,7 +137,7 @@ def test_alembic_upgrade_head_on_empty_database():
         "follow_requests",
         "club_invites",
     }.issubset(tables)
-    assert version == "0015_club_covers_invites"
+    assert version == "0016_discovery_matching"
     assert "visibility" in activity_cols
     assert "cover_data" in club_cols
     assert "cover_content_type" in club_cols

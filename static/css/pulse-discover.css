@@ -1,0 +1,330 @@
+
+/* ——— Tinder-style people discovery ——— */
+
+.discover-stack-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 0 4px 24px;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.discover-stack-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0 4px;
+}
+
+.discover-prefs-btn {
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.discover-remaining {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.discover-card {
+  width: 100%;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--surface-2, rgba(255, 255, 255, 0.04));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+
+.discover-card.is-swipe-left {
+  transform: translateX(-120%) rotate(-8deg);
+  opacity: 0;
+}
+
+.discover-card.is-swipe-right {
+  transform: translateX(120%) rotate(8deg);
+  opacity: 0;
+}
+
+.discover-card-photo {
+  display: block;
+  width: 100%;
+  border: none;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  position: relative;
+  min-height: 380px;
+}
+
+.discover-card-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 380px;
+  background: linear-gradient(145deg, #1a2332, #0f1419);
+  font-size: 72px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.discover-card-avatar img {
+  width: 100%;
+  height: 380px;
+  object-fit: cover;
+  display: block;
+}
+
+.discover-card-gradient {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 55%;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85), transparent);
+  pointer-events: none;
+}
+
+.discover-card-info {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 20px 18px 18px;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.discover-card-name {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.discover-card-loc,
+.discover-card-metrics {
+  font-size: 14px;
+  opacity: 0.92;
+}
+
+.discover-card-compat {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #b8f25a;
+}
+
+.discover-card-bio,
+.discover-card-avail {
+  padding: 12px 16px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.discover-actions {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+  width: 100%;
+  align-items: center;
+}
+
+.discover-action {
+  border: none;
+  border-radius: 999px;
+  padding: 14px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.discover-action--pass {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  justify-self: start;
+}
+
+.discover-action--profile {
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 10px 12px;
+}
+
+.discover-action--like {
+  background: #b8f25a;
+  color: #0a0f14;
+  justify-self: end;
+}
+
+.discover-loading,
+.discover-empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 32px 16px;
+}
+
+.discover-empty-block {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.discover-empty-block h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.discover-privacy-hint {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+}
+
+.discover-location-prompt {
+  text-align: center;
+  padding: 32px 20px;
+  max-width: 360px;
+  margin: 0 auto;
+}
+
+.discover-location-prompt h2 {
+  margin: 0 0 10px;
+  font-size: 20px;
+}
+
+.discover-location-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.discover-prefs-backdrop,
+.discover-match-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 120;
+}
+
+.discover-prefs-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 85vh;
+  overflow: auto;
+  background: var(--bg, #0a0f14);
+  border-radius: 20px 20px 0 0;
+  z-index: 121;
+  padding: 0 0 env(safe-area-inset-bottom);
+}
+
+.discover-prefs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.discover-prefs-body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.discover-prefs-body h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.discover-radius-list,
+.discover-mode-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.discover-prefs-foot {
+  padding: 12px 18px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.discover-match-modal {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 122;
+  width: min(340px, calc(100vw - 32px));
+  background: var(--bg, #0a0f14);
+  border-radius: 20px;
+  padding: 28px 22px;
+  text-align: center;
+  border: 1px solid rgba(184, 242, 90, 0.35);
+}
+
+.discover-match-kicker {
+  color: #b8f25a;
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+
+.discover-match-modal h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+
+.discover-match-avatar {
+  width: 96px;
+  height: 96px;
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 0 auto 10px;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+}
+
+.discover-match-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.discover-match-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+@media (min-width: 768px) {
+  .discover-card-photo {
+    min-height: 440px;
+  }
+  .discover-card-avatar,
+  .discover-card-avatar img {
+    min-height: 440px;
+    height: 440px;
+  }
+}
