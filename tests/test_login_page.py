@@ -23,6 +23,8 @@ def test_anonymous_home_serves_login_landing(client):
     assert "RUNS" in body
     assert "DISCOVER" in body
     assert "PROFILE" in body
+    assert "login-caption" in body
+    assert "theme-color" in body
 
 
 def test_login_stylesheet_uses_figma_tokens(client):
@@ -34,6 +36,7 @@ def test_login_stylesheet_uses_figma_tokens(client):
     assert "#000000" in css
     assert "Archivo" in css
     assert "IBM Plex Mono" in css
+    assert ".btn:hover" in css
 
 
 def test_login_hero_is_served(client):
