@@ -1499,7 +1499,7 @@
     const desc = document.getElementById("createRunDesc");
     if (desc) c.description = desc.value.trim();
     const maxp = document.getElementById("createRunMax");
-    if (maxp && maxp.value) c.max_participants = Number(maxp.value);
+    if (maxp) c.max_participants = maxp.value ? Number(maxp.value) : null;
     const vis = document.querySelector('input[name="runVis"]:checked');
     if (vis) c.visibility = vis.value;
     const clubSel = document.getElementById("createRunClub");
@@ -1539,11 +1539,12 @@
         }
       }
       const span = boundMax - boundMin || 1;
-      const left = ((min - boundMin) / span) * 100;
-      const width = ((max - min) / span) * 100;
+      const leftPct = ((min - boundMin) / span) * 100;
+      const widthPct = ((max - min) / span) * 100;
       if (fill) {
-        fill.style.left = `${left}%`;
-        fill.style.width = `${width}%`;
+        // Keep fill aligned with the inset track (14px each side).
+        fill.style.left = `calc(14px + (100% - 28px) * ${leftPct / 100})`;
+        fill.style.width = `calc((100% - 28px) * ${widthPct / 100})`;
       }
       if (readout) readout.textContent = formatMain(min, max);
       if (readoutSub && formatSub) readoutSub.textContent = formatSub(min, max);

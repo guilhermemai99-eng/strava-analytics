@@ -373,11 +373,15 @@
 .create-run-nav--sticky {
   position: sticky;
   bottom: calc(56px + env(safe-area-inset-bottom));
+  display: flex;
+  gap: 10px;
+  align-items: center;
   padding: 16px 0 24px;
   background: linear-gradient(180deg, transparent, var(--bg) 40%);
 }
 
 .create-run-nav--sticky .btn-primary {
+  flex: 1;
   width: 100%;
   justify-content: center;
   padding: 14px;
@@ -432,16 +436,6 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--muted);
-}
-
-.create-run-nav--sticky {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.create-run-nav--sticky .btn-primary {
-  flex: 1;
 }
 
 .run-form-label input,
