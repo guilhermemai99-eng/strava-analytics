@@ -3,7 +3,6 @@ builder = "NIXPACKS"
 
 [deploy]
 startCommand = "/bin/sh /app/start.sh"
-healthcheckPath = "/health"
+healthcheckPath = "/api/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
-

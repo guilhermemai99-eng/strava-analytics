@@ -1,0 +1,142 @@
+.card {
+  background: var(--color-cream);
+  padding-bottom: var(--space-6);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.name {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.meta {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.photo {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  background: var(--color-photo-fallback);
+}
+
+.fallback {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  background: linear-gradient(160deg, var(--color-lime) 0%, var(--color-cream) 55%);
+  display: flex;
+  align-items: flex-end;
+  padding: var(--space-5);
+}
+
+.metrics {
+  padding: var(--space-4) var(--space-4) 0;
+  display: grid;
+  gap: 2px;
+}
+
+.primaryMetrics {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-4);
+}
+
+.stat {
+  font-family: var(--font-display);
+  font-size: clamp(40px, 12vw, 56px);
+  line-height: 0.9;
+  letter-spacing: 0.02em;
+}
+
+.pace {
+  font-family: var(--font-display);
+  font-size: 28px;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+  margin-top: var(--space-2);
+}
+
+.badgeRow {
+  margin-top: var(--space-3);
+}
+
+.caption {
+  padding: var(--space-3) var(--space-4) 0;
+  font-size: 15px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4);
+}
+
+.action {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.liked {
+  font-weight: 800;
+}
+
+.menu {
+  margin-left: auto;
+  color: var(--color-muted);
+}
+
+.comments {
+  padding: 0 var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.comment {
+  font-size: 14px;
+}
+
+.commentAuthor {
+  font-weight: 700;
+  margin-right: var(--space-2);
+}
+
+.composer {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.composer input {
+  flex: 1;
+  border: none;
+  border-bottom: var(--stroke) solid var(--color-black);
+  background: transparent;
+  padding: 8px 0;
+  outline: none;
+}
+
+.composer button {
+  background: none;
+  border: none;
+  font-weight: 700;
+}
