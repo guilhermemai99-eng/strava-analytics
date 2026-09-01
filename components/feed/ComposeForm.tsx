@@ -1,44 +1,20 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field, TextArea } from "@/components/ui/Field";
+import { createPostAction } from "@/app/(main)/compose/actions";
 import styles from "./ComposeForm.module.css";
 
 export function ComposeForm() {
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const [state, formAction, pending] = useActionState(createPostAction, null);
   const [preview, setPreview] = useState<string | null>(null);
 
-  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    setPending(true);
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const hours = Number(data.get("hours") || 0);
-    const minutes = Number(data.get("minutes") || 0);
-    const seconds = Number(data.get("seconds") || 0);
-    data.set("durationSeconds", String(hours * 3600 + minutes * 60 + seconds));
-    data.set("isPr", data.get("isPr") ? "true" : "false");
-
-    const response = await fetch("/api/posts", { method: "POST", body: data });
-    setPending(false);
-    if (!response.ok) {
-      const body = (await response.json()) as { error?: string };
-      setError(body.error ?? "Could not post");
-      return;
-    }
-    router.push("/");
-    router.refresh();
-  }
-
   return (
-    <form className={styles.form} onSubmit={(event) => void onSubmit(event)}>
+    <form className={styles.form} action={formAction}>
       <h1 className={styles.title}>POST A RUN</h1>
-      <label>
+      <label className={styles.file}>
+        Photo
         <input
           type="file"
           name="image"
@@ -100,7 +76,7 @@ export function ComposeForm() {
           <option value="private">Only me</option>
         </select>
       </label>
-      {error ? <p className={styles.error}>{error}</p> : null}
+      {state?.error ? <p className={styles.error}>{state.error}</p> : null}
       <Button type="submit" disabled={pending} block>
         Share run
       </Button>

@@ -1,38 +1,25 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
+import { loginAction, registerAction } from "@/app/(auth)/login/actions";
 import styles from "./AuthScreen.module.css";
 
 export function AuthScreen() {
-  const router = useRouter();
   const [mode, setMode] = useState<"login" | "register">("login");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const [loginState, loginFormAction, loginPending] = useActionState(
+    loginAction,
+    null,
+  );
+  const [registerState, registerFormAction, registerPending] = useActionState(
+    registerAction,
+    null,
+  );
 
-  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    setPending(true);
-    const form = new FormData(event.currentTarget);
-    const payload = Object.fromEntries(form.entries());
-    const path = mode === "login" ? "/api/auth/login" : "/api/auth/register";
-    const response = await fetch(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    setPending(false);
-    if (!response.ok) {
-      const data = (await response.json()) as { error?: string };
-      setError(data.error ?? "Could not continue");
-      return;
-    }
-    router.push("/");
-    router.refresh();
-  }
+  const pending = mode === "login" ? loginPending : registerPending;
+  const error =
+    mode === "login" ? loginState?.error : registerState?.error;
 
   return (
     <main className={styles.screen}>
@@ -45,7 +32,10 @@ export function AuthScreen() {
         </p>
       </div>
 
-      <form className={styles.form} onSubmit={(event) => void onSubmit(event)}>
+      <form
+        className={styles.form}
+        action={mode === "login" ? loginFormAction : registerFormAction}
+      >
         {mode === "register" ? (
           <>
             <Field label="Name" name="name" required autoComplete="name" />
@@ -82,10 +72,7 @@ export function AuthScreen() {
         {mode === "login" ? "New here?" : "Already running with PULSE?"}{" "}
         <button
           type="button"
-          onClick={() => {
-            setError(null);
-            setMode(mode === "login" ? "register" : "login");
-          }}
+          onClick={() => setMode(mode === "login" ? "register" : "login")}
         >
           {mode === "login" ? "Create an account" : "Sign in"}
         </button>
