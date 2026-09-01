@@ -1,100 +1,222 @@
 <!DOCTYPE html>
-<html lang="pt">
+<html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PULSE</title>
+    <title>Pulse — Sign in</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #f5f3ee;
-            --black: #000;
-            --muted: #6e6c68;
-            --lime: #d6ff2e;
+            --bg: #060807;
+            --text: #f2efe8;
+            --muted: #8d968f;
+            --accent: #b8f25a;
+            --accent-2: #5cffb0;
+            --font-display: "Syne", ui-sans-serif, system-ui, sans-serif;
+            --font-body: "DM Sans", ui-sans-serif, system-ui, sans-serif;
         }
+
         * { box-sizing: border-box; }
-        body {
+
+        html, body {
             margin: 0;
+            min-height: 100%;
+        }
+
+        body {
+            color: var(--text);
+            font-family: var(--font-body);
+            background: #060807;
+            overflow-x: hidden;
+        }
+
+        .hero {
+            position: relative;
             min-height: 100vh;
-            background: var(--bg);
-            color: var(--black);
-            font-family: Inter, sans-serif;
+            min-height: 100dvh;
+            display: grid;
+            align-items: end;
+            padding: clamp(28px, 5vw, 64px);
+            isolation: isolate;
         }
-        .shell {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 32px 20px;
+
+        .hero-media {
+            position: absolute;
+            inset: 0;
+            z-index: -2;
+            background:
+                linear-gradient(180deg, rgba(6,8,7,0.15) 0%, rgba(6,8,7,0.35) 45%, rgba(6,8,7,0.92) 78%, #060807 100%),
+                radial-gradient(1200px 700px at 70% 10%, rgba(184,242,90,0.22), transparent 55%),
+                radial-gradient(900px 600px at 10% 80%, rgba(92,255,176,0.14), transparent 50%),
+                linear-gradient(135deg, #0b1510 0%, #08110d 40%, #050706 100%);
         }
-        .card {
-            width: min(440px, 100%);
-            border: 1px solid var(--black);
-            padding: 40px 28px;
-            background: var(--bg);
+
+        .hero-media::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 72px 72px;
+            mask-image: radial-gradient(ellipse at 60% 30%, black 20%, transparent 75%);
+            animation: gridDrift 18s linear infinite;
+            opacity: 0.5;
         }
+
+        .hero-media::after {
+            content: "";
+            position: absolute;
+            width: min(52vw, 560px);
+            height: min(52vw, 560px);
+            right: -8%;
+            top: 8%;
+            border-radius: 50%;
+            border: 1px solid rgba(184,242,90,0.18);
+            background:
+                radial-gradient(circle at 35% 35%, rgba(184,242,90,0.22), transparent 60%);
+            animation: orbFloat 7s ease-in-out infinite alternate;
+        }
+
+        @keyframes gridDrift {
+            from { transform: translateY(0); }
+            to { transform: translateY(72px); }
+        }
+
+        @keyframes orbFloat {
+            from { transform: translateY(0) scale(1); }
+            to { transform: translateY(28px) scale(1.05); }
+        }
+
+        .hero-content {
+            width: min(720px, 100%);
+            padding-bottom: clamp(24px, 6vh, 72px);
+        }
+
         .brand {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-family: Archivo, sans-serif;
+            font-family: var(--font-display);
+            font-size: clamp(56px, 12vw, 120px);
             font-weight: 800;
-            font-size: 22px;
-            letter-spacing: -0.44px;
-            margin-bottom: 28px;
+            letter-spacing: -0.06em;
+            line-height: 0.85;
+            margin: 0 0 28px;
+            opacity: 0;
+            transform: translateY(24px);
+            animation: rise 0.9s ease forwards;
         }
-        .star {
-            width: 10px;
-            height: 10px;
-            background: var(--lime);
-            clip-path: polygon(50% 0%, 65% 35%, 100% 50%, 65% 65%, 50% 100%, 35% 65%, 0 50%, 35% 35%);
-            border: 1px solid var(--black);
+
+        .brand span {
+            color: var(--accent);
         }
+
         h1 {
             margin: 0;
-            font-family: Archivo, sans-serif;
-            font-weight: 800;
-            font-size: clamp(32px, 7vw, 44px);
-            line-height: 0.95;
-            letter-spacing: -1px;
+            max-width: 14ch;
+            font-family: var(--font-display);
+            font-size: clamp(28px, 5.4vw, 48px);
+            line-height: 1.02;
+            letter-spacing: -0.04em;
+            font-weight: 700;
+            opacity: 0;
+            transform: translateY(24px);
+            animation: rise 0.9s ease 0.12s forwards;
+            /* Reserve space so random secondary can't shift the CTA */
+            min-height: 2.1em;
         }
+
         .subtitle {
             margin: 18px 0 0;
+            max-width: 36ch;
             color: var(--muted);
-            font-size: 15px;
+            font-size: clamp(15px, 2.2vw, 18px);
             line-height: 1.55;
-            max-width: 34ch;
+            opacity: 0;
+            transform: translateY(24px);
+            animation: rise 0.9s ease 0.22s forwards;
+            min-height: 3.2em;
         }
-        .login-button {
+
+        .cta {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            margin-top: 32px;
-            min-height: 48px;
-            padding: 0 22px;
-            background: var(--lime);
-            color: var(--black);
-            border: 1px solid var(--black);
-            border-radius: 4px;
+            margin-top: 34px;
+            min-height: 52px;
+            padding: 0 24px;
+            border-radius: 999px;
+            background: var(--text);
+            color: #0b0f0c;
+            font-size: 14px;
+            font-weight: 700;
             text-decoration: none;
-            font-size: 13px;
-            font-weight: 600;
-            letter-spacing: 0.26px;
+            transition: transform 0.25s ease, background 0.25s ease;
+            opacity: 0;
+            transform: translateY(24px);
+            animation: rise 0.9s ease 0.34s forwards;
+        }
+
+        .cta:hover {
+            transform: translateY(-2px);
+            background: var(--accent);
+        }
+
+        .cta:focus-visible {
+            outline: 2px solid var(--accent-2);
+            outline-offset: 3px;
+        }
+
+        @keyframes rise {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .brand, h1, .subtitle, .cta,
+            .hero-media::before, .hero-media::after {
+                animation: none !important;
+                opacity: 1;
+                transform: none;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .hero {
+                align-items: end;
+                padding: 24px 20px 36px;
+            }
         }
     </style>
 </head>
+
 <body>
-<div class="shell">
-    <section class="card">
-        <div class="brand"><span class="star"></span>PULSE</div>
-        <h1>RUN TOGETHER.<br>GET BETTER.</h1>
-        <p class="subtitle">
-            Uma rede social para quem corre. Vê corridas, encontra pessoas, junta-te a um grupo.
-        </p>
-        <a class="login-button" href="/auth/strava">ENTRAR COM STRAVA</a>
-    </section>
-</div>
+    <main class="hero">
+        <div class="hero-media" aria-hidden="true"></div>
+        <div class="hero-content">
+            <p class="brand">Pul<span>se</span></p>
+            <h1 id="landingHeadline">Your training has stories.</h1>
+            <p class="subtitle" id="landingSecondary">
+                The numbers know what you did last weekend.
+            </p>
+            <a class="cta" href="/auth/strava">Continue with Strava</a>
+        </div>
+    </main>
+    <script src="/static/js/microcopy.js?v=personality-1"></script>
+    <script>
+      (function () {
+        if (!window.PulseCopy) return;
+        var h = PulseCopy.pick("landing.headlines", "landing.headline");
+        var s = PulseCopy.pick("landing.secondary", "landing.secondary");
+        var headline = document.getElementById("landingHeadline");
+        var secondary = document.getElementById("landingSecondary");
+        if (headline && h) headline.textContent = h;
+        if (secondary && s) secondary.textContent = s;
+      })();
+    </script>
 </body>
+
 </html>

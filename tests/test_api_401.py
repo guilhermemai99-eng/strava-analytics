@@ -172,4 +172,7 @@ def test_protected_apis_return_401_without_session(client):
 
 
 def test_home_still_serves_login(client):
-    assert client.get("/").status_code == 200
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "/auth/strava" in response.text
+    assert "Strava" in response.text

@@ -14,7 +14,9 @@ def test_dashboard_serves_pulse_shell(client, make_session, make_athlete):
     assert "/static/js/pulse.js" in body
     assert "/static/js/pulse-runs.js" in body
     assert "/static/css/pulse-runs.css" in body
-    assert "v=deploy-8" in body
+    assert "v=deploy-9" in body
+    assert 'href="/lab"' in body
+    assert "Pulse Lab" in body
     assert 'data-nav="feed"' in body
     assert 'data-nav="discover"' in body
     assert 'data-nav="my-runs"' in body
@@ -24,6 +26,8 @@ def test_dashboard_serves_pulse_shell(client, make_session, make_athlete):
     assert 'sidebarNotifBadge' in body
     assert 'Notifications' in body
     assert 'pulse-mobile-header' in body
+    assert "/static/pulse/app.js" not in body
+    assert 'data-screen="feed"' not in body
 
 
 def test_pulse_shell_has_run_host_actions():

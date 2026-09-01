@@ -1819,6 +1819,7 @@
       <button type="button" class="btn btn-primary" data-nav="my-runs">My runs</button>
       <button type="button" class="btn btn-ghost" data-action="edit-profile">Edit profile</button>
       <button type="button" class="btn btn-ghost" data-action="open-settings">Settings</button>
+      <a class="btn btn-ghost" href="/lab">Lab</a>
     `;
 
     return renderIgProfileShell({

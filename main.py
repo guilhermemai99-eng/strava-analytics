@@ -2373,7 +2373,7 @@ def dashboard(
         )
 
     return FileResponse(
-        "static/app.html"
+        "static/pulse.html"
     )
 
 
