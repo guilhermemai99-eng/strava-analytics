@@ -4,8 +4,10 @@ Expo Go shell for the Pulse web app. Does **not** replace the FastAPI/static web
 
 ## Prerequisites
 
-- [Expo Go](https://expo.dev/go) on your phone
+- [Expo Go](https://expo.dev/go) from the **Apple App Store / Google Play** (SDK **54**)
 - Node 18+
+
+This shell stays on SDK 54 so store Expo Go can open it. SDK 55+ is not in the App Store; those versions need [sign.expo.dev](https://sign.expo.dev) or `eas go`.
 
 ## Commands
 
