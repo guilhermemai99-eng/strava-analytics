@@ -1,0 +1,6 @@
+# https://nixpacks.com/docs/configuration/file
+[phases.setup]
+nixPkgs = ["openssl"]
+
+[variables]
+NODE_VERSION = "22"
