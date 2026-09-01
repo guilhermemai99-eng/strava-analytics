@@ -1,0 +1,17 @@
+.empty {
+  padding: var(--space-8) var(--space-5);
+  text-align: center;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 40px;
+  letter-spacing: 0.04em;
+  margin-bottom: var(--space-3);
+}
+
+.body {
+  color: var(--color-muted);
+  max-width: 28ch;
+  margin: 0 auto var(--space-5);
+}

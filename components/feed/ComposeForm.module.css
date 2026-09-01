@@ -1,0 +1,44 @@
+.form {
+  max-width: var(--feed-max);
+  margin: 0 auto;
+  padding: var(--space-5);
+  display: grid;
+  gap: var(--space-5);
+}
+
+.title {
+  font-size: 48px;
+  letter-spacing: 0.04em;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+
+.select {
+  border: none;
+  border-bottom: var(--stroke) solid var(--color-black);
+  background: transparent;
+  padding: 10px 0;
+}
+
+.preview {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  background: var(--color-photo-fallback);
+}
+
+.error {
+  color: #8a2f1f;
+  font-weight: 600;
+}

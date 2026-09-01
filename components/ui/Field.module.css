@@ -1,0 +1,33 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.control {
+  width: 100%;
+  border: none;
+  border-bottom: var(--stroke) solid var(--color-black);
+  background: transparent;
+  padding: 10px 0;
+  outline: none;
+  border-radius: 0;
+}
+
+.control:focus {
+  border-bottom-width: 2px;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 88px;
+}

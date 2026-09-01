@@ -1,17 +1,51 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env
 .env
+.env.local
+.env.*.local
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# uploads
+/public/uploads/*
+!/public/uploads/.gitkeep
+
+# python leftovers
 .venv/
 __pycache__/
 *.pyc
-*.pyo
-strava.db
-strava_backup_antes_migracao.db
-*.db
-cache/
-ai_insights_cache.json
-running_pr_cache.json
-
-# Expo mobile shell
-mobile/node_modules/
-mobile/.expo/
-mobile/dist/
-mobile/.env

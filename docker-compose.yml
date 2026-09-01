@@ -2,18 +2,18 @@ services:
   db:
     image: postgres:16
     environment:
-      POSTGRES_USER: strava
-      POSTGRES_PASSWORD: strava
-      POSTGRES_DB: strava_analytics
+      POSTGRES_USER: pulse
+      POSTGRES_PASSWORD: pulse
+      POSTGRES_DB: pulse
     ports:
       - "5432:5432"
     volumes:
-      - strava_pg_data:/var/lib/postgresql/data
+      - pulse_pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U strava -d strava_analytics"]
+      test: ["CMD-SHELL", "pg_isready -U pulse -d pulse"]
       interval: 5s
       timeout: 5s
       retries: 10
 
 volumes:
-  strava_pg_data:
+  pulse_pg_data:

@@ -1,0 +1,181 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PostVisibility {
+  public
+  followers
+  private
+}
+
+enum PostSource {
+  manual
+  strava
+}
+
+model User {
+  id                    String   @id @default(cuid())
+  email                 String   @unique
+  passwordHash          String
+  name                  String
+  username              String   @unique
+  bio                   String?
+  city                  String?
+  avatarUrl             String?
+  preferredPaceSecPerKm Int?
+  preferredDistanceKm   Float?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  sessions          Session[]
+  posts             Post[]
+  likes             PostLike[]
+  comments          Comment[]
+  following         Follow[]           @relation("Follower")
+  followers         Follow[]           @relation("Following")
+  hostedRuns        Run[]
+  runParticipations RunParticipant[]
+  createdClubs      Club[]
+  clubMemberships   ClubMember[]
+  stravaConnection  StravaConnection?
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+  follower    User     @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+}
+
+model Post {
+  id               String         @id @default(cuid())
+  authorId         String
+  author           User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  imageUrl         String?
+  caption          String?
+  distanceKm       Float
+  durationSeconds  Int
+  occurredAt       DateTime
+  city             String?
+  isPr             Boolean        @default(false)
+  visibility       PostVisibility @default(public)
+  source           PostSource     @default(manual)
+  stravaActivityId String?        @unique
+  hiddenAt         DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  likes    PostLike[]
+  comments Comment[]
+
+  @@index([authorId, createdAt])
+}
+
+model PostLike {
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  postId    String
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+}
+
+model Run {
+  id           String   @id @default(cuid())
+  hostId       String
+  host         User     @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  clubId       String?
+  club         Club?    @relation(fields: [clubId], references: [id], onDelete: SetNull)
+  title        String
+  startsAt     DateTime
+  city         String
+  locationName String?
+  distanceKm   Float
+  paceMinSec   Int?
+  paceMaxSec   Int?
+  description  String?
+  createdAt    DateTime @default(now())
+
+  participants RunParticipant[]
+
+  @@index([startsAt])
+}
+
+model RunParticipant {
+  runId     String
+  userId    String
+  createdAt DateTime @default(now())
+  run       Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([runId, userId])
+}
+
+model Club {
+  id          String   @id @default(cuid())
+  creatorId   String
+  creator     User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  name        String
+  city        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  members ClubMember[]
+  runs    Run[]
+}
+
+model ClubMember {
+  clubId    String
+  userId    String
+  createdAt DateTime @default(now())
+  club      Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([clubId, userId])
+}
+
+model StravaConnection {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stravaAthleteId       String   @unique
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String
+  expiresAt             DateTime
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}

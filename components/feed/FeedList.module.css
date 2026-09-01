@@ -1,0 +1,18 @@
+.page {
+  max-width: var(--feed-max);
+  margin: 0 auto;
+}
+
+.title {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .title {
+    display: block;
+    font-size: 22px;
+    letter-spacing: 0.16em;
+    padding: 0 var(--space-4) var(--space-4);
+    color: var(--color-muted);
+  }
+}

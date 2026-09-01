@@ -1,0 +1,27 @@
+.page {
+  max-width: var(--feed-max);
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-4);
+  align-items: flex-start;
+}
+
+.name {
+  font-size: 40px;
+  letter-spacing: 0.04em;
+}
+
+.handle,
+.meta,
+.counts {
+  color: var(--color-muted);
+}
+
+.bio {
+  margin: var(--space-2) 0;
+  max-width: 36ch;
+}

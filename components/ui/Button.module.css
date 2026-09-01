@@ -1,0 +1,55 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: none;
+  background: transparent;
+  padding: 0;
+  text-decoration: none;
+}
+
+.primary {
+  background: var(--color-lime);
+  color: var(--color-black);
+  border: var(--stroke-cta) solid var(--color-black);
+  box-shadow: var(--shadow-cta);
+  padding: 12px 20px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 0.06em;
+  min-height: 48px;
+}
+
+.primary:hover {
+  transform: translate(1px, 1px);
+  box-shadow: 3px 3px 0 var(--color-black);
+}
+
+.primary:active {
+  transform: translate(4px, 4px);
+  box-shadow: none;
+}
+
+.ghost {
+  background: transparent;
+  color: var(--color-black);
+  padding: 8px;
+}
+
+.inverse {
+  background: var(--color-black);
+  color: var(--color-cream);
+  padding: 12px 18px;
+  font-weight: 600;
+}
+
+.block {
+  width: 100%;
+}
+
+.disabled,
+.button:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}

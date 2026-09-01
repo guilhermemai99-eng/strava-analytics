@@ -1,0 +1,33 @@
+:root {
+  --color-cream: #f5f3ee;
+  --color-black: #000000;
+  --color-white: #ffffff;
+  --color-lime: #d6ff2e;
+  --color-lavender: #b3bbff;
+  --color-muted: #6e6c68;
+  --color-surface: #ffffff;
+  --color-photo-fallback: #e8e4da;
+
+  --font-display: var(--font-display-loaded), "Bebas Neue", Impact, "Arial Narrow",
+    sans-serif;
+  --font-body: var(--font-body-loaded), "DM Sans", system-ui, sans-serif;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  --stroke: 1.5px;
+  --stroke-cta: 3px;
+  --shadow-cta: 4px 4px 0 var(--color-black);
+  --radius: 0;
+
+  --feed-max: 480px;
+  --nav-height: 64px;
+  --rail-width: 220px;
+  --header-height: 56px;
+}
