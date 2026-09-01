@@ -41,6 +41,8 @@
   text-transform: uppercase;
   color: var(--color-muted);
 }
+
+.preview {
   width: 100%;
   aspect-ratio: 4 / 5;
   object-fit: cover;
