@@ -44,6 +44,25 @@
   font-weight: 600;
 }
 
+.google,
+.apple {
+  padding: 12px 18px;
+  font-weight: 700;
+  font-size: 15px;
+  min-height: 48px;
+  border: var(--stroke-cta) solid var(--color-black);
+}
+
+.google {
+  background: var(--color-white);
+  color: var(--color-black);
+}
+
+.apple {
+  background: var(--color-black);
+  color: var(--color-cream);
+}
+
 .block {
   width: 100%;
 }

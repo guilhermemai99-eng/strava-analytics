@@ -1,7 +1,7 @@
 import Link from "next/link";
 import styles from "./Button.module.css";
 
-type Variant = "primary" | "ghost" | "inverse";
+type Variant = "primary" | "ghost" | "inverse" | "google" | "apple";
 
 type Props = {
   children: React.ReactNode;
@@ -34,6 +34,13 @@ export function Button({
     .join(" ");
 
   if (href) {
+    if (href.startsWith("/api/")) {
+      return (
+        <a href={href} className={classNames}>
+          {children}
+        </a>
+      );
+    }
     return (
       <Link href={href} className={classNames}>
         {children}

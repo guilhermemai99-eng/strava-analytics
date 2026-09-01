@@ -45,3 +45,13 @@ export const RESERVED_USERNAMES = new Set([
   "uploads",
   "health",
 ]);
+
+export function usernameFromSeed(seed: string) {
+  const cleaned = seed
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, "")
+    .slice(0, 16);
+  const base = cleaned.length >= 3 ? cleaned : `run${cleaned}`.padEnd(3, "x");
+  if (RESERVED_USERNAMES.has(base)) return `run_${base}`.slice(0, 24);
+  return base.slice(0, 24);
+}

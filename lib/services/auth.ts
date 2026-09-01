@@ -71,7 +71,13 @@ export async function loginUser(input: z.infer<typeof loginSchema>) {
   const user = await prisma.user.findUnique({
     where: { email: data.email.toLowerCase() },
   });
-  if (!user || !(await verifyPassword(data.password, user.passwordHash))) {
+  if (!user) {
+    throw new Error("Invalid email or password");
+  }
+  if (!user.passwordHash) {
+    throw new Error("This account uses Google or Apple. Continue with that instead.");
+  }
+  if (!(await verifyPassword(data.password, user.passwordHash))) {
     throw new Error("Invalid email or password");
   }
   const session = await createSession(user.id);

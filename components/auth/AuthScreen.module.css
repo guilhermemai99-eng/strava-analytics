@@ -28,6 +28,32 @@
   max-width: 18ch;
 }
 
+.oauth {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-5) 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1.5px;
+  background: var(--color-black);
+  opacity: 0.18;
+}
+
 .form {
   display: grid;
   gap: var(--space-4);

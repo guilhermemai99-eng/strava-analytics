@@ -21,7 +21,7 @@ enum PostSource {
 model User {
   id                    String   @id @default(cuid())
   email                 String   @unique
-  passwordHash          String
+  passwordHash          String?
   name                  String
   username              String   @unique
   bio                   String?
@@ -32,6 +32,7 @@ model User {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
+  accounts          OAuthAccount[]
   sessions          Session[]
   posts             Post[]
   likes             PostLike[]
@@ -53,6 +54,18 @@ model Session {
   expiresAt DateTime
   createdAt DateTime @default(now())
 
+  @@index([userId])
+}
+
+model OAuthAccount {
+  id                String   @id @default(cuid())
+  provider          String
+  providerAccountId String
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+
+  @@unique([provider, providerAccountId])
   @@index([userId])
 }
 
