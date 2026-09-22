@@ -171,8 +171,15 @@ export function PostCard({ post }: Props) {
         <div className={styles.comments}>
           {comments.map((comment) => (
             <p key={comment.id} className={styles.comment}>
-              <span className={styles.commentAuthor}>{comment.author.name}</span>
-              {comment.body}
+              <Avatar
+                name={comment.author.name}
+                src={comment.author.avatarUrl}
+                size="xs"
+              />
+              <span>
+                <span className={styles.commentAuthor}>{comment.author.name}</span>
+                {comment.body}
+              </span>
             </p>
           ))}
           <form className={styles.composer} onSubmit={(event) => void submitComment(event)}>

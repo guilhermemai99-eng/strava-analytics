@@ -35,6 +35,16 @@
   font-weight: 700;
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.headerAvatar {
+  display: flex;
+}
+
 .content {
   padding-bottom: calc(var(--nav-height) + var(--space-4));
 }
@@ -149,6 +159,32 @@
     box-shadow: 3px 3px 0 var(--color-black);
     border: 2px solid var(--color-black);
     padding: 0 8px;
+  }
+
+  .railUser {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-top: auto;
+    min-width: 0;
+  }
+
+  .railUser span {
+    display: grid;
+    min-width: 0;
+  }
+
+  .railUser strong {
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .railUser em {
+    font-style: normal;
+    color: var(--color-muted);
+    font-size: 12px;
   }
 
   .content {

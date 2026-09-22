@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { Avatar } from "@/components/ui/Avatar";
+import { AvatarEditor } from "@/components/profile/AvatarEditor";
 import { Button } from "@/components/ui/Button";
 import { getCurrentUser } from "@/lib/auth";
 import styles from "./profile.module.css";
+
+export const dynamic = "force-dynamic";
 
 export default async function ProfilePage() {
   const user = await getCurrentUser();
@@ -10,7 +12,7 @@ export default async function ProfilePage() {
 
   return (
     <section className={styles.page}>
-      <Avatar name={user.name} src={user.avatarUrl} size="lg" />
+      <AvatarEditor name={user.name} src={user.avatarUrl} />
       <h1 className={styles.name}>{user.name}</h1>
       <p className={styles.handle}>@{user.username}</p>
       {user.city ? <p className={styles.city}>{user.city}</p> : null}

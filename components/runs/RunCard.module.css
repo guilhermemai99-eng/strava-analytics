@@ -1,0 +1,37 @@
+.card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+  border-bottom: var(--stroke) solid rgba(0, 0, 0, 0.12);
+  min-width: 0;
+}
+
+.body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.when {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.title {
+  font-size: 32px;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  color: var(--color-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.people {
+  overflow: hidden;
+}

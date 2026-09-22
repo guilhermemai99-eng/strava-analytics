@@ -85,3 +85,29 @@ export async function updateProfile(
     },
   });
 }
+
+const publicSelect = {
+  id: true,
+  email: true,
+  name: true,
+  username: true,
+  bio: true,
+  city: true,
+  avatarUrl: true,
+} as const;
+
+export async function setAvatar(userId: string, avatarUrl: string) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { avatarUrl },
+    select: publicSelect,
+  });
+}
+
+export async function clearAvatar(userId: string) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { avatarUrl: null },
+    select: publicSelect,
+  });
+}

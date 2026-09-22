@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Avatar } from "@/components/ui/Avatar";
+import type { SessionUser } from "@/lib/auth";
 import styles from "./AppShell.module.css";
 
 const NAV = [
@@ -11,7 +13,13 @@ const NAV = [
   { href: "/profile", label: "Profile" },
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  user,
+}: {
+  children: React.ReactNode;
+  user: SessionUser;
+}) {
   const pathname = usePathname();
 
   function isActive(href: string) {
@@ -25,9 +33,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Link href="/" className={styles.wordmark}>
           PULSE
         </Link>
-        <Link href="/compose" className={styles.plus} aria-label="Post a run">
-          +
-        </Link>
+        <div className={styles.headerActions}>
+          <Link href="/profile" className={styles.headerAvatar} aria-label="Your profile">
+            <Avatar name={user.name} src={user.avatarUrl} size="sm" eager />
+          </Link>
+          <Link href="/compose" className={styles.plus} aria-label="Post a run">
+            +
+          </Link>
+        </div>
       </header>
 
       <aside className={styles.rail}>
@@ -54,6 +67,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </nav>
+        <Link href="/profile" className={styles.railUser}>
+          <Avatar name={user.name} src={user.avatarUrl} size="sm" eager />
+          <span>
+            <strong>{user.name}</strong>
+            <em>@{user.username}</em>
+          </span>
+        </Link>
         <Link href="/compose" className={styles.plus}>
           +
         </Link>

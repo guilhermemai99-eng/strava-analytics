@@ -25,9 +25,15 @@ export function handleRouteError(error: unknown) {
       "Comment is too long",
       "Use a JPEG, PNG, or WebP image",
       "Image must be under 8 MB",
+      "Choose a photo",
+      "Invalid avatar path",
+      "Run not found",
     ];
     if (known.includes(error.message)) {
-      const status = error.message === "Post not found" ? 404 : 400;
+      const status =
+        error.message === "Post not found" || error.message === "Run not found"
+          ? 404
+          : 400;
       return jsonError(error.message, status);
     }
   }

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { handleRouteError, jsonError } from "@/lib/api";
-import { updateProfile } from "@/lib/services/users";
-import { saveImageUpload } from "@/lib/storage";
-import { prisma } from "@/lib/db";
+import { setAvatar, updateProfile } from "@/lib/services/users";
+import { saveAvatarUpload } from "@/lib/storage";
 
 export async function GET() {
   try {
@@ -25,20 +24,8 @@ export async function PATCH(request: NextRequest) {
       const form = await request.formData();
       const file = form.get("avatar");
       if (file instanceof File && file.size > 0) {
-        const avatarUrl = await saveImageUpload(file);
-        const updated = await prisma.user.update({
-          where: { id: user.id },
-          data: { avatarUrl },
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            username: true,
-            bio: true,
-            city: true,
-            avatarUrl: true,
-          },
-        });
+        const avatarUrl = await saveAvatarUpload(user.id, file);
+        const updated = await setAvatar(user.id, avatarUrl);
         return NextResponse.json({ user: updated });
       }
     }

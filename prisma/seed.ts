@@ -81,6 +81,26 @@ async function main() {
       },
     });
   }
+
+  const existingRun = await prisma.run.count();
+  if (existingRun === 0) {
+    const run = await prisma.run.create({
+      data: {
+        hostId: joana.id,
+        title: "Saturday river miles",
+        startsAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+        city: "Porto",
+        locationName: "Ribeira",
+        distanceKm: 10,
+        paceMinSec: 310,
+        paceMaxSec: 340,
+        description: "Easy catch-up along the Douro.",
+      },
+    });
+    await prisma.runParticipant.create({
+      data: { runId: run.id, userId: marco.id },
+    });
+  }
 }
 
 main()

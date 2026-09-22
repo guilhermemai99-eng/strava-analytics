@@ -18,6 +18,8 @@ Demo seed login: `joana@pulse.run` / `pulse1234`
 
 Google and Apple sign-in need the OAuth variables in `.env.example`. Redirect URIs are `{APP_URL}/api/auth/google/callback` and `{APP_URL}/api/auth/apple/callback`.
 
+Profile photos are written to `public/uploads/avatars/{userId}/{generation}/` as WebP sizes (`w64`, `w128`, `w256`, `w512`). `User.avatarUrl` stores that folder path (or a Google photo URL), never the image bytes. A new generation folder is created on each upload so browsers do not keep a stale photo.
+
 ## Stack
 
 Next.js (App Router) · TypeScript · PostgreSQL · Prisma
