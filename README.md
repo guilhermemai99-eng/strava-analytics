@@ -25,3 +25,14 @@ Profile photos are written to `public/uploads/avatars/{userId}/{generation}/` as
 Next.js (App Router) · TypeScript · PostgreSQL · Prisma
 
 Business logic lives in `lib/services`. Route handlers are thin. Secrets stay on the server.
+
+## Railway
+
+Production deploys from GitHub, not from `railway up`.
+
+1. The web service is connected to this GitHub repo.
+2. A push (or merge) to the branch Railway watches triggers Nixpacks.
+3. `railway.toml` / `Procfile` start with `prisma migrate deploy && next start`.
+4. Set `DATABASE_URL`, `AUTH_SECRET`, and `APP_URL` in the Railway dashboard. Never commit those values.
+
+If a push does not deploy, the GitHub integration or the watched branch is wrong in Railway → Settings. That cannot be changed from this repo.

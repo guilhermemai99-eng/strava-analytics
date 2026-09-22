@@ -82,9 +82,48 @@ async function main() {
     });
   }
 
-  const existingRun = await prisma.run.count();
-  if (existingRun === 0) {
-    const run = await prisma.run.create({
+  const ines = await prisma.user.upsert({
+    where: { email: "ines@pulse.run" },
+    update: {},
+    create: {
+      email: "ines@pulse.run",
+      passwordHash,
+      name: "Inês Costa",
+      username: "ines",
+      city: "Porto",
+      bio: "Track Tuesdays.",
+    },
+  });
+  const rui = await prisma.user.upsert({
+    where: { email: "rui@pulse.run" },
+    update: {},
+    create: {
+      email: "rui@pulse.run",
+      passwordHash,
+      name: "Rui Mendes",
+      username: "rui",
+      city: "Porto",
+      bio: "Hills before breakfast.",
+    },
+  });
+  const ana = await prisma.user.upsert({
+    where: { email: "ana@pulse.run" },
+    update: {},
+    create: {
+      email: "ana@pulse.run",
+      passwordHash,
+      name: "Ana Rocha",
+      username: "ana",
+      city: "Porto",
+      bio: "Easy pace, long talks.",
+    },
+  });
+
+  let run = await prisma.run.findFirst({
+    where: { hostId: joana.id, title: "Saturday river miles" },
+  });
+  if (!run) {
+    run = await prisma.run.create({
       data: {
         hostId: joana.id,
         title: "Saturday river miles",
@@ -97,8 +136,12 @@ async function main() {
         description: "Easy catch-up along the Douro.",
       },
     });
-    await prisma.runParticipant.create({
-      data: { runId: run.id, userId: marco.id },
+  }
+  for (const person of [marco, ines, rui, ana]) {
+    await prisma.runParticipant.upsert({
+      where: { runId_userId: { runId: run.id, userId: person.id } },
+      update: {},
+      create: { runId: run.id, userId: person.id },
     });
   }
 }

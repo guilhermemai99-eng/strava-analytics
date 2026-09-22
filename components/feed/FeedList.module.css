@@ -1,6 +1,12 @@
 .page {
   max-width: var(--feed-max);
   margin: 0 auto;
+  min-width: 0;
+}
+
+.upcoming {
+  padding: 0 var(--space-4);
+  min-width: 0;
 }
 
 .title {
