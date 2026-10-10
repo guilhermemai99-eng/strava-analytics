@@ -14,7 +14,7 @@ A social-first running app. Not an analytics dashboard.
 5. `npm run db:seed` (optional demo users)
 6. `npm run dev` — http://localhost:3000
 
-Demo seed login: `joana@pulse.run` / `pulse1234`
+Demo seed login: `mike@pulse.run` / `pulse1234`
 
 Google and Apple sign-in need the OAuth variables in `.env.example`. Redirect URIs are `{APP_URL}/api/auth/google/callback` and `{APP_URL}/api/auth/apple/callback`.
 
